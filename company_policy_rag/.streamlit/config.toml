@@ -3,7 +3,7 @@
 # which otherwise triggers optional torchvision imports and floods the console.
 
 [server]
-address = "0.0.0.0"
+address = "localhost"
 port = 8501
 fileWatcherType = "none"
 headless = true

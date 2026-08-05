@@ -73,7 +73,7 @@ class Settings(BaseSettings):
 
     # ── Ollama / Models ────────────────────────────────────────────────────
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
-    llm_model: str = Field(default="qwen2.5:7b", alias="OLLAMA_LLM_MODEL")
+    llm_model: str = Field(default="gemma4:12b", alias="OLLAMA_LLM_MODEL")
     embed_model: str = Field(default="nomic-embed-text", alias="OLLAMA_EMBED_MODEL")
 
     llm_temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")

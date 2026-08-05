@@ -28,29 +28,23 @@ NEW_HEAD = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#e4eaf4">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Rag-chatbot — Interview Notes · Anthropic</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    (function () {
+      var r = document.documentElement;
+      r.classList.add('js');
+      if (location.protocol === 'file:') r.classList.add('is-file');
+      if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')) r.classList.add('is-mobile');
+    })();
+  </script>
   <style>
-"""
-
-REDIRECT_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=../../interview-notes.html">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Redirect — Interview Notes</title>
-  <link rel="canonical" href="../../interview-notes.html">
-</head>
-<body>
-  <p>Moved to <a href="../../interview-notes.html">interview-notes.html</a> (repository root).</p>
-</body>
-</html>
 """
 
 ENHANCED_JS = r"""
@@ -71,8 +65,10 @@ ENHANCED_JS = r"""
       function openMenu() {
         if (!panel) return;
         panel.classList.add('open');
-        backdrop.classList.add('visible');
-        backdrop.setAttribute('aria-hidden', 'false');
+        if (backdrop) {
+          backdrop.classList.add('visible');
+          backdrop.setAttribute('aria-hidden', 'false');
+        }
         document.body.classList.add('menu-open');
         if (toggle) {
           toggle.setAttribute('aria-expanded', 'true');
@@ -83,8 +79,10 @@ ENHANCED_JS = r"""
       function closeMenu() {
         if (!panel) return;
         panel.classList.remove('open');
-        backdrop.classList.remove('visible');
-        backdrop.setAttribute('aria-hidden', 'true');
+        if (backdrop) {
+          backdrop.classList.remove('visible');
+          backdrop.setAttribute('aria-hidden', 'true');
+        }
         document.body.classList.remove('menu-open');
         if (toggle) {
           toggle.setAttribute('aria-expanded', 'false');
@@ -223,6 +221,197 @@ def extract_diagram(plans: str, diagram_id: str, next_id: str | None = None) -> 
         block = m.group(0).rstrip()
     block = block.replace('diagram-hint', 'scroll-hint')
     return block
+
+
+MOBILE_SHARING_CSS = """
+    html.is-file,
+    html.is-mobile {
+      --glass-bg: #ffffff;
+      --glass-bg-strong: #ffffff;
+    }
+
+    html.is-file .liquid-bg,
+    html.is-mobile .liquid-bg {
+      display: none;
+    }
+
+    html.is-file .card,
+    html.is-file .hero,
+    html.is-file .toc,
+    html.is-file .mobile-header,
+    html.is-file .q-card,
+    html.is-file .fu-answer-block,
+    html.is-file .glass,
+    html.is-file .diagram-card,
+    html.is-file .plan-meta,
+    html.is-file .pitch-box,
+    html.is-file .stat-pill,
+    html.is-file .comp-card,
+    html.is-file .source-card,
+    html.is-file .code-panel,
+    html.is-mobile .card,
+    html.is-mobile .hero,
+    html.is-mobile .toc,
+    html.is-mobile .mobile-header,
+    html.is-mobile .q-card,
+    html.is-mobile .fu-answer-block,
+    html.is-mobile .glass,
+    html.is-mobile .diagram-card,
+    html.is-mobile .plan-meta,
+    html.is-mobile .pitch-box,
+    html.is-mobile .stat-pill,
+    html.is-mobile .comp-card,
+    html.is-mobile .source-card,
+    html.is-mobile .code-panel {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: #ffffff !important;
+    }
+
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      :root {
+        --glass-bg: #ffffff;
+        --glass-bg-strong: #ffffff;
+      }
+      .liquid-bg { display: none; }
+      .card, .hero, .toc, .mobile-header, .q-card, .fu-answer-block,
+      .glass, .diagram-card, .plan-meta, .pitch-box, .stat-pill, .comp-card,
+      .source-card, .code-panel {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: #ffffff !important;
+      }
+    }
+
+    .file-open-hint {
+      display: none;
+      position: sticky;
+      top: 0;
+      z-index: 300;
+      padding: 0.65rem 1rem;
+      padding-top: max(0.65rem, env(safe-area-inset-top));
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    html.is-file .file-open-hint {
+      display: block;
+    }
+"""
+
+MOBILE_MENU_OLD = """      .layout {
+        grid-template-columns: 1fr;
+        display: block;
+      }
+
+      .toc {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: min(320px, 88vw);
+        max-width: 88vw;
+        height: 100vh;
+        height: 100dvh;
+        z-index: 160;
+        transform: translateX(-105%);
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        border-right: 1px solid var(--glass-border);
+        border-bottom: none;
+        padding: 1.25rem 1rem 2rem;
+        padding-top: max(1.25rem, env(safe-area-inset-top));
+        box-shadow: var(--glass-shadow-hover);
+      }
+
+      .toc.open { transform: translateX(0); }
+
+      .toc-close { display: flex; align-items: center; justify-content: center; }
+
+      .toc-title { padding-right: 3rem; }
+
+      .toc nav { display: block; }
+
+      .toc nav .toc-section {
+        display: block;
+        margin-top: 0.75rem;
+      }"""
+
+MOBILE_MENU_NEW = """      .layout {
+        grid-template-columns: 1fr;
+        display: block;
+        position: static;
+        z-index: auto;
+      }
+
+      body.menu-open .layout {
+        position: relative;
+        z-index: 170;
+      }
+
+      .toc-backdrop.visible {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: rgba(15, 23, 42, 0.5);
+      }
+
+      .toc {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: min(320px, 88vw);
+        max-width: 88vw;
+        height: 100vh;
+        height: 100dvh;
+        z-index: 180;
+        transform: translateX(-105%);
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        border-right: 1px solid #e2e8f0;
+        border-bottom: none;
+        padding: 1.25rem 1rem 2rem;
+        padding-top: max(1.25rem, env(safe-area-inset-top));
+        box-shadow: 4px 0 24px rgba(15, 23, 42, 0.15);
+        background: #ffffff !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        color: var(--text-primary);
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .toc.open {
+        transform: translateX(0);
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .toc-close { display: flex; align-items: center; justify-content: center; }
+
+      .toc-title {
+        padding-right: 3rem;
+        color: #0f172a;
+      }
+
+      .toc nav { display: block; }
+
+      .toc nav a {
+        color: #334155;
+      }
+
+      .toc nav a:hover,
+      .toc nav a.active {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: #ccfbf1;
+        color: #0d9488;
+      }
+
+      .toc nav .toc-section {
+        display: block;
+        margin-top: 0.75rem;
+        color: #64748b;
+      }"""
 
 
 def patch_css(css: str) -> str:
@@ -476,6 +665,45 @@ def patch_css(css: str) -> str:
         "@media print {\n      .liquid-bg, .mobile-header, .toc-backdrop { display: none !important; }",
         "@media print {\n      .liquid-bg, .mobile-header, .toc-backdrop, .back-to-top { display: none !important; }",
     )
+    css = css.replace(
+        """    .toc-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 150;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }""",
+        """    .toc-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      z-index: 150;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      -webkit-tap-highlight-color: transparent;
+    }""",
+    )
+    css = css.replace(
+        "--font-serif: 'DM Serif Display', Georgia, serif;",
+        "--font-serif: Georgia, 'Times New Roman', serif;",
+    )
+    css = css.replace(
+        "--font-sans: 'Inter', system-ui, -apple-system, sans-serif;",
+        "--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;",
+    )
+    if "html.is-file" not in css:
+        css = css.replace(
+            "    }\n\n    *, *::before, *::after",
+            "    }\n" + MOBILE_SHARING_CSS + "\n    *, *::before, *::after",
+            1,
+        )
+    if MOBILE_MENU_OLD in css:
+        css = css.replace(MOBILE_MENU_OLD, MOBILE_MENU_NEW)
     return css
 
 
@@ -750,9 +978,9 @@ def main() -> None:
     html = re.sub(r"\s*<script>.*?</script>\s*</body>", ENHANCED_JS + "\n</body>", html, flags=re.DOTALL)
 
     OUT.write_text(html, encoding="utf-8")
-    REDIRECT.write_text(REDIRECT_HTML, encoding="utf-8")
+    REDIRECT.write_text(html, encoding="utf-8")
     print(f"Wrote {OUT} ({len(html)} chars)")
-    print(f"Wrote redirect {REDIRECT}")
+    print(f"Wrote self-contained copy {REDIRECT}")
 
 
 if __name__ == "__main__":
