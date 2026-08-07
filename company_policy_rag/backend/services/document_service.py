@@ -99,7 +99,7 @@ class DocumentService:
 
             # 3. Embedding Generation
             texts = [c.text for c in chunks]
-            embeddings = self.embedding_service.embed_documents(texts)
+            embeddings = self.embedding_service.embed_chunks(texts)
             for c, emb in zip(chunks, embeddings):
                 c.embedding = emb
 
@@ -222,15 +222,15 @@ class DocumentService:
         filename = doc_record["filename"]
 
         # 1. Purge from Vector Store
-        self.vector_store.delete_by_source(filename)
+        self.vector_store.delete_by_document_id(document_id)
 
         # 2. Purge from BM25 Index
-        self.bm25_index.remove_by_source_file(filename)
+        self.bm25_index.remove_by_document_id(document_id)
 
         # 3. Purge from Docstore
         chunk_ids_to_del = [
             cid for cid, chunk in list(self.docstore.items())
-            if chunk.metadata.document_id == document_id or chunk.metadata.source_file == filename
+            if chunk.metadata.document_id == document_id
         ]
         for cid in chunk_ids_to_del:
             self.docstore.pop(cid, None)

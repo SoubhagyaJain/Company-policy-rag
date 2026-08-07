@@ -54,6 +54,10 @@ class RelativeScoreThresholdPostprocessor:
         return filtered
 
 
+_shared_reranker_model: Optional[Any] = None
+_shared_reranker_model_loaded: bool = False
+
+
 class CrossEncoderReranker:
     """
     BAAI/bge-reranker-large cross-encoder reranker wrapper with device auto-detection,
@@ -76,19 +80,35 @@ class CrossEncoderReranker:
         self._model_loaded = False
 
     def _init_model(self) -> None:
+        global _shared_reranker_model, _shared_reranker_model_loaded
         if self._model_loaded:
             return
+        if _shared_reranker_model_loaded:
+            self._model = _shared_reranker_model
+            self._model_loaded = True
+            return
+
         self._model_loaded = True
         try:
             import torch  # type: ignore
             from sentence_transformers import CrossEncoder  # type: ignore
 
+            import os
             dev = "cuda" if (self.device == "cuda" or (self.device == "auto" and torch.cuda.is_available())) else "cpu"
             logger.info("Loading CrossEncoder reranker model %s on device %s", self.model_name, dev)
-            self._model = CrossEncoder(self.model_name, device=dev)
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            try:
+                self._model = CrossEncoder(self.model_name, device=dev)
+            except Exception as local_err:
+                logger.info("Local cached reranker model not found (%s). Fallback ranking enabled.", local_err)
+                self._model = None
         except Exception as exc:
             logger.warning("Failed to load CrossEncoder reranker (%s). Fallback ranking enabled.", exc)
             self._model = None
+
+        _shared_reranker_model = self._model
+        _shared_reranker_model_loaded = True
 
     def rerank(self, query: str, candidates: List[ScoredChunk]) -> List[ScoredChunk]:
         """Rerank candidate chunks using cross-encoder logit scoring and relative thresholding."""

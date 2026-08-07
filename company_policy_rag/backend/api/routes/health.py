@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from backend.api.dependencies import get_document_service
 from backend.models.api_dto import HealthStatus
 from backend.services.document_service import DocumentService
+from backend.utils.redis_cache import redis_cache
 
 router = APIRouter(tags=["Health"])
 
@@ -16,7 +17,7 @@ def get_health_status(
     chunk_cnt = doc_service.vector_store.count()
     return HealthStatus(
         status="ok",
-        redis=False,  # In-memory fallback mode active
+        redis=redis_cache.is_redis_available(),
         vector_db=True,
         bm25_index=True,
         models_loaded=True,
@@ -24,3 +25,4 @@ def get_health_status(
         chunk_count=chunk_cnt,
         collection=doc_service.vector_store.collection_name,
     )
+

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
@@ -47,7 +48,7 @@ async def upload_document_file(
             chunk_strategy=chunk_strategy,
         )
         return res
-    except ValueError as val_err:
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as val_err:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
     except Exception as exc:
         raise HTTPException(

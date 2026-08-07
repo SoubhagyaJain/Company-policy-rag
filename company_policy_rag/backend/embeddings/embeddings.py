@@ -38,6 +38,10 @@ class EmbeddingCache:
         return len(self._cache)
 
 
+_shared_embedding_model: Optional[Any] = None
+_shared_embedding_model_loaded: bool = False
+
+
 class EmbeddingService:
     """
     Service wrapper for dense vector embeddings with caching, batching, and normalization.
@@ -58,17 +62,33 @@ class EmbeddingService:
         self._model_loaded: bool = False
 
     def _init_model(self) -> None:
+        global _shared_embedding_model, _shared_embedding_model_loaded
         if self._model_loaded:
             return
+        if _shared_embedding_model_loaded:
+            self._model = _shared_embedding_model
+            self._model_loaded = True
+            return
+
         self._model_loaded = True
         try:
             from sentence_transformers import SentenceTransformer  # type: ignore
 
+            import os
             logger.info("Loading embedding model %s", self.model_name)
-            self._model = SentenceTransformer(self.model_name)
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            try:
+                self._model = SentenceTransformer(self.model_name)
+            except Exception as local_err:
+                logger.info("Local cached embedding model not found (%s). Fallback embedder enabled.", local_err)
+                self._model = None
         except Exception as exc:
             logger.warning("Could not load SentenceTransformer model %s (%s). Using fallback embedder.", self.model_name, exc)
             self._model = None
+
+        _shared_embedding_model = self._model
+        _shared_embedding_model_loaded = True
 
     def _fallback_embed(self, text: str) -> List[float]:
         """Deterministic pseudo-embedding for testing when ML packages are unavailable."""

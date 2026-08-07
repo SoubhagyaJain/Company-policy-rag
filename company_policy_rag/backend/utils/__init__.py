@@ -1,5 +1,6 @@
 from backend.utils.hashing import compute_file_hash, compute_string_hash
 from backend.utils.logging import logger, setup_logging, timed, timer
+from backend.utils.redis_cache import RedisCache, get_redis_cache, redis_cache
 from backend.utils.section_tracker import (
     SECTION_PATTERNS,
     SectionContext,
@@ -18,6 +19,9 @@ __all__ = [
     "setup_logging",
     "timed",
     "timer",
+    "RedisCache",
+    "get_redis_cache",
+    "redis_cache",
     "SECTION_PATTERNS",
     "SectionContext",
     "SectionHeading",
@@ -27,3 +31,4 @@ __all__ = [
     "is_noise_line",
     "parse_section_heading",
 ]
+

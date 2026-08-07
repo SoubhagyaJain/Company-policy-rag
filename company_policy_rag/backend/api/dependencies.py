@@ -8,11 +8,12 @@ from backend.embeddings.vector_store import ChromaVectorStore
 from backend.rag.pipeline import RAGPipeline
 from backend.retrieval.bm25 import BM25SearchIndex
 from backend.retrieval.hybrid import HybridRetriever
+from backend.retrieval.vector import DenseVectorRetriever
 from backend.services.chat_service import ChatService
 from backend.services.document_service import DocumentService
 from backend.services.telemetry_service import TelemetryService
 
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 _telemetry_service: Optional[TelemetryService] = None
 _document_service: Optional[DocumentService] = None
@@ -48,10 +49,13 @@ def get_rag_pipeline() -> RAGPipeline:
                 bm25_index = doc_service.bm25_index
                 embedding_service = doc_service.embedding_service
 
-                hybrid_retriever = HybridRetriever(
+                dense_retriever = DenseVectorRetriever(
                     vector_store=vector_store,
-                    bm25_index=bm25_index,
                     embedding_service=embedding_service,
+                )
+                hybrid_retriever = HybridRetriever(
+                    dense_retriever=dense_retriever,
+                    bm25_index=bm25_index,
                 )
                 _rag_pipeline = RAGPipeline(
                     hybrid_retriever=hybrid_retriever,

@@ -47,6 +47,10 @@ class VectorStoreInterface(ABC):
         pass
 
     @abstractmethod
+    def delete_by_document_id(self, document_id: str) -> None:
+        pass
+
+    @abstractmethod
     def count(self) -> int:
         pass
 
@@ -259,6 +263,20 @@ class ChromaVectorStore(VectorStoreInterface):
                 self._collection.delete(where={"source_file": source_file})
             except Exception as exc:
                 logger.warning("Failed to delete from Chroma by source_file: %s", exc)
+
+    def delete_by_document_id(self, document_id: str) -> None:
+        to_delete = [
+            cid for cid, chunk in self._memory_chunks.items()
+            if chunk.metadata.document_id == document_id
+        ]
+        for cid in to_delete:
+            del self._memory_chunks[cid]
+
+        if self._collection is not None:
+            try:
+                self._collection.delete(where={"document_id": document_id})
+            except Exception as exc:
+                logger.warning("Failed to delete from Chroma by document_id: %s", exc)
 
     def count(self) -> int:
         if self._collection is not None:

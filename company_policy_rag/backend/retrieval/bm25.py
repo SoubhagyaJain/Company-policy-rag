@@ -205,6 +205,29 @@ class BM25SearchIndex:
         else:
             self._bm25 = None
 
+    def remove_by_document_id(self, document_id: str) -> None:
+        kept_entries: List[Chunk] = []
+        kept_tokens: List[List[str]] = []
+
+        for chunk, tokens in zip(self.entries, self._tokenized_corpus):
+            if chunk.metadata.document_id == document_id:
+                continue
+            kept_entries.append(chunk)
+            kept_tokens.append(tokens)
+
+        self.entries = kept_entries
+        self._tokenized_corpus = kept_tokens
+
+        if self._tokenized_corpus:
+            try:
+                from rank_bm25 import BM25Okapi  # type: ignore
+
+                self._bm25 = BM25Okapi(self._tokenized_corpus)
+            except Exception:
+                self._bm25 = None
+        else:
+            self._bm25 = None
+
     def clear(self) -> None:
         self.entries.clear()
         self._tokenized_corpus.clear()

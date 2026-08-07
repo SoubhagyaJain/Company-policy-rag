@@ -25,10 +25,10 @@ class TelemetryService:
         self._total_queries: int = 0
         self._prompt_tokens: int = 0
         self._completion_tokens: int = 0
-        self._all_latencies: List[float] = []
-        self._all_ttfts: List[float] = []
-        self._all_similarity_scores: List[float] = []
-        self._all_rerank_scores: List[float] = []
+        self._all_latencies: collections.deque[float] = collections.deque(maxlen=max_traces)
+        self._all_ttfts: collections.deque[float] = collections.deque(maxlen=max_traces)
+        self._all_similarity_scores: collections.deque[float] = collections.deque(maxlen=max_traces)
+        self._all_rerank_scores: collections.deque[float] = collections.deque(maxlen=max_traces)
 
     def record_trace(self, trace: TraceSummary) -> TraceSummary:
         """Record a pre-assembled TraceSummary object into the circular buffer."""

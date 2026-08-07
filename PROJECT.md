@@ -51,9 +51,9 @@ c:\Users\jains\OneDrive\Desktop\Rag-chatbot\company_policy_rag\
 |---|------|-------|-------------|--------|
 | M1 | Backend Clean Layout & Ingestion Engine | Modular `backend/` structure, multi-format loaders, adaptive chunkers | None | DONE |
 | M2 | Advanced Retrieval & RAG Pipeline | Hybrid search, multi-query, query rewrite, reranker, context compression, citations | M1 | DONE |
-| M3 | FastAPI Web Application & Observability | API routes, SSE streaming server, admin observability & telemetry endpoints | M2 | PLANNED |
-| M4 | Next.js 15 Anthropic-inspired UI | Next.js 15 App Router, cream aesthetic, streaming UI, citation cards, document manager | M3 | PLANNED |
-| M5 | Production Infra, Redis & Testing | Docker compose, Redis cache, pytest/jest test suites, pyright/mypy/eslint config | M4 | PLANNED |
+| M3 | FastAPI Web Application & Observability | API routes, SSE streaming server, admin observability & telemetry endpoints | M2 | DONE |
+| M4 | Next.js 15 Anthropic-inspired UI | Next.js 15 App Router, cream aesthetic, streaming UI, citation cards, document manager | M3 | IN_PROGRESS |
+| M5 | Production Infra, Redis & Testing | Docker compose, Redis cache, pytest/jest test suites, pyright/mypy/eslint config | M4 | IN_PROGRESS |
 | M6 | Golden Evaluation Gate & Victory Audit | Run evaluate.py (Faithfulness >= 0.90, Relevancy >= 0.75), type checks, test suite, docker build | M5 | PLANNED |
 
 ## Interface Contracts
