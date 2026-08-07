@@ -38,10 +38,10 @@ COPY frontend/hooks/ ./hooks/
 COPY frontend/lib/ ./lib/
 COPY frontend/preview/ ./preview/
 
-# Copy styles if they exist
-COPY frontend/styles/ ./styles/ 2>/dev/null || true
+    # Copy styles if they exist (Next.js 15 requires the globals.css)
+    COPY frontend/styles/ ./styles/
 
-# Build-time environment variables
+    # Build-time environment variables
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
