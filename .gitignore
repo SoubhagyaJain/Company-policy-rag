@@ -20,3 +20,8 @@ company_policy_rag/frontend/aether/*.tsbuildinfo
 company_policy_rag/frontend/aether/.next/
 company_policy_rag/frontend/aether/dist/
 company_policy_rag/frontend/aether/build/
+# Ignore company_policy_rag frontend generated artifacts
+company_policy_rag/frontend/node_modules/
+company_policy_rag/frontend/.next/
+company_policy_rag/frontend/tsconfig.tsbuildinfo
+

@@ -1,0 +1,188 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+
+import { Header, ViewTab } from '@/components/Header';
+import { SessionSidebar } from '@/components/SessionSidebar';
+import { ChatWindow } from '@/components/ChatWindow';
+import { CitationDrawer } from '@/components/CitationDrawer';
+import { DocumentsView } from '@/components/DocumentsView';
+import { AdminView } from '@/components/AdminView';
+
+import { useChatStream } from '@/hooks/useChatStream';
+import { useSessions } from '@/hooks/useSessions';
+import { useObservability } from '@/hooks/useObservability';
+
+import type { FilterOptions } from '@/lib/types';
+
+export default function HomePage() {
+  /* ─── Dark mode ──────────────────────────────── */
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('rag_dark_mode');
+    if (stored === 'true') {
+      setIsDarkMode(true);
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('rag_dark_mode', String(isDarkMode));
+  }, [isDarkMode]);
+
+  /* ─── Tabs & sidebar ─────────────────────────── */
+  const [activeTab, setActiveTab] = useState<ViewTab>('chat');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  /* ─── Sessions ───────────────────────────────── */
+  const {
+    sessions,
+    activeSession,
+    activeSessionId,
+    createNewSession,
+    switchSession,
+    deleteSession,
+    renameSession,
+    updateSessionMessages,
+  } = useSessions();
+
+  /* ─── Chat streaming ─────────────────────────── */
+  const {
+    messages,
+    setMessages,
+    isStreaming,
+    sendMessage,
+    cancelStream,
+    clearMessages,
+    activeCitation,
+    openCitation,
+    isDrawerOpen,
+    closeCitationDrawer,
+  } = useChatStream(activeSession?.messages ?? []);
+
+  /* ─── Observability (health for header) ──────── */
+  const { health } = useObservability();
+
+  /* Sync messages from active session into the chat hook when switching sessions */
+  useEffect(() => {
+    if (activeSession) {
+      setMessages(activeSession.messages);
+    }
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Persist chat messages back into the session whenever they change */
+  useEffect(() => {
+    if (activeSessionId && messages.length > 0) {
+      updateSessionMessages(activeSessionId, messages);
+    }
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ─── Handlers ───────────────────────────────── */
+  const handleSendMessage = useCallback(
+    (content: string, filters?: FilterOptions, model?: string) => {
+      sendMessage(content, activeSessionId, filters, model);
+    },
+    [sendMessage, activeSessionId],
+  );
+
+  const handleNewSession = useCallback(() => {
+    clearMessages();
+    createNewSession();
+  }, [clearMessages, createNewSession]);
+
+  const handleSwitchSession = useCallback(
+    (id: string) => {
+      cancelStream();
+      switchSession(id);
+    },
+    [cancelStream, switchSession],
+  );
+
+  const handleClearChat = useCallback(() => {
+    clearMessages();
+    if (activeSessionId) {
+      updateSessionMessages(activeSessionId, []);
+    }
+  }, [clearMessages, activeSessionId, updateSessionMessages]);
+
+  /* ─── Tab content ────────────────────────────── */
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'documents':
+        return <DocumentsView />;
+      case 'observability':
+        return <AdminView />;
+      case 'chat':
+      default:
+        return (
+          <ChatWindow
+            messages={messages}
+            isStreaming={isStreaming}
+            onSendMessage={handleSendMessage}
+            onCancelStream={cancelStream}
+            onClearChat={handleClearChat}
+            onOpenCitation={openCitation}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[#FAF9F5] dark:bg-[#141413] transition-colors">
+      {/* Header */}
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isSidebarOpen={isSidebarOpen}
+        setIsSidebarOpen={setIsSidebarOpen}
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
+        health={health}
+      />
+
+      {/* Main body: sidebar + content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Session sidebar — only relevant on chat tab */}
+        {activeTab === 'chat' && (
+          <SessionSidebar
+            isOpen={isSidebarOpen}
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectSession={handleSwitchSession}
+            onNewSession={handleNewSession}
+            onDeleteSession={deleteSession}
+            onRenameSession={renameSession}
+          />
+        )}
+
+        {/* Page content with page-transition animation */}
+        <AnimatePresence mode="wait">
+          <motion.main
+            key={activeTab}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="flex-1 flex flex-col min-w-0"
+          >
+            {renderContent()}
+          </motion.main>
+        </AnimatePresence>
+      </div>
+
+      {/* Citation drawer slides from right */}
+      <CitationDrawer
+        isOpen={isDrawerOpen}
+        citation={activeCitation}
+        onClose={closeCitationDrawer}
+      />
+    </div>
+  );
+}

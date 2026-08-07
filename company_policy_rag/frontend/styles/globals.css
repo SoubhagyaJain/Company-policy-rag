@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base ─────────────────────────────────────── */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-[#FAF9F5] text-charcoal transition-colors duration-200;
+  }
+
+  .dark body,
+  html.dark body {
+    @apply bg-[#141413] text-cream-100;
+  }
+
+  /* Accessible focus ring */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-terracotta-600/60;
+  }
+
+  /* Selection highlight */
+  ::selection {
+    @apply bg-terracotta-500/20 text-charcoal;
+  }
+
+  .dark ::selection {
+    @apply bg-terracotta-500/30 text-cream-100;
+  }
+}
+
+/* ─── Components ───────────────────────────────── */
+@layer components {
+  /* Custom scrollbar — thin, matching the cream/sand palette */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #C5BDAB transparent;
+  }
+
+  .dark .custom-scrollbar {
+    scrollbar-color: #3A3832 transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: #D9D3C5;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #C5BDAB;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #2A2925;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #3A3832;
+  }
+
+  /* Liquid glass focus ring for interactive elements */
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-terracotta-600/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream-50 dark:focus-visible:ring-offset-cream-950;
+  }
+
+  /* Upload dropzone dashed border animation */
+  .dropzone-active {
+    @apply border-terracotta-500 bg-terracotta-500/5 dark:bg-terracotta-500/10;
+  }
+}
+
+/* ─── Utilities ────────────────────────────────── */
+@layer utilities {
+  /* Hide scrollbar entirely (for overlays) */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ─── Reduced Motion (a11y + Framer Motion) ──── */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
