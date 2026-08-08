@@ -3,7 +3,8 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
+
 from pydantic import BaseModel, Field
 
 from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole, ContentType
@@ -17,7 +18,7 @@ class MetadataFilter(BaseModel):
     value: Any
 
 
-def cosine_similarity(v1: List[float], v2: List[float]) -> float:
+def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     if not v1 or not v2 or len(v1) != len(v2):
         return 0.0
     dot = sum(a * b for a, b in zip(v1, v2))
@@ -30,16 +31,16 @@ def cosine_similarity(v1: List[float], v2: List[float]) -> float:
 
 class VectorStoreInterface(ABC):
     @abstractmethod
-    def add_chunks(self, chunks: List[Chunk]) -> None:
+    def add_chunks(self, chunks: list[Chunk]) -> None:
         pass
 
     @abstractmethod
     def search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         top_k: int = 20,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ScoredChunk]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]:
         pass
 
     @abstractmethod
@@ -74,7 +75,7 @@ class ChromaVectorStore(VectorStoreInterface):
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self._collection: Any = None
-        self._memory_chunks: Dict[str, Chunk] = {}
+        self._memory_chunks: dict[str, Chunk] = {}
         self._init_chroma()
 
     def _init_chroma(self) -> None:
@@ -95,9 +96,9 @@ class ChromaVectorStore(VectorStoreInterface):
             logger.warning("ChromaDB initialization failed (%s). Operating in-memory vector store mode.", exc)
             self._collection = None
 
-    def _flatten_metadata(self, meta: ChunkMetadata) -> Dict[str, Any]:
+    def _flatten_metadata(self, meta: ChunkMetadata) -> dict[str, Any]:
         d = meta.model_dump()
-        flat: Dict[str, Any] = {}
+        flat: dict[str, Any] = {}
         for k, v in d.items():
             if k == "extra" and isinstance(v, dict):
                 for ek, ev in v.items():
@@ -115,7 +116,7 @@ class ChromaVectorStore(VectorStoreInterface):
                 flat[k] = str(v)
         return flat
 
-    def add_chunks(self, chunks: List[Chunk]) -> None:
+    def add_chunks(self, chunks: list[Chunk]) -> None:
         if not chunks:
             return
 
@@ -124,10 +125,10 @@ class ChromaVectorStore(VectorStoreInterface):
 
         if self._collection is not None:
             try:
-                ids: List[str] = []
-                documents: List[str] = []
-                embeddings: List[Any] = []
-                metadatas: List[Any] = []
+                ids: list[str] = []
+                documents: list[str] = []
+                embeddings: list[Any] = []
+                metadatas: list[Any] = []
 
                 for chunk in chunks:
                     if chunk.embedding is None:
@@ -147,7 +148,7 @@ class ChromaVectorStore(VectorStoreInterface):
             except Exception as exc:
                 logger.warning("Failed to add chunks to Chroma collection: %s", exc)
 
-    def _matches_filters(self, chunk: Chunk, filters: Optional[Dict[str, Any]]) -> bool:
+    def _matches_filters(self, chunk: Chunk, filters: dict[str, Any] | None) -> bool:
         if not filters:
             return True
         meta_dict = chunk.metadata.model_dump()
@@ -164,10 +165,10 @@ class ChromaVectorStore(VectorStoreInterface):
 
     def search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         top_k: int = 20,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ScoredChunk]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]:
         if not query_embedding:
             return []
 
@@ -186,7 +187,7 @@ class ChromaVectorStore(VectorStoreInterface):
                     elif len(conditions) > 1:
                         where_clause = {"$and": conditions}
 
-                query_params: Dict[str, Any] = {
+                query_params: dict[str, Any] = {
                     "query_embeddings": [query_embedding],
                     "n_results": min(top_k, cast(int, self._collection.count())),
                     "include": ["documents", "metadatas", "distances"],
@@ -195,7 +196,7 @@ class ChromaVectorStore(VectorStoreInterface):
                     query_params["where"] = where_clause
 
                 results = self._collection.query(**query_params)
-                scored_chunks: List[ScoredChunk] = []
+                scored_chunks: list[ScoredChunk] = []
 
                 if results is not None and results.get("ids") and len(results["ids"]) > 0:
                     hit_ids = results["ids"][0]
@@ -204,7 +205,7 @@ class ChromaVectorStore(VectorStoreInterface):
                     hit_dists = (results.get("distances") or [[]])[0]
 
                     for cid, meta, doc, dist in zip(hit_ids, hit_metas, hit_docs, hit_dists):
-                        meta_dict = cast(Dict[str, Any], meta) if meta else {}
+                        meta_dict = cast(dict[str, Any], meta) if meta else {}
                         dist_val = float(dist) if dist is not None else 1.0
                         sim_score = max(0.0, 1.0 - dist_val)
 
@@ -237,7 +238,7 @@ class ChromaVectorStore(VectorStoreInterface):
                 logger.warning("Chroma query failed (%s). Falling back to memory search.", exc)
 
         # Fallback in-memory search
-        scored_memory: List[ScoredChunk] = []
+        scored_memory: list[ScoredChunk] = []
         for chunk in self._memory_chunks.values():
             if not self._matches_filters(chunk, filters):
                 continue

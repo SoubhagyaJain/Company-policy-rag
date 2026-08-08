@@ -63,3 +63,50 @@ def test_post_chat_with_category_filter():
     assert response.status_code == 200
     data = response.json()
     assert data["query"] == "What are the security guidelines?"
+
+
+def test_post_chat_multi_turn_conversational_memory():
+    client = TestClient(app)
+    session_id = "mem_test_session_1"
+
+    # Turn 1
+    p1 = {
+        "message": "What is the employee annual leave policy?",
+        "session_id": session_id,
+    }
+    r1 = client.post("/api/chat", json=p1)
+    assert r1.status_code == 200
+    d1 = r1.json()
+    assert d1["session_id"] == session_id
+
+    # Turn 2 (Follow-up with pronoun)
+    p2 = {
+        "message": "Does it apply to part-time employees?",
+        "session_id": session_id,
+    }
+    r2 = client.post("/api/chat", json=p2)
+    assert r2.status_code == 200
+    d2 = r2.json()
+    assert d2["session_id"] == session_id
+
+    # Verify ChatService internal session tracking
+    chat_svc = get_chat_service()
+    history = chat_svc._sessions.get(session_id, [])
+    assert len(history) == 4  # User1, Assistant1, User2, Assistant2
+    assert history[0]["role"] == "user"
+    assert history[0]["content"] == "What is the employee annual leave policy?"
+    assert history[2]["role"] == "user"
+    assert history[2]["content"] == "Does it apply to part-time employees?"
+
+
+def test_post_chat_model_parameter():
+    client = TestClient(app)
+    payload = {
+        "message": "What is the resignation notice period?",
+        "model": "llama3.1:8b",
+    }
+    response = client.post("/api/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["model"] == "llama3.1:8b"
+

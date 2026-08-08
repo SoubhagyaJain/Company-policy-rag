@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any
+
 from backend.models.rag import ScoredChunk
 from backend.utils.logging import logger
 
@@ -16,7 +17,7 @@ class RelativeScoreThresholdPostprocessor:
         self.min_ratio = min_ratio
         self.min_keep = min_keep
 
-    def filter(self, chunks: List[ScoredChunk]) -> List[ScoredChunk]:
+    def filter(self, chunks: list[ScoredChunk]) -> list[ScoredChunk]:
         if not chunks:
             return chunks
 
@@ -54,7 +55,7 @@ class RelativeScoreThresholdPostprocessor:
         return filtered
 
 
-_shared_reranker_model: Optional[Any] = None
+_shared_reranker_model: Any | None = None
 _shared_reranker_model_loaded: bool = False
 
 
@@ -90,10 +91,10 @@ class CrossEncoderReranker:
 
         self._model_loaded = True
         try:
+            import os
+
             import torch  # type: ignore
             from sentence_transformers import CrossEncoder  # type: ignore
-
-            import os
             dev = "cuda" if (self.device == "cuda" or (self.device == "auto" and torch.cuda.is_available())) else "cpu"
             logger.info("Loading CrossEncoder reranker model %s on device %s", self.model_name, dev)
             os.environ["HF_HUB_OFFLINE"] = "1"
@@ -110,7 +111,7 @@ class CrossEncoderReranker:
         _shared_reranker_model = self._model
         _shared_reranker_model_loaded = True
 
-    def rerank(self, query: str, candidates: List[ScoredChunk]) -> List[ScoredChunk]:
+    def rerank(self, query: str, candidates: list[ScoredChunk]) -> list[ScoredChunk]:
         """Rerank candidate chunks using cross-encoder logit scoring and relative thresholding."""
         if not candidates:
             return []
@@ -124,7 +125,7 @@ class CrossEncoderReranker:
                 if hasattr(logits, "tolist"):
                     logits = logits.tolist()
 
-                reranked_candidates: List[ScoredChunk] = []
+                reranked_candidates: list[ScoredChunk] = []
                 for sc, logit in zip(candidates, logits):
                     score_val = float(logit)
                     reranked_candidates.append(

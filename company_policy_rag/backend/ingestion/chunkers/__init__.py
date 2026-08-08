@@ -7,11 +7,11 @@ from backend.ingestion.chunkers.semantic import SemanticChunker
 from backend.ingestion.chunkers.table_aware import TableAwareChunker
 
 __all__ = [
+    "AdaptiveChunker",
     "BaseChunker",
+    "HeadingAwareChunker",
+    "MarkdownAwareChunker",
     "RecursiveChunker",
     "SemanticChunker",
-    "MarkdownAwareChunker",
-    "HeadingAwareChunker",
     "TableAwareChunker",
-    "AdaptiveChunker",
 ]

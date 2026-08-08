@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Optional
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from backend.api.dependencies import get_document_service
@@ -23,7 +23,7 @@ router = APIRouter(tags=["Documents"])
 async def upload_document_file(
     file: UploadFile = File(...),
     category: str = Form("general"),
-    chunk_strategy: Optional[str] = Form(None),
+    chunk_strategy: str | None = Form(None),
     doc_service: DocumentService = Depends(get_document_service),
 ) -> DocumentUploadResponse:
     """
@@ -37,7 +37,7 @@ async def upload_document_file(
     if len(content) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size exceeds maximum allowed limit of 100MB.",
+            detail="File size exceeds maximum allowed limit of 100MB.",
         )
 
     try:
@@ -53,13 +53,13 @@ async def upload_document_file(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process document upload: {str(exc)}",
+            detail=f"Failed to process document upload: {exc!s}",
         )
 
 
 @router.get("/api/documents", response_model=DocumentListResponse)
 def list_indexed_documents(
-    category: Optional[str] = None,
+    category: str | None = None,
     limit: int = 100,
     offset: int = 0,
     doc_service: DocumentService = Depends(get_document_service),

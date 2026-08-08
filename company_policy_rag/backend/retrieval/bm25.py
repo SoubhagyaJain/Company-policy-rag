@@ -4,7 +4,8 @@ import json
 import pickle
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from backend.models.chunk import Chunk
 from backend.models.rag import ScoredChunk
 from backend.utils.logging import logger
@@ -12,7 +13,7 @@ from backend.utils.logging import logger
 _token_re = re.compile(r"[a-z0-9]+")
 
 
-def tokenize(text: str) -> List[str]:
+def tokenize(text: str) -> list[str]:
     return _token_re.findall(text.lower())
 
 
@@ -37,11 +38,11 @@ class BM25SearchIndex:
 
     def __init__(self, storage_dir: str = "app/storage/bm25") -> None:
         self.storage_dir = Path(storage_dir)
-        self.entries: List[Chunk] = []
-        self._tokenized_corpus: List[List[str]] = []
-        self._bm25: Optional[Any] = None
+        self.entries: list[Chunk] = []
+        self._tokenized_corpus: list[list[str]] = []
+        self._bm25: Any | None = None
 
-    def build_index(self, chunks: List[Chunk]) -> None:
+    def build_index(self, chunks: list[Chunk]) -> None:
         """Build BM25 index over a list of document chunks."""
         self.entries = []
         self._tokenized_corpus = []
@@ -65,7 +66,7 @@ class BM25SearchIndex:
         else:
             self._bm25 = None
 
-    def _matches_filters(self, chunk: Chunk, filters: Optional[Dict[str, Any]]) -> bool:
+    def _matches_filters(self, chunk: Chunk, filters: dict[str, Any] | None) -> bool:
         if not filters:
             return True
         meta_dict = chunk.metadata.model_dump()
@@ -84,8 +85,8 @@ class BM25SearchIndex:
         self,
         query: str,
         top_k: int = 25,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ScoredChunk]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]:
         """Search BM25 index and return ScoredChunk list sorted by BM25 relevance score."""
         if not self._bm25 or not self.entries:
             return []
@@ -106,7 +107,7 @@ class BM25SearchIndex:
             reverse=True,
         )
 
-        results: List[ScoredChunk] = []
+        results: list[ScoredChunk] = []
         for idx in ranked_indices:
             chunk = self.entries[idx]
             if not self._matches_filters(chunk, filters):
@@ -124,7 +125,7 @@ class BM25SearchIndex:
 
         return results
 
-    def save(self, storage_dir: Optional[str] = None) -> None:
+    def save(self, storage_dir: str | None = None) -> None:
         target_dir = Path(storage_dir) if storage_dir else self.storage_dir
         target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -143,7 +144,7 @@ class BM25SearchIndex:
             )
         logger.info("Saved BM25 index (%d docs) to %s", len(self.entries), target_dir)
 
-    def load(self, storage_dir: Optional[str] = None) -> bool:
+    def load(self, storage_dir: str | None = None) -> bool:
         target_dir = Path(storage_dir) if storage_dir else self.storage_dir
         corpus_file = target_dir / "corpus.json"
         index_file = target_dir / "index.pkl"
@@ -183,8 +184,8 @@ class BM25SearchIndex:
         return False
 
     def remove_by_source_file(self, source_file: str) -> None:
-        kept_entries: List[Chunk] = []
-        kept_tokens: List[List[str]] = []
+        kept_entries: list[Chunk] = []
+        kept_tokens: list[list[str]] = []
 
         for chunk, tokens in zip(self.entries, self._tokenized_corpus):
             if chunk.metadata.source_file == source_file:
@@ -206,8 +207,8 @@ class BM25SearchIndex:
             self._bm25 = None
 
     def remove_by_document_id(self, document_id: str) -> None:
-        kept_entries: List[Chunk] = []
-        kept_tokens: List[List[str]] = []
+        kept_entries: list[Chunk] = []
+        kept_tokens: list[list[str]] = []
 
         for chunk, tokens in zip(self.entries, self._tokenized_corpus):
             if chunk.metadata.document_id == document_id:

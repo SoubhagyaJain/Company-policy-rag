@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+
 from backend.api.dependencies import get_document_service
 from backend.models.api_dto import HealthStatus
 from backend.services.document_service import DocumentService

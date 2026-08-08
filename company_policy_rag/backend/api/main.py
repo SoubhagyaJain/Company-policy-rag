@@ -63,7 +63,7 @@ def create_app() -> FastAPI:
         logger.exception("Unhandled server error on %s: %s", request.url.path, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": f"Internal server error: {str(exc)}", "error_code": "INTERNAL_ERROR"},
+            content={"detail": f"Internal server error: {exc!s}", "error_code": "INTERNAL_ERROR"},
         )
 
     @app.get("/")

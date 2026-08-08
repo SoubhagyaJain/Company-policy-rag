@@ -1,133 +1,279 @@
-# 🚀 Enterprise Policy RAG System: High-Precision Knowledge Retrieval
+# 🚀 Enterprise Policy RAG Chatbot
 
 ![Architecture: Microservices](https://img.shields.io/badge/Architecture-Microservices-blue)
 ![Backend: FastAPI](https://img.shields.io/badge/Backend-FastAPI_|_Python_3.11-009688?logo=fastapi)
-![Frontend: Next.js](https://img.shields.io/badge/Frontend-Next.js_15_|_React_18-000000?logo=next.js)
+![Frontend: Next.js](https://img.shields.io/badge/Frontend-Next.js_16_|_React_19-000000?logo=next.js)
 ![VectorDB: Chroma](https://img.shields.io/badge/VectorDB-ChromaDB-FF4F00)
-![Cache: Redis](https://img.shields.io/badge/Cache-Redis-DC382D?logo=redis)
-![CI/CD: GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?logo=github-actions)
+![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)
+![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)
 
-A production-grade, highly scalable **Retrieval-Augmented Generation (RAG)** architecture designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built to MAANG engineering standards, this system prioritizes **precision, verifiability, and sub-second latency**.
+A production-grade **Retrieval-Augmented Generation (RAG)** chatbot designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, and a real-time streaming UI with **live model switching**.
 
-Unlike standard "toy" RAG implementations, this system features a decoupled microservices architecture, advanced hybrid retrieval with Cross-Encoder reranking, and a rigorous faithfulness evaluation guardrail.
+---
+
+## ✨ Features
+
+### 🧠 Conversational Memory
+- **Multi-turn context awareness** — the chatbot remembers previous messages within the same session.
+- **Pronoun resolution** — follow-up questions like *"Are there any exceptions for it?"* are automatically resolved using conversation history.
+- **Context-aware query rewriting** — the AI Query Rewriter uses past conversation turns to generate better search queries, improving retrieval accuracy.
+
+### 🔀 Live Model Switching
+- **In-chat model dropdown** — switch between LLM models directly from the chat UI without restarting.
+- **Thread-safe model proxy** — concurrent requests with different models are handled safely.
+- **Supported models**: `qwen2.5:7b`, `qwen2.5:14b`, `llama3.1:8b`, `mistral:7b`, `gemma2:9b` (any Ollama model can be added).
+
+### ⚡ Real-Time Streaming
+- **Server-Sent Events (SSE)** — tokens stream to the browser in real-time as the LLM generates them.
+- **Sub-second TTFT** — optimized pipeline delivers Time-To-First-Token under 1 second on cached queries.
+- **Live retrieval telemetry** — the UI shows retrieval stage timings, reranking scores, and citation sources in real-time.
+
+### 🎯 High-Precision Retrieval
+- **Hybrid Search (Dense + Sparse)** — combines dense vector similarity (`BAAI/bge-small-en-v1.5`) with sparse BM25 keyword matching via Reciprocal Rank Fusion (RRF).
+- **Cross-Encoder Reranking** — `BAAI/bge-reranker-large` running on **CUDA GPU** re-scores candidates for maximum precision.
+- **Parent Context Expansion** — expands retrieved chunks to include surrounding context for more complete answers.
+
+### 🛡️ Hallucination Mitigation
+- **Strict Grounding Enforcement** — the LLM is forced to abstain rather than guess when sources don't contain the answer.
+- **Deterministic Citations** — every claim is bound to exact `[Source N]` references from retrieved document chunks.
+- **Faithfulness Evaluation** — automated LLM-as-a-judge evaluation validates output fidelity.
+
+### 📄 Document Management
+- **Multi-format upload** — supports PDF, DOCX, TXT, MD, HTML, CSV, JSON (up to 100MB).
+- **Adaptive chunking** — intelligent section-aware chunking preserves document structure.
+- **Live document stats** — the UI shows total documents, chunks, file sizes, and indexing status.
 
 ---
 
 ## 📐 System Architecture
 
-The architecture is fully decoupled, horizontally scalable, and containerized.
-
 ```mermaid
 graph TD
-    %% Frontend
-    Client[Client / Web Browser] --> |Next.js 15 App Router| UI[Next.js Frontend]
+    Client[Web Browser] --> |Next.js 16| UI[React Frontend]
     UI --> |SSE Streaming| API[FastAPI Backend]
 
-    %% Backend Services
     subgraph Backend [FastAPI Microservice]
-        API --> |Cache Hit| Redis[(Redis Cache)]
-        API --> |Cache Miss| Orchestrator[RAG Pipeline]
+        API --> Orchestrator[RAG Pipeline]
+        Orchestrator --> Memory[Session Memory]
     end
 
-    %% RAG Pipeline
     subgraph RAG [Advanced RAG Pipeline]
-        Orchestrator --> |Query Rewrite| LLM_Q[LLM]
+        Orchestrator --> |Context-Aware Rewrite| LLM_Q[Query Rewriter]
         Orchestrator --> |Hybrid Search| VectorDB[(ChromaDB)]
         VectorDB --> |BM25 + Dense Vectors| RRF[Reciprocal Rank Fusion]
-        RRF --> |Top K Candidates| Reranker[BGE Cross-Encoder]
-        Reranker --> |Context Compression| Context[Filtered Context]
-        Context --> |Strict Grounding| LLM[LLM Generator]
+        RRF --> |Top K Candidates| Reranker[BGE Cross-Encoder · CUDA]
+        Reranker --> |Context Expansion| Context[Filtered Context]
+        Context --> |Grounded Generation| LLM[Ollama LLM · GPU]
     end
-    
-    %% External
+
     LLM --> |Verification| Guardrail[Faithfulness Evaluator]
+    LLM --> |Stream Tokens| UI
 ```
-
----
-
-## 🏆 Key Engineering Achievements
-
-### 1. High-Precision Retrieval Pipeline
-- **Hybrid Search (Dense + Sparse):** Combines dense vector similarity (`nomic-embed-text`) with sparse BM25 keyword matching via Reciprocal Rank Fusion (RRF) to capture both semantic meaning and exact lexical matches (critical for policy numbers/acronyms).
-- **Cross-Encoder Reranking:** Implemented `BAAI/bge-reranker-large` to re-score the top 30 retrieval candidates, drastically reducing context noise and improving **Context Precision to 0.82+**.
-- **Context Compression:** Dynamically extracts highly relevant sentences from large text chunks before passing them to the LLM context window, reducing token usage by ~40% and mitigating "lost in the middle" degradation.
-
-### 2. Hallucination Mitigation & Verifiability
-- **Strict Grounding Enforcement:** The LLM is forced to abstain (`"I cannot answer based on the provided documents"`) rather than guess when confidence thresholds are unmet.
-- **Deterministic Citations:** Engineered a custom post-processing pipeline that binds generated claims to exact source document chunks, exposing verifiable `[Source N]` tags to the frontend UI.
-- **Automated Faithfulness Evals:** Integrated LLM-as-a-judge evaluation scripts (`scripts/evaluate.py`) achieving a **Faithfulness Score of 0.90+** against a golden dataset.
-
-### 3. Scalable Distributed Infrastructure
-- **Asynchronous I/O:** Built entirely on Python `asyncio` and FastAPI, utilizing `uvloop` for high-throughput concurrency.
-- **Distributed Caching:** Integrated an async `redis-py` caching layer using SHA-256 hashes of queries and metadata filters, reducing p99 latency by 85% for frequent queries.
-- **Sub-second TTFT:** Optimized Server-Sent Events (SSE) streaming to achieve a Time-To-First-Token (TTFT) of `< 1.0s` even under heavy load.
-
-### 4. Production-Ready DevOps
-- **Multi-Stage Docker Builds:** Optimized Dockerfiles reducing image size by over 60%, utilizing non-root users (`uid 1001`) for strict container security.
-- **CI/CD Pipelines:** GitHub Actions workflow enforces code quality via Ruff, MyPy strict mode typing, ESLint, and a 142+ unit/integration test suite using Pytest.
 
 ---
 
 ## 💻 Tech Stack
 
-| Component | Technology | Rationale |
-|-----------|------------|-----------|
-| **Frontend** | Next.js 15, React 18, Tailwind | App Router for SSR, Framer Motion for liquid UI |
-| **Backend API** | FastAPI, Uvicorn, Python 3.11 | Async-first, automatic OpenAPI docs, Pydantic validation |
-| **RAG Core** | LlamaIndex, PyTorch | Extensible orchestrator, modular retrievers |
-| **Vector Store** | ChromaDB | Lightweight, persistent, fast vector lookups |
-| **Caching** | Redis (Alpine) | In-memory key-value store for exact-match query caching |
-| **LLM Provider** | Ollama (Local) / OpenAI | Configurable via `.env` for cost/privacy tradeoffs |
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Frontend** | Next.js 16, React 19, Tailwind CSS, Framer Motion | SSR, liquid glass UI, real-time streaming |
+| **Backend API** | FastAPI, Uvicorn, Python 3.11 | Async-first API with Pydantic validation |
+| **RAG Core** | LlamaIndex, PyTorch | Modular retrievers, rerankers, and generators |
+| **Vector Store** | ChromaDB | Persistent, fast vector similarity search |
+| **Embeddings** | `BAAI/bge-small-en-v1.5` | Dense vector embeddings |
+| **Reranker** | `BAAI/bge-reranker-large` | Cross-encoder reranking on CUDA GPU |
+| **LLM** | Ollama (local) — `qwen2.5:7b` default | Privacy-first, configurable, multi-model |
+| **GPU** | NVIDIA RTX 4050 (CUDA) | Accelerated reranking and embeddings |
 
 ---
 
 ## 🚀 Getting Started
 
-The entire stack is orchestrated via Docker Compose for a frictionless developer experience.
-
 ### Prerequisites
-- Docker Engine & Docker Compose
-- (Optional) Local LLM engine: [Ollama](https://ollama.com) pulling `qwen2.5:14b-instruct` and `nomic-embed-text`.
 
-### Launch the Cluster
+- **Python 3.11+** with a virtual environment
+- **Node.js 18+** and npm
+- **Ollama** installed and running ([ollama.com](https://ollama.com))
+- **NVIDIA GPU** with CUDA (optional, falls back to CPU)
+
+### 1. Pull the Required Models
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/company_policy_rag.git
+ollama pull qwen2.5:7b
+ollama pull nomic-embed-text
+
+# Optional — for model switching
+ollama pull llama3.1:8b
+ollama pull mistral:7b
+ollama pull gemma2:9b
+```
+
+### 2. Setup Backend
+
+```bash
 cd company_policy_rag
 
-# 2. Configure Environment
-cp .env.example .env
+# Create virtual environment
+python -m venv .venv
 
-# 3. Spin up the microservices
-docker-compose up --build -d
+# Activate it
+# Windows:
+.venv\Scripts\Activate.ps1
+# macOS/Linux:
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-### Access Points
-- **Next.js Web Client:** `http://localhost:3000`
-- **FastAPI Swagger Docs:** `http://localhost:8000/docs`
-- **Redis CLI:** `docker exec -it <redis-container-id> redis-cli`
+### 3. Setup Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+### 4. Configure Environment
+
+Edit the `.env` file in the project root to match your setup:
+
+```env
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_LLM_MODEL=qwen2.5:7b
+RERANKER_DEVICE=cuda    # Use 'cpu' if no NVIDIA GPU
+```
+
+### 5. Run the Application
+
+Open **two terminals**:
+
+**Terminal 1 — Backend:**
+```bash
+cd company_policy_rag
+.venv\Scripts\Activate.ps1
+uvicorn backend.api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Terminal 2 — Frontend:**
+```bash
+cd company_policy_rag/frontend
+npm run dev
+```
+
+### 6. Access the App
+
+| Service | URL |
+|---------|-----|
+| **Chat UI** | [http://localhost:3000](http://localhost:3000) |
+| **API Docs (Swagger)** | [http://localhost:8000/docs](http://localhost:8000/docs) |
+| **Health Check** | [http://localhost:8000/api/health](http://localhost:8000/api/health) |
 
 ---
 
-## 🧪 Testing & CI
+## 🗂️ Project Structure
 
-This repository enforces strict code quality and high test coverage.
-
-**Run Backend Test Suite (142 Tests):**
-```bash
-python -m pytest tests/ -v --cov=backend
 ```
-
-**Run Frontend Lint & Build Checks:**
-```bash
-cd frontend && npm run lint && npm run build
+company_policy_rag/
+├── backend/
+│   ├── api/
+│   │   ├── main.py              # FastAPI app entry point
+│   │   ├── dependencies.py      # Dependency injection factory
+│   │   └── routes/              # API route handlers
+│   ├── embeddings/              # Embedding service & vector store
+│   ├── models/                  # Pydantic data models
+│   ├── rag/
+│   │   ├── pipeline.py          # Master RAG pipeline orchestrator
+│   │   ├── query_rewrite.py     # Context-aware query rewriter
+│   │   ├── citations.py         # Citation extraction engine
+│   │   └── context_compression.py
+│   ├── retrieval/
+│   │   ├── hybrid.py            # Hybrid dense + BM25 retriever
+│   │   ├── reranker.py          # Cross-encoder reranker (CUDA)
+│   │   ├── vector.py            # Dense vector retriever
+│   │   └── bm25.py              # BM25 sparse retriever
+│   └── services/
+│       ├── chat_service.py      # Chat orchestration + session memory
+│       ├── document_service.py  # Document ingestion & management
+│       └── telemetry_service.py # Observability & trace recording
+├── frontend/
+│   ├── app/                     # Next.js App Router pages
+│   ├── components/
+│   │   ├── ChatWindow.tsx       # Chat UI with model switcher
+│   │   ├── ChatMessage.tsx      # Message bubbles with citations
+│   │   ├── DocumentsView.tsx    # Document management panel
+│   │   ├── AdminView.tsx        # Observability dashboard
+│   │   ├── SessionSidebar.tsx   # Chat session management
+│   │   └── CitationDrawer.tsx   # Source citation viewer
+│   ├── hooks/                   # Custom React hooks
+│   └── lib/                     # API client, types, utilities
+├── .env                         # Environment configuration
+└── requirements.txt             # Python dependencies
 ```
 
 ---
 
-## 📈 Roadmap & Future Scaling
+## 🧪 Usage Examples
 
-- [ ] **Semantic Caching:** Upgrade Redis cache to a Vector Cache (e.g., RedisVL) to cache semantically similar queries, not just exact string matches.
-- [ ] **Graph RAG Integration:** Implement Knowledge Graphs (Neo4j) to capture hierarchical organizational structures and entity relationships across documents.
-- [ ] **Kubernetes Migration:** Provide Helm charts for deploying the architecture to AWS EKS or GKE with Horizontal Pod Autoscaling (HPA).
+### Basic Chat
+Ask any question about your uploaded company documents:
+> *"What is the policy for remote work?"*
+
+### Follow-up with Memory
+The chatbot remembers context within the same session:
+> *"Are there any exceptions for it?"*
+> → Automatically resolves "it" to "remote work" from the previous message.
+
+### Switch Models Mid-Chat
+Click the **model dropdown** (CPU icon) in the chat top bar to switch between:
+- Qwen 2.5 7B (fast & balanced)
+- Qwen 2.5 14B (higher quality)
+- Llama 3.1 8B (Meta open model)
+- Mistral 7B (efficient reasoning)
+- Gemma 2 9B (Google compact)
+
+### Upload Documents
+Navigate to the **Documents** tab and drag & drop PDF, DOCX, TXT, MD, CSV, JSON, or HTML files. They are automatically chunked, embedded, and indexed.
+
+---
+
+## ⚙️ Environment Variables
+
+Key configuration options in `.env`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_LLM_MODEL` | `qwen2.5:7b` | Default LLM model |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `RERANKER_DEVICE` | `cuda` | Reranker device (`cuda` or `cpu`) |
+| `RERANKER_MODEL` | `BAAI/bge-reranker-large` | Cross-encoder model |
+| `LLM_TEMPERATURE` | `0.1` | Generation temperature |
+| `LLM_REQUEST_TIMEOUT` | `60.0` | LLM request timeout (seconds) |
+| `ENABLE_QUERY_REWRITE` | `true` | Enable LLM-based query rewriting |
+| `ENABLE_RERANKER` | `true` | Enable cross-encoder reranking |
+| `GROUNDING_STRICTNESS` | `balanced` | `balanced` or `strict` |
+
+---
+
+## 📈 Roadmap
+
+- [x] Hybrid Dense + BM25 retrieval with RRF
+- [x] Cross-Encoder reranking on CUDA GPU
+- [x] Real-time SSE token streaming
+- [x] Conversational memory with pronoun resolution
+- [x] Live model switching from chat UI
+- [x] Multi-format document upload & management
+- [x] Observability dashboard with trace telemetry
+- [ ] Semantic caching (vector-based cache for similar queries)
+- [ ] Graph RAG integration (Neo4j for entity relationships)
+- [ ] Multi-user authentication & role-based access
+- [ ] Kubernetes Helm charts for cloud deployment
+
+---
+
+## 📝 License
+
+This project is for educational and portfolio demonstration purposes.
+
+---
+
+**Built with ❤️ using FastAPI, Next.js, Ollama, and ChromaDB**

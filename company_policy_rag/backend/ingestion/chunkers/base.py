@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import uuid
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole, ContentType
 from backend.models.document import RawDocument
@@ -16,9 +14,8 @@ class BaseChunker(ABC):
         self.chunk_overlap = chunk_overlap
 
     @abstractmethod
-    def chunk(self, documents: List[RawDocument]) -> List[Chunk]:
+    def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
         """Split RawDocument list into Chunk list according to strategy."""
-        pass
 
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count (approx 4 chars per token)."""
@@ -30,13 +27,13 @@ class BaseChunker(ABC):
         document: RawDocument,
         chunk_index: int,
         strategy_name: str,
-        section_title: Optional[str] = None,
-        section_number: Optional[str] = None,
-        section_path: Optional[str] = None,
-        section_level: Optional[int] = None,
+        section_title: str | None = None,
+        section_number: str | None = None,
+        section_path: str | None = None,
+        section_level: int | None = None,
         node_role: ChunkRole = ChunkRole.STANDALONE,
-        parent_id: Optional[str] = None,
-        child_ids: Optional[List[str]] = None,
+        parent_id: str | None = None,
+        child_ids: list[str] | None = None,
         content_type: ContentType = ContentType.PROSE,
         is_atomic: bool = False,
     ) -> Chunk:

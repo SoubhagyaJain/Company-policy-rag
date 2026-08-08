@@ -32,7 +32,7 @@ def post_chat(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing chat query: {str(exc)}",
+            detail=f"Error processing chat query: {exc!s}",
         )
 
 

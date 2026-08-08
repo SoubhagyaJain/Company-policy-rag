@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.api.dependencies import get_document_service, get_telemetry_service
-from backend.models.api_dto import ObservabilityMetrics, TraceDetailResponse, TraceSummary
+from backend.models.api_dto import (
+    ObservabilityMetrics,
+    TraceDetailResponse,
+)
 from backend.services.document_service import DocumentService
 from backend.services.telemetry_service import TelemetryService
 
@@ -37,7 +41,7 @@ def get_query_traces(
     limit: int = 50,
     offset: int = 0,
     telemetry_service: TelemetryService = Depends(get_telemetry_service),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Retrieve list of execution traces for debugging RAG pipeline operations."""
     traces = telemetry_service.get_recent_traces(limit=limit, offset=offset)
     metrics = telemetry_service.get_metrics()

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
 import zipfile
+from pathlib import Path
+from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
-from backend.models.document import DocumentMetadata, DocumentType, RawDocument
+from backend.models.document import DocumentType, RawDocument
 from backend.utils.logging import logger
-from backend.utils.section_tracker import SectionTracker, clean_title
+from backend.utils.section_tracker import SectionTracker
 
 
 class DocxLoader(BaseLoader):
@@ -20,8 +19,8 @@ class DocxLoader(BaseLoader):
     def load(
         self,
         file_path: Path,
-        base_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[RawDocument]:
+        base_metadata: dict[str, Any] | None = None,
+    ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.DOCX, base_metadata)
 
         try:
@@ -39,7 +38,7 @@ class DocxLoader(BaseLoader):
             return [RawDocument(content="", metadata=base_meta)]
 
         section_tracker = SectionTracker()
-        content_parts: List[str] = []
+        content_parts: list[str] = []
         has_tables = False
         has_code = False
 
@@ -77,7 +76,7 @@ class DocxLoader(BaseLoader):
             elif tag_name == "tbl":
                 # Table element
                 has_tables = True
-                table_lines: List[str] = []
+                table_lines: list[str] = []
                 for row in element.iter():
                     if row.tag.endswith("tr"):
                         cells = []

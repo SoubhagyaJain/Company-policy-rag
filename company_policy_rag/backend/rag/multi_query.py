@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import List, Set
-
 
 _BUILDING_BLOCK_SUBQUERIES: tuple[str, ...] = (
     "5 Levels of Agentic AI Systems building blocks overview",
@@ -54,9 +52,9 @@ _CHECK_THIS_OUT_SUBQUERIES: tuple[str, ...] = (
 )
 
 
-def _split_topic_clause(clause: str) -> List[str]:
+def _split_topic_clause(clause: str) -> list[str]:
     parts = re.split(r",(?![^()]*\))", clause)
-    topics: List[str] = []
+    topics: list[str] = []
     for part in parts:
         cleaned = re.sub(r"\s+", " ", part).strip(" .")
         if len(cleaned) >= 3:
@@ -70,14 +68,14 @@ class MultiQueryGenerator:
     targeting specific document sections to maximize Context Recall.
     """
 
-    def generate_subqueries(self, query: str, max_queries: int = 8) -> List[str]:
+    def generate_subqueries(self, query: str, max_queries: int = 8) -> list[str]:
         """Generate deduplicated list of sub-queries for retrieval aggregation."""
         core = query.strip()
         if not core:
             return []
 
-        queries: List[str] = []
-        seen: Set[str] = set()
+        queries: list[str] = []
+        seen: set[str] = set()
 
         def add_q(q_text: str) -> None:
             key = q_text.lower()

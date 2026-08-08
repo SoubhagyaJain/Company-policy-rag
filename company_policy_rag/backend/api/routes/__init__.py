@@ -5,9 +5,9 @@ from backend.api.routes.health import router as health_router
 from backend.api.routes.models import router as models_router
 
 __all__ = [
+    "admin_router",
     "chat_router",
     "documents_router",
-    "admin_router",
     "health_router",
     "models_router",
 ]

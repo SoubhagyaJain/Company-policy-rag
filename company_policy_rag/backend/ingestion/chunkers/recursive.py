@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List
-
 from backend.ingestion.chunkers.base import BaseChunker
 from backend.models.chunk import Chunk, ContentType
 from backend.models.document import RawDocument
@@ -14,13 +12,13 @@ class RecursiveChunker(BaseChunker):
         self,
         chunk_size: int = 512,
         chunk_overlap: int = 64,
-        separators: List[str] | None = None,
+        separators: list[str] | None = None,
     ) -> None:
         super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         self.separators = separators or ["\n\n", "\n", ". ", " ", ""]
 
-    def chunk(self, documents: List[RawDocument]) -> List[Chunk]:
-        chunks: List[Chunk] = []
+    def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
+        chunks: list[Chunk] = []
 
         for doc in documents:
             if not doc.content.strip():
@@ -41,12 +39,12 @@ class RecursiveChunker(BaseChunker):
 
         return chunks
 
-    def _split_text(self, text: str, separators: List[str]) -> List[str]:
-        final_chunks: List[str] = []
+    def _split_text(self, text: str, separators: list[str]) -> list[str]:
+        final_chunks: list[str] = []
         target_len = self.chunk_size * 4  # Convert token size target to char count approx
 
         separator = separators[-1]
-        new_separators: List[str] = []
+        new_separators: list[str] = []
         for i, s in enumerate(separators):
             if s == "":
                 separator = s
@@ -58,7 +56,7 @@ class RecursiveChunker(BaseChunker):
 
         splits = text.split(separator) if separator else list(text)
 
-        good_splits: List[str] = []
+        good_splits: list[str] = []
         for s in splits:
             if len(s) < target_len:
                 good_splits.append(s)
@@ -79,9 +77,9 @@ class RecursiveChunker(BaseChunker):
 
         return final_chunks
 
-    def _merge_splits(self, splits: List[str], separator: str, target_len: int) -> List[str]:
-        docs: List[str] = []
-        current_doc: List[str] = []
+    def _merge_splits(self, splits: list[str], separator: str, target_len: int) -> list[str]:
+        docs: list[str] = []
+        current_doc: list[str] = []
         total = 0
         overlap_char_count = self.chunk_overlap * 4
 

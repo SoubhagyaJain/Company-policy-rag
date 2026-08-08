@@ -250,6 +250,111 @@ def test_query_rewriter():
     assert res_comp.inferred_corpus == "guidebook"
 
 
+def test_query_rewriter_with_history():
+    # Test fallback pronoun resolution without LLM
+    rewriter = QueryRewriter(enable_llm_rewrite=False)
+    history = [
+        {"role": "user", "content": "What is the employee annual leave policy?"},
+        {"role": "assistant", "content": "Employees get 15 days of paid annual leave per year."},
+    ]
+    res = rewriter.rewrite("Does it apply to part-time employees?", history=history)
+    assert "What is the employee annual leave policy?" in res.rewritten_query
+
+    # Test fallback without explicit pronouns in multi-turn follow-up
+    res_no_pronoun = rewriter.rewrite("Who is eligible?", history=history)
+    assert "What is the employee annual leave policy?" in res_no_pronoun.rewritten_query
+
+    # Test LLM query rewriting with history
+    class DummyLLM:
+        def complete(self, prompt: str) -> str:
+            assert "Conversation History:" in prompt
+            assert "Follow-up Question: Does it apply to part-time employees?" in prompt
+            return "annual leave policy part-time employee eligibility"
+
+    llm_rewriter = QueryRewriter(enable_llm_rewrite=True, llm=DummyLLM())
+    res_llm = llm_rewriter.rewrite("Does it apply to part-time employees?", history=history)
+    assert res_llm.rewritten_query == "annual leave policy part-time employee eligibility"
+
+
+def test_pipeline_query_rewriter_llm_connection(sample_chunks: list[Chunk]):
+    # Verify Fix 1: RAGPipeline(..., llm=llm) connects query_rewriter.llm
+    class DummyLLM:
+        def __init__(self):
+            self.model = "qwen2.5:7b"
+
+        def complete(self, prompt: str) -> str:
+            return "rewritten search query"
+
+    dummy_llm = DummyLLM()
+    mock_retriever = HybridRetriever(
+        dense_retriever=DenseVectorRetriever(vector_store=None, embedding_service=EmbeddingService()),
+        bm25_index=BM25SearchIndex(),
+    )
+    pipeline = RAGPipeline(hybrid_retriever=mock_retriever, llm=dummy_llm)
+    assert pipeline.query_rewriter.llm is dummy_llm
+
+
+def test_history_slicing_twelve_messages():
+    # Verify Fix 2: history slicing preserves 12 messages for 6 turns
+    from backend.rag.pipeline import _format_history_for_prompt
+
+    history = []
+    for i in range(1, 10):  # 9 turns = 18 messages
+        history.append({"role": "user", "content": f"User msg {i}"})
+        history.append({"role": "assistant", "content": f"Assistant msg {i}"})
+
+    formatted = _format_history_for_prompt(history, max_turns=6)
+    # Turn 4 to Turn 9 should be present (6 turns * 2 = 12 messages)
+    assert "User msg 4" in formatted
+    assert "User msg 9" in formatted
+    assert "User msg 3" not in formatted
+
+
+def test_pipeline_with_history_and_model(sample_chunks: list[Chunk]):
+    temp_dir = tempfile.mkdtemp()
+    try:
+        vstore = ChromaVectorStore(collection_name="rag_mem_test", persist_dir=temp_dir)
+        vstore.add_chunks(sample_chunks)
+        embed_service = EmbeddingService(cache_enabled=True)
+        dense_retriever = DenseVectorRetriever(vector_store=vstore, embedding_service=embed_service)
+        bm25 = BM25SearchIndex(storage_dir=os.path.join(temp_dir, "bm25"))
+        bm25.build_index(sample_chunks)
+        hybrid_retriever = HybridRetriever(dense_retriever=dense_retriever, bm25_index=bm25)
+
+        class DummyLLM:
+            def __init__(self):
+                self.model = "qwen2.5:7b"
+                self.last_prompt = ""
+
+            def complete(self, prompt: str) -> str:
+                self.last_prompt = prompt
+                return "Part-time employees are not eligible for annual leave [Source 1]."
+
+        dummy_llm = DummyLLM()
+        pipeline = RAGPipeline(hybrid_retriever=hybrid_retriever, llm=dummy_llm)
+
+        history = [
+            {"role": "user", "content": "What is the employee annual leave policy?"},
+            {"role": "assistant", "content": "Employees get 15 days of annual leave."},
+        ]
+
+        response = pipeline.query(
+            user_query="Does it apply to part-time employees?",
+            history=history,
+            model="llama3.1:8b",
+        )
+
+        assert response.model == "llama3.1:8b"
+        # Verify Fix 4: shared singleton dummy_llm.model is NOT mutated
+        assert dummy_llm.model == "qwen2.5:7b"
+        assert "Recent Conversation History:" in dummy_llm.last_prompt
+        assert "User: What is the employee annual leave policy?" in dummy_llm.last_prompt
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+
+
 def test_context_compression_and_parent_expansion(sample_chunks: list[Chunk]):
     compressor = ContextCompressor(enable_parent_expansion=True, max_token_budget=4096)
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import collections
 import statistics
 import threading
-from typing import Any, Dict, List, Optional
 
 from backend.models.api_dto import ObservabilityMetrics, TraceSummary
 from backend.models.rag import RAGResponse, ScoredChunk
@@ -58,11 +57,11 @@ class TelemetryService:
     def record_from_rag_response(
         self,
         rag_response: RAGResponse,
-        ttft_ms: Optional[float] = None,
+        ttft_ms: float | None = None,
     ) -> TraceSummary:
         """Extract telemetry data from a RAGResponse and record in trace store."""
         t = rag_response.trace
-        context_chunks: List[ScoredChunk] = rag_response.context_chunks or []
+        context_chunks: list[ScoredChunk] = rag_response.context_chunks or []
 
         similarity_scores = [sc.dense_score for sc in context_chunks if sc.dense_score is not None]
         bm25_scores = [sc.sparse_score for sc in context_chunks if sc.sparse_score is not None]
@@ -145,13 +144,13 @@ class TelemetryService:
                 recent_traces=recent_list,
             )
 
-    def get_recent_traces(self, limit: int = 50, offset: int = 0) -> List[TraceSummary]:
+    def get_recent_traces(self, limit: int = 50, offset: int = 0) -> list[TraceSummary]:
         """Return slices of stored traces from newest to oldest."""
         with self._lock:
             all_traces = list(self._traces)
             return all_traces[offset : offset + limit]
 
-    def get_trace_by_id(self, trace_id: str) -> Optional[TraceSummary]:
+    def get_trace_by_id(self, trace_id: str) -> TraceSummary | None:
         """Find a specific trace by trace_id."""
         with self._lock:
             for t in self._traces:

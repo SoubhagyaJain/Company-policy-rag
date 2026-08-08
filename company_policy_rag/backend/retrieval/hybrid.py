@@ -1,25 +1,27 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from backend.models.rag import ScoredChunk
 from backend.retrieval.bm25 import BM25SearchIndex
+from backend.retrieval.reranker import CrossEncoderReranker
 from backend.retrieval.vector import DenseVectorRetriever
 from backend.utils.logging import logger
 
 
 def reciprocal_rank_fusion(
-    ranked_lists: List[List[ScoredChunk]],
+    ranked_lists: list[list[ScoredChunk]],
     rrf_k: int = 60,
-) -> List[ScoredChunk]:
+) -> list[ScoredChunk]:
     """
     Merges multiple ranked lists of ScoredChunks using Reciprocal Rank Fusion (RRF).
     Formula: RRF_Score(doc) = sum( 1.0 / (rrf_k + rank) ) across ranked lists.
     Preserves highest dense_score and sparse_score attributes.
     """
-    rrf_scores: Dict[str, float] = {}
-    best_chunks: Dict[str, ScoredChunk] = {}
-    dense_scores: Dict[str, Optional[float]] = {}
-    sparse_scores: Dict[str, Optional[float]] = {}
+    rrf_scores: dict[str, float] = {}
+    best_chunks: dict[str, ScoredChunk] = {}
+    dense_scores: dict[str, float | None] = {}
+    sparse_scores: dict[str, float | None] = {}
 
     for node_list in ranked_lists:
         for rank, sc in enumerate(node_list, start=1):
@@ -38,7 +40,7 @@ def reciprocal_rank_fusion(
     if not rrf_scores:
         return []
 
-    fused: List[ScoredChunk] = []
+    fused: list[ScoredChunk] = []
     sorted_items = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
 
     for rank, (cid, score) in enumerate(sorted_items, start=1):
@@ -65,10 +67,12 @@ class HybridRetriever:
         self,
         dense_retriever: DenseVectorRetriever,
         bm25_index: BM25SearchIndex,
+        reranker: CrossEncoderReranker | None = None,
         rrf_k: int = 60,
     ) -> None:
         self.dense_retriever = dense_retriever
         self.bm25_index = bm25_index
+        self.reranker = reranker or CrossEncoderReranker()
         self.rrf_k = rrf_k
 
     def retrieve(
@@ -76,8 +80,8 @@ class HybridRetriever:
         query: str,
         dense_top_k: int = 25,
         bm25_top_k: int = 25,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ScoredChunk]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]:
         """Execute hybrid search with Reciprocal Rank Fusion."""
         if not query.strip():
             return []

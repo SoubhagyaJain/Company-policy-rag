@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
-_VALID_ROMANS: Set[str] = {
+_VALID_ROMANS: set[str] = {
     "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
     "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX",
 }
@@ -15,15 +15,15 @@ class SectionPattern:
     name: str
     level: int
     regex: re.Pattern[str]
-    number_group: Optional[int]
-    title_group: Optional[int]
+    number_group: int | None
+    title_group: int | None
     priority: int = 100
 
 
 @dataclass
 class SectionHeading:
     level: int
-    section_number: Optional[str]
+    section_number: str | None
     section_title: str
     full_label: str
     pattern_name: str
@@ -31,13 +31,13 @@ class SectionHeading:
 
 @dataclass
 class SectionContext:
-    section_title: Optional[str] = None
-    section_number: Optional[str] = None
-    section_path: Optional[str] = None
-    section_level: Optional[int] = None
-    headings: List[SectionHeading] = field(default_factory=list)
+    section_title: str | None = None
+    section_number: str | None = None
+    section_path: str | None = None
+    section_level: int | None = None
+    headings: list[SectionHeading] = field(default_factory=list)
 
-    def to_metadata(self) -> Dict[str, Any]:
+    def to_metadata(self) -> dict[str, Any]:
         return {
             "section_title": self.section_title,
             "section_number": self.section_number,
@@ -46,7 +46,7 @@ class SectionContext:
         }
 
 
-def _build_section_patterns() -> List[SectionPattern]:
+def _build_section_patterns() -> list[SectionPattern]:
     return sorted(
         [
             SectionPattern(
@@ -115,7 +115,7 @@ def _build_section_patterns() -> List[SectionPattern]:
     )
 
 
-SECTION_PATTERNS: List[SectionPattern] = _build_section_patterns()
+SECTION_PATTERNS: list[SectionPattern] = _build_section_patterns()
 
 
 def is_noise_line(line: str) -> bool:
@@ -144,7 +144,7 @@ def clean_title(title: str) -> str:
     return cleaned.rstrip(".:;-–—")[:200]
 
 
-def parse_section_heading(line: str) -> Optional[SectionHeading]:
+def parse_section_heading(line: str) -> SectionHeading | None:
     stripped = line.strip()
     if not stripped or len(stripped) < 3 or is_noise_line(stripped):
         return None
@@ -208,7 +208,7 @@ class SectionTracker:
     """Stack-based section hierarchy tracker for document parsers."""
 
     def __init__(self) -> None:
-        self.stack: List[SectionHeading] = []
+        self.stack: list[SectionHeading] = []
 
     def update(self, heading: SectionHeading) -> SectionContext:
         """Pushes new heading, popping any equal or deeper level headings."""
@@ -231,7 +231,7 @@ class SectionTracker:
             headings=list(self.stack),
         )
 
-    def process_line(self, line: str) -> Optional[SectionContext]:
+    def process_line(self, line: str) -> SectionContext | None:
         heading = parse_section_heading(line)
         if heading:
             return self.update(heading)

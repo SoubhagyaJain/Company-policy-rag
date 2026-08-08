@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
 from backend.ingestion.loaders.csv import CSVLoader
@@ -18,7 +18,7 @@ class LoaderFactory:
     """Factory registry for document loaders."""
 
     def __init__(self) -> None:
-        self.loaders: List[BaseLoader] = [
+        self.loaders: list[BaseLoader] = [
             PDFLoader(),
             DocxLoader(),
             MarkdownLoader(),
@@ -42,8 +42,8 @@ class LoaderFactory:
     def load_document(
         self,
         file_path: Path,
-        base_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[RawDocument]:
+        base_metadata: dict[str, Any] | None = None,
+    ) -> list[RawDocument]:
         """Convenience method to load a document file using the appropriate loader."""
         loader = self.get_loader_for_file(file_path)
         return loader.load(file_path, base_metadata=base_metadata)
@@ -59,6 +59,6 @@ def get_loader_for_file(file_path: Path) -> BaseLoader:
 
 def load_document(
     file_path: Path,
-    base_metadata: Optional[Dict[str, Any]] = None,
-) -> List[RawDocument]:
+    base_metadata: dict[str, Any] | None = None,
+) -> list[RawDocument]:
     return _default_factory.load_document(file_path, base_metadata=base_metadata)

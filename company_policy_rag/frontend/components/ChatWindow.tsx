@@ -12,6 +12,8 @@ import {
   FileQuestion,
   ShieldCheck,
   Zap,
+  Cpu,
+  ChevronDown,
 } from 'lucide-react';
 import { ChatMessageData, Citation, FilterOptions } from '../lib/types';
 import { ChatMessage } from './ChatMessage';
@@ -32,6 +34,14 @@ const CATEGORY_OPTIONS = [
   'IT & Security',
   'Finance',
   'Compliance',
+];
+
+const MODEL_OPTIONS = [
+  { id: 'qwen2.5:7b', label: 'Qwen 2.5 7B', desc: 'Fast & balanced' },
+  { id: 'qwen2.5:14b', label: 'Qwen 2.5 14B', desc: 'Higher quality' },
+  { id: 'llama3.1:8b', label: 'Llama 3.1 8B', desc: 'Meta open model' },
+  { id: 'mistral:7b', label: 'Mistral 7B', desc: 'Efficient reasoning' },
+  { id: 'gemma2:9b', label: 'Gemma 2 9B', desc: 'Google compact' },
 ];
 
 const SUGGESTED_PROMPTS = [
@@ -67,8 +77,9 @@ export function ChatWindow({
 }: ChatWindowProps) {
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
-  const [selectedModel, setSelectedModel] = useState('FastAPI RAG');
+  const [selectedModel, setSelectedModel] = useState('qwen2.5:7b');
   const [showFilters, setShowFilters] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -129,6 +140,51 @@ export function ChatWindow({
                   }`}
                 >
                   {cat}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Model Switcher */}
+        <div className="relative">
+          <button
+            onClick={() => setShowModelPicker((prev) => !prev)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs text-charcoal dark:text-cream-200 hover:bg-cream-200 transition-colors"
+          >
+            <Cpu className="w-3.5 h-3.5 text-sky-500" />
+            <span className="font-medium">
+              {MODEL_OPTIONS.find((m) => m.id === selectedModel)?.label || selectedModel}
+            </span>
+            <ChevronDown className="w-3 h-3 opacity-50" />
+          </button>
+
+          {showModelPicker && (
+            <div className="absolute right-0 top-full mt-1 w-56 rounded-xl bg-white dark:bg-[#1E1D1A] border border-sand-border dark:border-sand-darkBorder shadow-xl z-50 py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+              {MODEL_OPTIONS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setSelectedModel(m.id);
+                    setShowModelPicker(false);
+                  }}
+                  className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors ${
+                    selectedModel === m.id
+                      ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20'
+                      : 'hover:bg-cream-100 dark:hover:bg-sand-dark'
+                  }`}
+                >
+                  <Cpu className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
+                    selectedModel === m.id ? 'text-terracotta-600' : 'text-charcoal-muted dark:text-cream-400'
+                  }`} />
+                  <div>
+                    <div className={`text-xs font-semibold ${
+                      selectedModel === m.id
+                        ? 'text-terracotta-600'
+                        : 'text-charcoal dark:text-cream-200'
+                    }`}>{m.label}</div>
+                    <div className="text-[10px] text-charcoal-muted dark:text-cream-400">{m.desc}</div>
+                  </div>
                 </button>
               ))}
             </div>

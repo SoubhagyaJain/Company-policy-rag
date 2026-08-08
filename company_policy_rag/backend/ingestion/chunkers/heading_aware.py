@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import List
-
 from backend.ingestion.chunkers.base import BaseChunker
-from backend.models.chunk import Chunk, ChunkRole, ContentType
+from backend.models.chunk import Chunk, ContentType
 from backend.models.document import RawDocument
 from backend.utils.section_tracker import SectionTracker, parse_section_heading
 
@@ -14,8 +12,8 @@ class HeadingAwareChunker(BaseChunker):
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64) -> None:
         super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    def chunk(self, documents: List[RawDocument]) -> List[Chunk]:
-        chunks: List[Chunk] = []
+    def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
+        chunks: list[Chunk] = []
 
         for doc in documents:
             if not doc.content.strip():
@@ -25,7 +23,7 @@ class HeadingAwareChunker(BaseChunker):
             section_tracker = SectionTracker()
             chunk_idx = 0
 
-            current_lines: List[str] = []
+            current_lines: list[str] = []
             current_ctx = section_tracker.current_context()
 
             for line in lines:

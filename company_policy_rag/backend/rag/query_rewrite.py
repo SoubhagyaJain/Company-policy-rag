@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import re
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict
+
 from backend.models.rag import QueryRewriteResult
 from backend.utils.logging import logger
 
-_POLICY_TOPIC_EXPANSIONS: List[Tuple[Tuple[str, ...], str]] = [
+_POLICY_TOPIC_EXPANSIONS: list[tuple[tuple[str, ...], str]] = [
     (
         ("health benefit", "health insurance", "benefits", "eligible for health", "enrollment"),
         "health insurance medical dental vision eligibility enrollment waiting period 30 days",
@@ -32,7 +33,7 @@ _POLICY_TOPIC_EXPANSIONS: List[Tuple[Tuple[str, ...], str]] = [
     ),
 ]
 
-_GUIDEBOOK_TOPIC_EXPANSIONS: List[Tuple[Tuple[str, ...], str]] = [
+_GUIDEBOOK_TOPIC_EXPANSIONS: list[tuple[tuple[str, ...], str]] = [
     (
         ("building block", "building blocks", "six building"),
         "Role-playing Focus Tasks Tools Cooperation Guardrails Planning Memory six AI agents",
@@ -83,7 +84,7 @@ _GUIDEBOOK_TOPIC_EXPANSIONS: List[Tuple[Tuple[str, ...], str]] = [
     ),
 ]
 
-_COMPREHENSIVE_QUERY_PATTERNS: Tuple[re.Pattern[str], ...] = (
+_COMPREHENSIVE_QUERY_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\blist\b.+\bexplain\b", re.IGNORECASE),
     re.compile(r"\blist\b", re.IGNORECASE),
     re.compile(r"\bbuilding\s+blocks?\b", re.IGNORECASE),
@@ -101,20 +102,66 @@ _COMPREHENSIVE_QUERY_PATTERNS: Tuple[re.Pattern[str], ...] = (
 )
 
 
+_REFERENTIAL_PRONOUNS_PATTERN: re.Pattern[str] = re.compile(
+    r"\b(it|its|this|that|these|those|they|them|their|his|her|he|she|same|else|another)\b",
+    re.IGNORECASE,
+)
+
+_REFERENTIAL_PHRASES_PATTERN: re.Pattern[str] = re.compile(
+    r"\b(what\s+about|how\s+about|tell\s+me\s+more|explain\s+more|more\s+details|how\s+long|where\s+is|why\s+is|how\s+so|what\s+else|any\s+exceptions?|does\s+it|can\s+you\s+elaborate)\b",
+    re.IGNORECASE,
+)
+
+
+def _format_history_for_rewrite(history: list[Dict[str, Any]], max_turns: int = 4) -> str:
+    recent = history[-(max_turns * 2):]
+    lines = []
+    for msg in recent:
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        content = str(msg.get("content", "")).strip()
+        lines.append(f"{role}: {content}")
+    return "\n".join(lines)
+
+
 class QueryRewriter:
     """
     Query normalization, deterministic term expansion, and LLM-based query rewriting.
     """
 
-    def __init__(self, enable_llm_rewrite: bool = True, llm: Optional[Any] = None) -> None:
+    def __init__(self, enable_llm_rewrite: bool = True, llm: Any | None = None) -> None:
         self.enable_llm_rewrite = enable_llm_rewrite
         self.llm = llm
 
-    def _query_matches_triggers(self, query: str, expansions: List[Tuple[Tuple[str, ...], str]]) -> bool:
+    def _query_matches_triggers(self, query: str, expansions: list[tuple[tuple[str, ...], str]]) -> bool:
         q_lower = query.lower()
         return any(any(t in q_lower for t in triggers) for triggers, _ in expansions)
 
-    def detect_corpus(self, query: str) -> Optional[str]:
+    def _is_followup_query(self, query: str) -> bool:
+        """
+        Determines if a query is a follow-up question referencing previous context
+        by checking for pronouns, referential phrases, or short implicit queries.
+        """
+        q_lower = query.strip().lower()
+        if not q_lower:
+            return False
+
+        if _REFERENTIAL_PRONOUNS_PATTERN.search(q_lower):
+            return True
+
+        if _REFERENTIAL_PHRASES_PATTERN.search(q_lower):
+            return True
+
+        words = q_lower.split()
+        if len(words) <= 3:
+            if not (
+                self._query_matches_triggers(query, _POLICY_TOPIC_EXPANSIONS)
+                or self._query_matches_triggers(query, _GUIDEBOOK_TOPIC_EXPANSIONS)
+            ):
+                return True
+
+        return False
+
+    def detect_corpus(self, query: str) -> str | None:
         q_lower = query.lower()
         if any(w in q_lower for w in ("vacation", "pto", "sick leave", "resignation", "at-will")):
             return "policy"
@@ -126,9 +173,9 @@ class QueryRewriter:
             return "policy"
         return None
 
-    def expand_terms(self, query: str) -> Tuple[str, List[str]]:
+    def expand_terms(self, query: str) -> tuple[str, list[str]]:
         q_lower = query.lower()
-        expanded: List[str] = []
+        expanded: list[str] = []
         for triggers, terms in _POLICY_TOPIC_EXPANSIONS + _GUIDEBOOK_TOPIC_EXPANSIONS:
             if any(t in q_lower for t in triggers):
                 expanded.append(terms)
@@ -145,28 +192,78 @@ class QueryRewriter:
             return False
         return any(pattern.search(text) for pattern in _COMPREHENSIVE_QUERY_PATTERNS)
 
-    def rewrite(self, query: str) -> QueryRewriteResult:
-        """Process user query and return QueryRewriteResult."""
+    def _fallback_rewrite(
+        self,
+        original: str,
+        augmented: str,
+        history: list[Dict[str, Any]] | None,
+    ) -> str:
+        """
+        Robust non-LLM query rewrite fallback for multi-turn dialogues.
+        Extracts the root topic (first user query) and recent user queries from history
+        ONLY when original query is identified as a follow-up.
+        """
+        if not history or not self._is_followup_query(original):
+            return augmented
+
+        user_queries = [
+            str(msg.get("content", "")).strip()
+            for msg in history
+            if msg.get("role") == "user" and str(msg.get("content", "")).strip()
+        ]
+        if not user_queries:
+            return augmented
+
+        root_query = user_queries[0]
+        last_query = user_queries[-1]
+
+        if len(user_queries) == 1 or root_query == last_query:
+            context_str = root_query
+        else:
+            context_str = f"{root_query} {last_query}"
+
+        return f"{augmented} {context_str}"
+
+    def rewrite(
+        self,
+        query: str,
+        history: list[Dict[str, Any]] | None = None,
+        llm: Any | None = None,
+    ) -> QueryRewriteResult:
+        """Process user query and return QueryRewriteResult, considering conversation history if available."""
         original = query.strip()
         augmented, expanded_terms = self.expand_terms(original)
         is_comp = self.is_comprehensive_list(original)
         inferred_corp = self.detect_corpus(original)
 
         rewritten = augmented
+        effective_llm = llm or self.llm
 
-        if self.enable_llm_rewrite and self.llm is not None:
+        if self.enable_llm_rewrite and effective_llm is not None:
             try:
-                prompt = (
-                    "You rewrite questions into concise keyword search queries for a document retrieval system.\n"
-                    f"Question: {original}\n"
-                    "Search query:"
-                )
-                response = str(self.llm.complete(prompt)).strip()
+                if history and len(history) > 0:
+                    history_str = _format_history_for_rewrite(history)
+                    prompt = (
+                        "Given the following conversation history and follow-up question, rewrite the follow-up question into a standalone, clear keyword search query for document retrieval. Resolve all pronouns (such as 'it', 'that', 'they', 'what about...') into specific topic terms.\n\n"
+                        f"Conversation History:\n{history_str}\n\n"
+                        f"Follow-up Question: {original}\n"
+                        "Standalone Search Query:"
+                    )
+                else:
+                    prompt = (
+                        "You rewrite questions into concise keyword search queries for a document retrieval system.\n"
+                        f"Question: {original}\n"
+                        "Search query:"
+                    )
+                response = str(effective_llm.complete(prompt)).strip()
                 first_line = response.splitlines()[0].strip().strip('"').strip("'")
-                if len(first_line) >= 5:
+                if len(first_line) >= 3:
                     rewritten = first_line
             except Exception as exc:
-                logger.warning("LLM query rewrite failed (%s). Using augmented query.", exc)
+                logger.warning("LLM query rewrite failed (%s). Using fallback query rewrite.", exc)
+                rewritten = self._fallback_rewrite(original, augmented, history)
+        elif history and len(history) > 0:
+            rewritten = self._fallback_rewrite(original, augmented, history)
 
         return QueryRewriteResult(
             original_query=original,
@@ -176,3 +273,5 @@ class QueryRewriter:
             is_comprehensive_list=is_comp,
             inferred_corpus=inferred_corp,
         )
+
+

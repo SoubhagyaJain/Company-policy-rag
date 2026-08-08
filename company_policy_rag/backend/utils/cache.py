@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     from redis.asyncio import Redis as AsyncRedis
@@ -33,11 +33,11 @@ class AsyncRedisCache:
 
     def __init__(
         self,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        host: str | None = None,
+        port: int | None = None,
         db: int = 0,
-        password: Optional[str] = None,
-        redis_url: Optional[str] = None,
+        password: str | None = None,
+        redis_url: str | None = None,
         default_ttl: int = DEFAULT_TTL,
     ) -> None:
         self._host = host or os.getenv("REDIS_HOST", "localhost")
@@ -46,9 +46,9 @@ class AsyncRedisCache:
         self._password = password or os.getenv("REDIS_PASSWORD") or None
         self._redis_url = redis_url or os.getenv("REDIS_URL") or None
         self._default_ttl = default_ttl
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
 
-    async def _get_client(self) -> Optional[Any]:
+    async def _get_client(self) -> Any | None:
         """Lazily create and verify the async Redis connection."""
         if self._client is not None:
             return self._client
@@ -90,7 +90,7 @@ class AsyncRedisCache:
 
     # ── Core CRUD ────────────────────────────────────────────
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """Retrieve a value by key. Returns None on miss or error."""
         client = await self._get_client()
         if client is None:
@@ -112,7 +112,7 @@ class AsyncRedisCache:
         self,
         key: str,
         value: Any,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> bool:
         """Store a value with optional TTL (seconds). Returns False on error."""
         client = await self._get_client()
@@ -172,7 +172,7 @@ class AsyncRedisCache:
     # ── Cache key generation ─────────────────────────────────
 
     @staticmethod
-    def make_key(query: str, filters: Optional[Dict[str, Any]] = None) -> str:
+    def make_key(query: str, filters: dict[str, Any] | None = None) -> str:
         """Generate a deterministic cache key from a query string and optional filters.
 
         Uses SHA-256 to produce a fixed-length, collision-resistant key
@@ -189,8 +189,8 @@ class AsyncRedisCache:
     async def get_query_cache(
         self,
         query: str,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """Retrieve a cached RAG response by query + filters hash."""
         key = self.make_key(query, filters)
         result = await self.get(key)
@@ -201,15 +201,15 @@ class AsyncRedisCache:
     async def set_query_cache(
         self,
         query: str,
-        response_data: Dict[str, Any],
-        filters: Optional[Dict[str, Any]] = None,
+        response_data: dict[str, Any],
+        filters: dict[str, Any] | None = None,
         ttl: int = DEFAULT_TTL,
     ) -> bool:
         """Cache a RAG response keyed by query + filters hash."""
         key = self.make_key(query, filters)
         return await self.set(key, response_data, ttl=ttl)
 
-    async def get_embedding_cache(self, text: str) -> Optional[List[float]]:
+    async def get_embedding_cache(self, text: str) -> list[float] | None:
         """Retrieve a cached embedding vector by text hash."""
         digest = hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
         key = f"emb:{digest}"
@@ -221,7 +221,7 @@ class AsyncRedisCache:
     async def set_embedding_cache(
         self,
         text: str,
-        embedding: List[float],
+        embedding: list[float],
         ttl: int = 86400,
     ) -> bool:
         """Cache an embedding vector keyed by text hash."""
@@ -242,7 +242,7 @@ class AsyncRedisCache:
 
 # ── Module-level singleton ────────────────────────────────────
 
-_async_cache_instance: Optional[AsyncRedisCache] = None
+_async_cache_instance: AsyncRedisCache | None = None
 
 
 def get_async_cache() -> AsyncRedisCache:

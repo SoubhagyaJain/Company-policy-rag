@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Set
+
 from backend.models.rag import Citation, ScoredChunk
-from backend.utils.logging import logger
 
 _SOURCE_TAG_PATTERN = re.compile(r"\[Source\s+([^\]]+)\]", re.IGNORECASE)
 
@@ -16,9 +15,9 @@ class CitationEngine:
     """
 
     @staticmethod
-    def extract_source_tags(answer_text: str) -> Set[int]:
+    def extract_source_tags(answer_text: str) -> set[int]:
         """Parse 1-based [Source N] tags from answer text."""
-        indices: Set[int] = set()
+        indices: set[int] = set()
         for match in _SOURCE_TAG_PATTERN.finditer(answer_text):
             inner = match.group(1)
             for num_match in re.finditer(r"\b(\d+)\b", inner):
@@ -28,15 +27,15 @@ class CitationEngine:
     def select_citations(
         self,
         answer_text: str,
-        generation_chunks: List[ScoredChunk],
-        user_query: Optional[str] = None,
-    ) -> List[Citation]:
+        generation_chunks: list[ScoredChunk],
+        user_query: str | None = None,
+    ) -> list[Citation]:
         """Map answer text [Source N] tags or relevance scores to Citation models."""
         if not generation_chunks:
             return []
 
         cited_indices = self.extract_source_tags(answer_text)
-        citations: List[Citation] = []
+        citations: list[Citation] = []
         selection_mode = "cited_in_answer"
 
         if cited_indices:

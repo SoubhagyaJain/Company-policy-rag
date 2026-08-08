@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import List
 
 from backend.ingestion.chunkers.base import BaseChunker
 from backend.models.chunk import Chunk, ContentType
@@ -22,15 +21,15 @@ class SemanticChunker(BaseChunker):
         super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         self.max_sentences_per_chunk = max_sentences_per_chunk
 
-    def chunk(self, documents: List[RawDocument]) -> List[Chunk]:
-        chunks: List[Chunk] = []
+    def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
+        chunks: list[Chunk] = []
 
         for doc in documents:
             if not doc.content.strip():
                 continue
 
             paragraphs = [p.strip() for p in doc.content.split("\n\n") if p.strip()]
-            current_sentences: List[str] = []
+            current_sentences: list[str] = []
             current_tokens = 0
             chunk_idx = 0
 
@@ -56,7 +55,7 @@ class SemanticChunker(BaseChunker):
                         chunk_idx += 1
 
                         # Keep overlap sentences
-                        overlap_sentences: List[str] = []
+                        overlap_sentences: list[str] = []
                         overlap_tokens = 0
                         for prev_s in reversed(current_sentences):
                             prev_t = self._estimate_tokens(prev_s)

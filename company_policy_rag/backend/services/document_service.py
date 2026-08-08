@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import os
-import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from backend.embeddings.embeddings import EmbeddingService
 from backend.embeddings.vector_store import ChromaVectorStore
@@ -33,10 +31,10 @@ class DocumentService:
 
     def __init__(
         self,
-        vector_store: Optional[ChromaVectorStore] = None,
-        bm25_index: Optional[BM25SearchIndex] = None,
-        embedding_service: Optional[EmbeddingService] = None,
-        docstore: Optional[Dict[str, Chunk]] = None,
+        vector_store: ChromaVectorStore | None = None,
+        bm25_index: BM25SearchIndex | None = None,
+        embedding_service: EmbeddingService | None = None,
+        docstore: dict[str, Chunk] | None = None,
         storage_dir: str = "app/storage/uploads",
     ) -> None:
         self.vector_store = vector_store or ChromaVectorStore()
@@ -47,14 +45,14 @@ class DocumentService:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
         # In-memory document metadata registry
-        self._documents: Dict[str, Dict[str, Any]] = {}
+        self._documents: dict[str, dict[str, Any]] = {}
 
     def upload_document(
         self,
         filename: str,
         content_bytes: bytes,
         category: str = "general",
-        chunk_strategy: Optional[str] = None,
+        chunk_strategy: str | None = None,
     ) -> DocumentUploadResponse:
         """Process file upload, parse, chunk adaptively, embed, index, and record in docstore."""
         file_size = len(content_bytes)
@@ -113,7 +111,7 @@ class DocumentService:
                 self.docstore[c.id] = c
 
             # 6. Document Registry
-            created_at = datetime.now(timezone.utc).isoformat()
+            created_at = datetime.now(UTC).isoformat()
             doc_record = {
                 "document_id": document_id,
                 "filename": filename,
@@ -167,7 +165,7 @@ class DocumentService:
 
     def list_documents(
         self,
-        category: Optional[str] = None,
+        category: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> DocumentListResponse:
@@ -195,7 +193,7 @@ class DocumentService:
 
         return DocumentListResponse(documents=summaries, total_count=len(records))
 
-    def get_document_detail(self, document_id: str) -> Optional[DocumentDetailResponse]:
+    def get_document_detail(self, document_id: str) -> DocumentDetailResponse | None:
         """Get full details and chunk metadata for a document."""
         r = self._documents.get(document_id)
         if not r:
@@ -213,7 +211,7 @@ class DocumentService:
             chunks=r.get("chunks", []),
         )
 
-    def delete_document(self, document_id: str) -> Optional[Dict[str, Any]]:
+    def delete_document(self, document_id: str) -> dict[str, Any] | None:
         """Remove document and purge all associated vector embeddings and BM25 postings."""
         doc_record = self._documents.get(document_id)
         if not doc_record:

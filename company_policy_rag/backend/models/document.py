@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -31,20 +32,20 @@ class DocumentMetadata(BaseModel):
     file_hash: str = Field(..., description="SHA-256 or fast hash for change detection")
     document_type: DocumentType = Field(default=DocumentType.UNKNOWN)
     category: str = Field(default="general")
-    page_number: Optional[int] = Field(default=None, description="1-indexed page number if applicable")
-    page_label: Optional[str] = Field(default=None)
-    total_pages: Optional[int] = Field(default=None)
-    section_title: Optional[str] = Field(default=None)
-    section_number: Optional[str] = Field(default=None)
-    section_path: Optional[str] = Field(default=None, description="e.g. 'I. GENERAL > A. At-Will'")
-    section_level: Optional[int] = Field(default=None)
+    page_number: int | None = Field(default=None, description="1-indexed page number if applicable")
+    page_label: str | None = Field(default=None)
+    total_pages: int | None = Field(default=None)
+    section_title: str | None = Field(default=None)
+    section_number: str | None = Field(default=None)
+    section_path: str | None = Field(default=None, description="e.g. 'I. GENERAL > A. At-Will'")
+    section_level: int | None = Field(default=None)
     has_tables: bool = Field(default=False)
     has_code: bool = Field(default=False)
-    extra: Dict[str, Any] = Field(default_factory=dict)
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class RawDocument(BaseModel):
     id: str = Field(default_factory=lambda: f"doc_{uuid.uuid4().hex[:12]}")
     content: str = Field(..., description="Raw text or structured markdown content")
     metadata: DocumentMetadata
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

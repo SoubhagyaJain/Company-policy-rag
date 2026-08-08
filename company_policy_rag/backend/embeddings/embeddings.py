@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from backend.utils.logging import logger
 
 
-def normalize_vector(vector: List[float]) -> List[float]:
+def normalize_vector(vector: list[float]) -> list[float]:
     """Normalize vector to unit length for cosine similarity calculations."""
     norm = math.sqrt(sum(x * x for x in vector))
     if norm == 0:
@@ -18,16 +19,16 @@ class EmbeddingCache:
     """In-memory + hash-based embedding cache to avoid recomputing vector embeddings."""
 
     def __init__(self) -> None:
-        self._cache: Dict[str, List[float]] = {}
+        self._cache: dict[str, list[float]] = {}
 
     def _hash_text(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    def get(self, text: str) -> Optional[List[float]]:
+    def get(self, text: str) -> list[float] | None:
         key = self._hash_text(text)
         return self._cache.get(key)
 
-    def set(self, text: str, embedding: List[float]) -> None:
+    def set(self, text: str, embedding: list[float]) -> None:
         key = self._hash_text(text)
         self._cache[key] = embedding
 
@@ -38,7 +39,7 @@ class EmbeddingCache:
         return len(self._cache)
 
 
-_shared_embedding_model: Optional[Any] = None
+_shared_embedding_model: Any | None = None
 _shared_embedding_model_loaded: bool = False
 
 
@@ -58,7 +59,7 @@ class EmbeddingService:
         self.cache_enabled = cache_enabled
         self.dimension = dimension
         self.cache = EmbeddingCache() if cache_enabled else None
-        self._model: Optional[Any] = None
+        self._model: Any | None = None
         self._model_loaded: bool = False
 
     def _init_model(self) -> None:
@@ -72,9 +73,9 @@ class EmbeddingService:
 
         self._model_loaded = True
         try:
-            from sentence_transformers import SentenceTransformer  # type: ignore
-
             import os
+
+            from sentence_transformers import SentenceTransformer  # type: ignore
             logger.info("Loading embedding model %s", self.model_name)
             os.environ["HF_HUB_OFFLINE"] = "1"
             os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -90,7 +91,7 @@ class EmbeddingService:
         _shared_embedding_model = self._model
         _shared_embedding_model_loaded = True
 
-    def _fallback_embed(self, text: str) -> List[float]:
+    def _fallback_embed(self, text: str) -> list[float]:
         """Deterministic pseudo-embedding for testing when ML packages are unavailable."""
         tokens = text.lower().split()
         vector = [0.0] * self.dimension
@@ -101,7 +102,7 @@ class EmbeddingService:
             vector[idx] += val
         return normalize_vector(vector)
 
-    def embed_text(self, text: str) -> List[float]:
+    def embed_text(self, text: str) -> list[float]:
         """Embed a single query or text string."""
         if not text:
             return [0.0] * self.dimension
@@ -126,14 +127,14 @@ class EmbeddingService:
             self.cache.set(text, vector)
         return vector
 
-    def embed_chunks(self, texts: List[str]) -> List[List[float]]:
+    def embed_chunks(self, texts: list[str]) -> list[list[float]]:
         """Batch embed a list of document chunk texts."""
         if not texts:
             return []
 
-        results: List[Optional[List[float]]] = [None] * len(texts)
-        missing_indices: List[int] = []
-        missing_texts: List[str] = []
+        results: list[list[float] | None] = [None] * len(texts)
+        missing_indices: list[int] = []
+        missing_texts: list[str] = []
 
         for idx, text in enumerate(texts):
             if self.cache is not None:
@@ -146,7 +147,7 @@ class EmbeddingService:
 
         if missing_texts:
             self._init_model()
-            computed_vectors: List[List[float]] = []
+            computed_vectors: list[list[float]] = []
             if self._model is not None:
                 try:
                     raw_embs = self._model.encode(missing_texts, convert_to_numpy=True)

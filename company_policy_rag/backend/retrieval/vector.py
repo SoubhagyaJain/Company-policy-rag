@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from backend.embeddings.embeddings import EmbeddingService
 from backend.embeddings.vector_store import VectorStoreInterface
 from backend.models.rag import ScoredChunk
@@ -23,8 +24,8 @@ class DenseVectorRetriever:
         self,
         query: str,
         top_k: int = 25,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[ScoredChunk]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[ScoredChunk]:
         """Generate query vector embedding and perform top-k vector store similarity search."""
         if not query.strip():
             return []

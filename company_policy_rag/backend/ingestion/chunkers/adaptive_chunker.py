@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
 from backend.ingestion.chunkers.base import BaseChunker
 from backend.ingestion.chunkers.heading_aware import HeadingAwareChunker
 from backend.ingestion.chunkers.markdown_aware import MarkdownAwareChunker
@@ -19,7 +17,7 @@ class AdaptiveChunker(BaseChunker):
         self,
         chunk_size: int = 512,
         chunk_overlap: int = 64,
-        override_strategy: Optional[str] = None,
+        override_strategy: str | None = None,
     ) -> None:
         super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         self.override_strategy = override_strategy.lower() if override_strategy else None
@@ -61,8 +59,8 @@ class AdaptiveChunker(BaseChunker):
 
         return self.recursive_chunker
 
-    def chunk(self, documents: List[RawDocument]) -> List[Chunk]:
-        chunks: List[Chunk] = []
+    def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
+        chunks: list[Chunk] = []
 
         for doc in documents:
             chunker = self.select_chunker(doc)

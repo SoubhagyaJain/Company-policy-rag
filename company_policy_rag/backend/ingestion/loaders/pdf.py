@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
-from backend.models.document import DocumentMetadata, DocumentType, RawDocument
+from backend.models.document import DocumentType, RawDocument
 from backend.utils.logging import logger
 from backend.utils.section_tracker import SectionTracker
 
@@ -22,10 +22,10 @@ class PDFLoader(BaseLoader):
     def load(
         self,
         file_path: Path,
-        base_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[RawDocument]:
+        base_metadata: dict[str, Any] | None = None,
+    ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.PDF, base_metadata)
-        documents: List[RawDocument] = []
+        documents: list[RawDocument] = []
         section_tracker = SectionTracker()
 
         # Try fitz (PyMuPDF) first
@@ -97,7 +97,7 @@ class PDFLoader(BaseLoader):
 
         return documents
 
-    def _read_with_fitz(self, file_path: Path) -> Optional[List[tuple[int, str]]]:
+    def _read_with_fitz(self, file_path: Path) -> list[tuple[int, str]] | None:
         try:
             import fitz
 
@@ -114,7 +114,7 @@ class PDFLoader(BaseLoader):
             logger.debug("fitz PDF extraction failed for %s: %s", file_path, e)
             return None
 
-    def _read_with_pypdf(self, file_path: Path) -> List[tuple[int, str]]:
+    def _read_with_pypdf(self, file_path: Path) -> list[tuple[int, str]]:
         try:
             import pypdf
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set
 from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole
 from backend.models.rag import ScoredChunk
 from backend.utils.logging import logger
@@ -22,9 +21,9 @@ class ContextCompressor:
 
     def expand_to_parents(
         self,
-        chunks: List[ScoredChunk],
-        docstore: Optional[Dict[str, Chunk]] = None,
-    ) -> List[ScoredChunk]:
+        chunks: list[ScoredChunk],
+        docstore: dict[str, Chunk] | None = None,
+    ) -> list[ScoredChunk]:
         """
         Replace child chunks with parent document sections when available,
         deduplicating by parent_id while retaining highest relevance score.
@@ -32,8 +31,8 @@ class ContextCompressor:
         if not self.enable_parent_expansion or not chunks:
             return chunks
 
-        expanded: List[ScoredChunk] = []
-        seen_parents: Set[str] = set()
+        expanded: list[ScoredChunk] = []
+        seen_parents: set[str] = set()
 
         for sc in chunks:
             meta = sc.chunk.metadata
@@ -79,7 +78,7 @@ class ContextCompressor:
 
         return expanded if expanded else chunks
 
-    def format_context_for_prompt(self, chunks: List[ScoredChunk]) -> str:
+    def format_context_for_prompt(self, chunks: list[ScoredChunk]) -> str:
         """
         Format retrieved scored chunks into structured [Source N] context blocks for LLM synthesis.
         Enforces token budget clipping.
@@ -87,7 +86,7 @@ class ContextCompressor:
         if not chunks:
             return "No relevant context found."
 
-        context_blocks: List[str] = []
+        context_blocks: list[str] = []
         total_estimated_tokens = 0
 
         for idx, sc in enumerate(chunks, start=1):

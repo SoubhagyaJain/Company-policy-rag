@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Dict
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
 from backend.models.api_dto import ModelInfo, ModelListResponse
 
 router = APIRouter(tags=["Models"])
@@ -42,7 +42,7 @@ def get_available_models() -> ModelListResponse:
 
 @router.post("/api/models/select")
 @router.put("/api/models/active")
-def select_active_model(req: ModelSelectRequest) -> Dict[str, str]:
+def select_active_model(req: ModelSelectRequest) -> dict[str, str]:
     """Switch active LLM model."""
     global _current_active_model
     valid_ids = [m.id for m in AVAILABLE_MODELS if m.type == "llm"]

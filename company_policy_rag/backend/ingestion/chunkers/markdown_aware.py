@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import List
 
 from backend.ingestion.chunkers.base import BaseChunker
 from backend.models.chunk import Chunk, ContentType
@@ -17,8 +16,8 @@ class MarkdownAwareChunker(BaseChunker):
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64) -> None:
         super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    def chunk(self, documents: List[RawDocument]) -> List[Chunk]:
-        chunks: List[Chunk] = []
+    def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
+        chunks: list[Chunk] = []
 
         for doc in documents:
             if not doc.content.strip():
@@ -55,7 +54,7 @@ class MarkdownAwareChunker(BaseChunker):
                 else:
                     # Normal markdown text
                     lines = part_stripped.splitlines()
-                    current_block: List[str] = []
+                    current_block: list[str] = []
 
                     for line in lines:
                         heading = parse_section_heading(line)

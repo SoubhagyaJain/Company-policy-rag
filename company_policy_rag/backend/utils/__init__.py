@@ -13,22 +13,22 @@ from backend.utils.section_tracker import (
 )
 
 __all__ = [
-    "compute_file_hash",
-    "compute_string_hash",
-    "logger",
-    "setup_logging",
-    "timed",
-    "timer",
-    "RedisCache",
-    "get_redis_cache",
-    "redis_cache",
     "SECTION_PATTERNS",
+    "RedisCache",
     "SectionContext",
     "SectionHeading",
     "SectionPattern",
     "SectionTracker",
     "clean_title",
+    "compute_file_hash",
+    "compute_string_hash",
+    "get_redis_cache",
     "is_noise_line",
+    "logger",
     "parse_section_heading",
+    "redis_cache",
+    "setup_logging",
+    "timed",
+    "timer",
 ]
 

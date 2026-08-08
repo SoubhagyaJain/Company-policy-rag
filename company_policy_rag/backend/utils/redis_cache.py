@@ -4,7 +4,7 @@ import json
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 try:
     import redis
@@ -25,11 +25,11 @@ class RedisCache:
 
     def __init__(
         self,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        host: str | None = None,
+        port: int | None = None,
         db: int = 0,
-        password: Optional[str] = None,
-        redis_url: Optional[str] = None,
+        password: str | None = None,
+        redis_url: str | None = None,
         default_ttl: int = 3600,
         enabled: bool = True,
     ) -> None:
@@ -41,9 +41,9 @@ class RedisCache:
         self.default_ttl = default_ttl
         self.enabled = enabled and (os.getenv("REDIS_ENABLED", "true").lower() in ("true", "1", "yes"))
 
-        self._redis_client: Optional[Any] = None
+        self._redis_client: Any | None = None
         self._redis_connected = False
-        self._memory_store: Dict[str, Dict[str, Any]] = {}
+        self._memory_store: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
 
         if self.enabled and REDIS_INSTALLED:
@@ -114,7 +114,7 @@ class RedisCache:
                 del self._memory_store[key]
             return default
 
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+    def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """Store key in cache with optional TTL in seconds."""
         expire_ttl = ttl if ttl is not None else self.default_ttl
         serialized = json.dumps(value) if isinstance(value, (dict, list, bool)) else str(value)
@@ -170,27 +170,27 @@ class RedisCache:
 
     # High-level specialized methods
 
-    def get_query_cache(self, query_hash: str) -> Optional[Dict[str, Any]]:
+    def get_query_cache(self, query_hash: str) -> dict[str, Any] | None:
         """Retrieve cached query response by query hash."""
         return self.get(f"query:{query_hash}")
 
-    def set_query_cache(self, query_hash: str, response_data: Dict[str, Any], ttl: int = 3600) -> bool:
+    def set_query_cache(self, query_hash: str, response_data: dict[str, Any], ttl: int = 3600) -> bool:
         """Store query response in cache."""
         return self.set(f"query:{query_hash}", response_data, ttl=ttl)
 
-    def get_embedding_cache(self, text_hash: str) -> Optional[List[float]]:
+    def get_embedding_cache(self, text_hash: str) -> list[float] | None:
         """Retrieve cached vector embedding by text hash."""
         return self.get(f"emb:{text_hash}")
 
-    def set_embedding_cache(self, text_hash: str, embedding: List[float], ttl: int = 86400) -> bool:
+    def set_embedding_cache(self, text_hash: str, embedding: list[float], ttl: int = 86400) -> bool:
         """Store vector embedding in cache."""
         return self.set(f"emb:{text_hash}", embedding, ttl=ttl)
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
         """Retrieve session data by session ID."""
         return self.get(f"session:{session_id}")
 
-    def set_session(self, session_id: str, session_data: Dict[str, Any], ttl: int = 86400) -> bool:
+    def set_session(self, session_id: str, session_data: dict[str, Any], ttl: int = 86400) -> bool:
         """Store session data in cache."""
         return self.set(f"session:{session_id}", session_data, ttl=ttl)
 
@@ -199,7 +199,7 @@ class RedisCache:
         return self.delete(f"session:{session_id}")
 
 
-_redis_cache_instance: Optional[RedisCache] = None
+_redis_cache_instance: RedisCache | None = None
 
 
 def get_redis_cache() -> RedisCache:

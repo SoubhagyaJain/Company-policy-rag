@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
 from backend.models.document import DocumentType, RawDocument
@@ -17,14 +17,14 @@ class JSONLoader(BaseLoader):
     def load(
         self,
         file_path: Path,
-        base_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[RawDocument]:
+        base_metadata: dict[str, Any] | None = None,
+    ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.JSON, base_metadata)
 
         content_str = file_path.read_text(encoding="utf-8", errors="replace")
 
         if file_path.suffix.lower() == ".jsonl":
-            documents: List[RawDocument] = []
+            documents: list[RawDocument] = []
             lines = [line.strip() for line in content_str.splitlines() if line.strip()]
             for idx, line in enumerate(lines, start=1):
                 try:

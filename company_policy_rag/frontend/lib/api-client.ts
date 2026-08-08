@@ -233,7 +233,17 @@ export class ApiClient {
       throw new Error(`Failed to fetch documents (${res.status})`);
     }
     const data = await res.json();
-    return data.documents || data || [];
+    const rawDocs = data.documents || data || [];
+    return rawDocs.map((doc: any) => ({
+      id: doc.document_id || doc.id,
+      filename: doc.filename,
+      category: doc.category || 'General',
+      chunks_count: doc.chunk_count ?? doc.chunks_count ?? doc.chunks_indexed ?? 0,
+      file_size: doc.file_size_bytes ?? doc.file_size ?? 0,
+      uploaded_at: doc.created_at || doc.uploaded_at || new Date().toISOString(),
+      status: doc.status || 'indexed',
+      file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown'
+    }));
   }
 
   /**
@@ -254,7 +264,17 @@ export class ApiClient {
       throw new Error(`Upload failed (${res.status}): ${errText}`);
     }
 
-    return res.json();
+    const doc = await res.json();
+    return {
+      id: doc.document_id || doc.id,
+      filename: doc.filename,
+      category: doc.category || category || 'General',
+      chunks_count: doc.chunks_indexed ?? doc.chunk_count ?? doc.chunks_count ?? 0,
+      file_size: doc.file_size_bytes ?? doc.file_size ?? 0,
+      uploaded_at: doc.created_at || doc.uploaded_at || new Date().toISOString(),
+      status: doc.status || 'indexed',
+      file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown'
+    };
   }
 
   /**

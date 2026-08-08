@@ -105,3 +105,37 @@ def test_post_chat_stream_auto_generates_session_id():
 
         start_obj = [e[1] for e in events if e[0] == "start"][0]
         assert start_obj["session_id"].startswith("sess_")
+
+
+def test_post_chat_stream_model_parameter():
+    client = TestClient(app)
+    payload = {
+        "message": "Tell me about security policies.",
+        "model": "llama3.1:8b",
+    }
+
+    with client.stream("POST", "/api/chat/stream", json=payload) as response:
+        assert response.status_code == 200
+        events = []
+        current_event = None
+        current_data = []
+
+        for line in response.iter_lines():
+            if not line:
+                if current_event and current_data:
+                    data_str = "\n".join(current_data)
+                    data_obj = json.loads(data_str)
+                    events.append((current_event, data_obj))
+                    current_event = None
+                    current_data = []
+                continue
+
+            line_str = line if isinstance(line, str) else line.decode("utf-8")
+            if line_str.startswith("event:"):
+                current_event = line_str[6:].strip()
+            elif line_str.startswith("data:"):
+                current_data.append(line_str[5:].strip())
+
+        start_obj = [e[1] for e in events if e[0] == "start"][0]
+        assert start_obj["model"] == "llama3.1:8b"
+

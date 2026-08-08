@@ -1,24 +1,31 @@
 from __future__ import annotations
 
+import os
 import threading
-from typing import Optional
 
-from backend.embeddings.embeddings import EmbeddingService
-from backend.embeddings.vector_store import ChromaVectorStore
+from dotenv import load_dotenv
+
+try:
+    from llama_index.llms.ollama import Ollama
+except Exception:
+    Ollama = None
+
 from backend.rag.pipeline import RAGPipeline
-from backend.retrieval.bm25 import BM25SearchIndex
 from backend.retrieval.hybrid import HybridRetriever
+from backend.retrieval.reranker import CrossEncoderReranker
 from backend.retrieval.vector import DenseVectorRetriever
 from backend.services.chat_service import ChatService
 from backend.services.document_service import DocumentService
 from backend.services.telemetry_service import TelemetryService
 
+load_dotenv()
+
 _lock = threading.RLock()
 
-_telemetry_service: Optional[TelemetryService] = None
-_document_service: Optional[DocumentService] = None
-_rag_pipeline: Optional[RAGPipeline] = None
-_chat_service: Optional[ChatService] = None
+_telemetry_service: TelemetryService | None = None
+_document_service: DocumentService | None = None
+_rag_pipeline: RAGPipeline | None = None
+_chat_service: ChatService | None = None
 
 
 def get_telemetry_service() -> TelemetryService:
@@ -53,13 +60,55 @@ def get_rag_pipeline() -> RAGPipeline:
                     vector_store=vector_store,
                     embedding_service=embedding_service,
                 )
+                # Initialize Reranker
+                reranker_device = os.getenv("RERANKER_DEVICE", "cpu")
+                reranker_model = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-large")
+                reranker_top_n = int(os.getenv("RERANKER_TOP_N", "5"))
+                reranker_min_ratio = float(os.getenv("RERANK_MIN_SCORE_RATIO", "0.40"))
+                
+                reranker = CrossEncoderReranker(
+                    model_name=reranker_model,
+                    top_n=reranker_top_n,
+                    device=reranker_device,
+                    min_ratio=reranker_min_ratio
+                )
+
                 hybrid_retriever = HybridRetriever(
                     dense_retriever=dense_retriever,
                     bm25_index=bm25_index,
+                    reranker=reranker,
                 )
+                
+                # Initialize LLM
+                ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+                ollama_model = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:14b-instruct")
+                temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+                request_timeout = float(os.getenv("LLM_REQUEST_TIMEOUT", "300.0"))
+                
+                llm = None
+                global Ollama
+                if Ollama is None:
+                    try:
+                        from llama_index.llms.ollama import Ollama
+                    except Exception:
+                        Ollama = None
+
+                if Ollama is not None:
+                    try:
+                        llm = Ollama(
+                            base_url=ollama_url,
+                            model=ollama_model,
+                            temperature=temperature,
+                            request_timeout=request_timeout,
+                        )
+                    except Exception:
+                        llm = None
+                
                 _rag_pipeline = RAGPipeline(
                     hybrid_retriever=hybrid_retriever,
+                    reranker=reranker,
                     docstore=doc_service.docstore,
+                    llm=llm
                 )
     return _rag_pipeline
 

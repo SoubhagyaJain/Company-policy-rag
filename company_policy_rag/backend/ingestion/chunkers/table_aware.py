@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import List
 
 from backend.ingestion.chunkers.base import BaseChunker
 from backend.models.chunk import Chunk, ContentType
@@ -16,8 +15,8 @@ class TableAwareChunker(BaseChunker):
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64) -> None:
         super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-    def chunk(self, documents: List[RawDocument]) -> List[Chunk]:
-        chunks: List[Chunk] = []
+    def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
+        chunks: list[Chunk] = []
 
         for doc in documents:
             if not doc.content.strip():
@@ -25,8 +24,8 @@ class TableAwareChunker(BaseChunker):
 
             lines = doc.content.splitlines()
             in_table = False
-            table_lines: List[str] = []
-            prose_lines: List[str] = []
+            table_lines: list[str] = []
+            prose_lines: list[str] = []
             chunk_idx = 0
 
             for line in lines:
@@ -78,7 +77,7 @@ class TableAwareChunker(BaseChunker):
 
         return chunks
 
-    def _chunk_table_lines(self, lines: List[str], doc: RawDocument, start_idx: int) -> List[Chunk]:
+    def _chunk_table_lines(self, lines: list[str], doc: RawDocument, start_idx: int) -> list[Chunk]:
         table_text = "\n".join(lines).strip()
         tokens = self._estimate_tokens(table_text)
 
@@ -98,7 +97,7 @@ class TableAwareChunker(BaseChunker):
         header_lines = lines[:2] if len(lines) >= 2 and "---" in lines[1] else lines[:1]
         data_lines = lines[len(header_lines) :]
 
-        chunks: List[Chunk] = []
+        chunks: list[Chunk] = []
         current_rows = list(header_lines)
         curr_tokens = self._estimate_tokens("\n".join(current_rows))
         sub_idx = start_idx

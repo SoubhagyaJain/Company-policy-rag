@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
 from backend.models.document import DocumentType, RawDocument
 from backend.utils.logging import logger
-from backend.utils.section_tracker import SectionTracker, clean_title
+from backend.utils.section_tracker import SectionTracker
 
 
 class HTMLLoader(BaseLoader):
@@ -19,8 +18,8 @@ class HTMLLoader(BaseLoader):
     def load(
         self,
         file_path: Path,
-        base_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[RawDocument]:
+        base_metadata: dict[str, Any] | None = None,
+    ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.HTML, base_metadata)
 
         try:
