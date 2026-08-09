@@ -195,7 +195,7 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
                   <div>
                     <span className="text-[10px] text-charcoal-muted block">Tokens Used</span>
                     <span className="font-bold">
-                      {message.trace.prompt_tokens + message.trace.completion_tokens}
+                      {(message.trace.prompt_tokens || 0) + (message.trace.completion_tokens || 0)}
                     </span>
                   </div>
                 </div>

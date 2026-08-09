@@ -16,9 +16,11 @@ from backend.rag.citations import CitationEngine
 from backend.rag.context_compression import ContextCompressor
 from backend.rag.multi_query import MultiQueryGenerator
 from backend.rag.query_rewrite import QueryRewriter
+from backend.rag.semantic_cache import SemanticCacheManager
 from backend.retrieval.hybrid import HybridRetriever
 from backend.retrieval.reranker import CrossEncoderReranker
 from backend.utils.logging import logger
+from src.ollama_client import stop_ollama_model
 
 _llm_lock = threading.Lock()
 
@@ -47,20 +49,32 @@ class _LLMProxy:
             try:
                 if hasattr(self._target_llm, "model"):
                     self._target_llm.model = self.model
-                return list(self._target_llm.stream_complete(prompt, **kwargs))
+                gen = self._target_llm.stream_complete(prompt, **kwargs)
+                first = None
+                try:
+                    first = next(gen)
+                except StopIteration:
+                    pass
             finally:
                 if hasattr(self._target_llm, "model") and old_model is not None:
                     self._target_llm.model = old_model
+                    
+        def wrapper():
+            if first is not None:
+                yield first
+            yield from gen
+            
+        return wrapper()
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._target_llm, name)
 
 
-GROUNDED_SYSTEM_PROMPT = """You are an accurate, enterprise policy & technical documentation assistant.
+GROUNDED_SYSTEM_PROMPT = """You are an accurate, helpful AI assistant.
 Your instructions:
-1. Answer the user's question using ONLY the provided document sources below and relevant conversation history.
+1. Answer the user's question using the provided document sources below and relevant conversation history.
 2. For EVERY key claim or fact in your response, cite the source number using exact bracket format [Source N] (e.g. [Source 1], [Source 2]).
-3. If the provided sources do not contain sufficient information to answer the question, state clearly: "I am unable to answer based on the provided policy documents."
+3. If the provided sources do not contain sufficient information to answer the question, state clearly: "I am unable to answer based on the provided documents."
 4. Do not invent, hallucinate, or extrapolate facts beyond the sources.
 
 Document Sources:
@@ -86,7 +100,7 @@ class RAGPipeline:
     """
     Master end-to-end RAG Pipeline orchestrating query rewrite, multi-query decomposition,
     hybrid dense+sparse search, cross-encoder reranking, parent context expansion,
-    LLM grounded synthesis, structured citation extraction, and telemetry traces.
+    LLM grounded synthesis, structured citation extraction, semantic caching, and telemetry traces.
     """
 
     def __init__(
@@ -99,6 +113,7 @@ class RAGPipeline:
         citation_engine: CitationEngine | None = None,
         docstore: dict[str, Chunk] | None = None,
         llm: Any | None = None,
+        semantic_cache: SemanticCacheManager | None = None,
     ) -> None:
         self.hybrid_retriever = hybrid_retriever
         self.reranker = reranker or CrossEncoderReranker()
@@ -108,9 +123,83 @@ class RAGPipeline:
         self.citation_engine = citation_engine or CitationEngine()
         self.docstore = docstore or {}
         self.llm = llm
+        self.semantic_cache = semantic_cache
+        self.active_model = getattr(self.llm, "model", None) or "qwen2.5:7b"
 
         if self.query_rewriter.llm is None and self.llm is not None:
             self.query_rewriter.llm = self.llm
+
+    def set_active_model(self, model: str) -> str:
+        """Switch the global runtime model used by the backend pipeline.
+
+        Best-effort: stop the prior Ollama model over the local RPC endpoint before
+        re-pointing the LLM object at the new default. This is safe for the current API;
+        failures are logged and downgraded so the new model can still be selected.
+        """
+        model = (model or "").strip()
+        if not model:
+            raise ValueError("Model name cannot be empty.")
+
+        previous_model = self.active_model or getattr(self.llm, "model", None) or "qwen2.5:7b"
+        if previous_model and previous_model != model:
+            try:
+                base_url = getattr(self.llm, "base_url", None) if self.llm is not None else None
+                stopped = stop_ollama_model(previous_model, base_url=base_url)
+                if not stopped:
+                    logger.warning("Previous Ollama model '%s' was not stopped cleanly; forcing runtime switch anyway.", previous_model)
+            except Exception as exc:
+                logger.warning("Previous model shutdown failed for '%s': %s", previous_model, exc)
+
+        self.active_model = model
+        if self.llm is not None:
+            try:
+                if hasattr(self.llm, "model"):
+                    self.llm.model = model
+                else:
+                    logger.warning("LLM provider does not expose a .model attribute; active_model=%s", model)
+            except Exception as exc:
+                logger.warning("Unable to patch LLM provider model attribute: %s", exc)
+                raise
+        logger.info("Backend pipeline model switched to %s", model)
+        return model
+
+    def get_active_model(self) -> str:
+        """Return the currently configured generation model."""
+        if self.llm is not None:
+            current = getattr(self.llm, "model", None)
+            if current:
+                self.active_model = str(current)
+        return self.active_model or "qwen2.5:7b"
+
+    def _queue_cache_write(
+        self,
+        user_query: str,
+        answer: str,
+        citations: list[Any],
+        kb_version: str | None = None,
+        model_name: str | None = None,
+    ) -> None:
+        """Queue asynchronous non-blocking background cache write."""
+        if not self.semantic_cache:
+            return
+
+        def _async_put():
+            try:
+                self.semantic_cache.put(
+                    query=user_query,
+                    answer=answer,
+                    citations=citations,
+                    kb_version=kb_version,
+                    model_name=model_name,
+                )
+            except Exception as exc:
+                logger.warning("Background cache write error: %s", exc)
+
+        try:
+            thread = threading.Thread(target=_async_put, daemon=True)
+            thread.start()
+        except Exception as exc:
+            logger.warning("Failed to start background cache write thread: %s", exc)
 
     def _get_effective_llm(self, model: str | None) -> tuple[Any | None, str]:
         """Return a per-request thread-safe LLM proxy and model name without mutating shared singleton state."""
@@ -136,6 +225,40 @@ class RAGPipeline:
         stage_timings: dict[str, float] = {}
 
         req_llm, selected_model = self._get_effective_llm(model)
+
+        # 0. Pre-rewrite Cache Lookup
+        cache_enabled = getattr(self.semantic_cache.settings, "semantic_cache_enabled", True) if (self.semantic_cache and hasattr(self.semantic_cache, "settings")) else True
+        if cache_enabled and self.semantic_cache is not None:
+            t0 = time.perf_counter()
+            cached_res = self.semantic_cache.get(user_query, model_name=selected_model)
+            stage_timings["cache_lookup"] = round((time.perf_counter() - t0) * 1000, 2)
+            if cached_res is not None:
+                total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
+                trace = RAGTrace(
+                    query=user_query,
+                    rewritten_query=None,
+                    sub_queries=[],
+                    retrieved_candidate_count=0,
+                    post_rerank_count=0,
+                    final_context_count=0,
+                    execution_time_ms=total_elapsed,
+                    stage_timings_ms=stage_timings,
+                    fallback_reason="none",
+                    faithfulness_checked=True,
+                    faithfulness_passed=True,
+                    cache_hit=True,
+                    cache_similarity=cached_res.similarity_score,
+                )
+                return RAGResponse(
+                    id=f"resp_{uuid.uuid4().hex[:12]}",
+                    query=user_query,
+                    answer=cached_res.answer,
+                    citations=cached_res.citations,
+                    context_chunks=[],
+                    trace=trace,
+                    model=model or "semantic_cache",
+                    token_usage={"prompt_tokens": 0, "completion_tokens": len(cached_res.answer.split())},
+                )
 
         # 1. Query Rewrite
         t0 = time.perf_counter()
@@ -220,7 +343,13 @@ class RAGPipeline:
             fallback_reason="none" if req_llm is not None else "llm_offline_fallback",
             faithfulness_checked=True,
             faithfulness_passed=True,
+            cache_hit=False,
+            cache_similarity=None,
         )
+
+        # 9. Queue non-blocking cache write on successful citation-backed answer
+        if citations and len(citations) > 0 and answer_text:
+            self._queue_cache_write(user_query, answer_text, citations, model_name=selected_model)
 
         return RAGResponse(
             id=f"resp_{uuid.uuid4().hex[:12]}",
@@ -236,7 +365,7 @@ class RAGPipeline:
     def _fallback_synthesis(self, user_query: str, context_chunks: list[ScoredChunk]) -> str:
         """Deterministic grounded response fallback when LLM service is offline."""
         if not context_chunks:
-            return "I am unable to answer based on the provided policy documents."
+            return "I am unable to answer based on the provided documents."
 
         paragraphs: list[str] = []
         for idx, sc in enumerate(context_chunks, start=1):
@@ -256,8 +385,8 @@ class RAGPipeline:
         model: str | None = None,
     ) -> Generator[dict[str, Any], None, None]:
         """
-        Streaming RAG pipeline: runs retrieval synchronously, then yields
-        real-time LLM tokens via llm.stream_complete().
+        Streaming RAG pipeline: performs pre-rewrite cache lookup, or runs retrieval
+        synchronously and yields real-time LLM tokens via llm.stream_complete().
 
         Yields dicts with 'type' key:
           - {'type': 'retrieval_done', 'stage_timings': {...}, 'candidate_count': int, ...}
@@ -268,6 +397,59 @@ class RAGPipeline:
         stage_timings: dict[str, float] = {}
 
         req_llm, selected_model = self._get_effective_llm(model)
+
+        # 0. Pre-rewrite Cache Lookup
+        cache_enabled = getattr(self.semantic_cache.settings, "semantic_cache_enabled", True) if (self.semantic_cache and hasattr(self.semantic_cache, "settings")) else True
+        if cache_enabled and self.semantic_cache is not None:
+            t0 = time.perf_counter()
+            cached_res = self.semantic_cache.get(user_query, model_name=selected_model)
+            stage_timings["cache_lookup"] = round((time.perf_counter() - t0) * 1000, 2)
+            if cached_res is not None:
+                yield {
+                    "type": "retrieval_done",
+                    "stage_timings": stage_timings,
+                    "candidate_count": 0,
+                    "reranked_count": 0,
+                    "context_count": 0,
+                    "cache_hit": True,
+                }
+
+                words = cached_res.answer.split(" ")
+                for i, word in enumerate(words):
+                    chunk_text = word + (" " if i < len(words) - 1 else "")
+                    yield {"type": "token", "content": chunk_text}
+
+                total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
+                trace = RAGTrace(
+                    query=user_query,
+                    rewritten_query=None,
+                    sub_queries=[],
+                    retrieved_candidate_count=0,
+                    post_rerank_count=0,
+                    final_context_count=0,
+                    execution_time_ms=total_elapsed,
+                    stage_timings_ms=stage_timings,
+                    fallback_reason="none",
+                    faithfulness_checked=True,
+                    faithfulness_passed=True,
+                    cache_hit=True,
+                    cache_similarity=cached_res.similarity_score,
+                )
+                yield {
+                    "type": "done",
+                    "answer": cached_res.answer,
+                    "citations": cached_res.citations,
+                    "context_chunks": [],
+                    "trace": trace,
+                    "model": model or "semantic_cache",
+                    "token_usage": {
+                        "prompt_tokens": 0,
+                        "completion_tokens": len(cached_res.answer.split()),
+                    },
+                    "total_elapsed_ms": total_elapsed,
+                    "cache_hit": True,
+                }
+                return
 
         # 1. Query Rewrite
         t0 = time.perf_counter()
@@ -312,6 +494,7 @@ class RAGPipeline:
             "candidate_count": len(candidate_chunks),
             "reranked_count": len(reranked_chunks),
             "context_count": len(expanded_chunks),
+            "cache_hit": False,
         }
 
         # 6. Stream LLM tokens in real-time
@@ -371,7 +554,13 @@ class RAGPipeline:
             fallback_reason="none" if req_llm is not None else "llm_offline_fallback",
             faithfulness_checked=True,
             faithfulness_passed=True,
+            cache_hit=False,
+            cache_similarity=None,
         )
+
+        # 9. Queue non-blocking cache write on successful completion with valid citations
+        if citations and len(citations) > 0 and full_answer:
+            self._queue_cache_write(user_query, full_answer, citations, model_name=selected_model)
 
         # Yield final done event with all metadata
         yield {
@@ -386,5 +575,7 @@ class RAGPipeline:
                 "completion_tokens": len(full_answer.split()),
             },
             "total_elapsed_ms": total_elapsed,
+            "cache_hit": False,
         }
+
 

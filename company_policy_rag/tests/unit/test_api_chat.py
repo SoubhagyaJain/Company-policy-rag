@@ -110,3 +110,27 @@ def test_post_chat_model_parameter():
     data = response.json()
     assert data["model"] == "llama3.1:8b"
 
+
+def test_post_chat_semantic_cache_hit_and_miss():
+    client = TestClient(app)
+    payload = {
+        "message": "What is the policy for parental leave?",
+        "session_id": "cache_test_sess_1",
+    }
+    # First request: Cache Miss
+    r1 = client.post("/api/chat", json=payload)
+    assert r1.status_code == 200
+    d1 = r1.json()
+    assert "trace" in d1
+    assert d1["trace"]["cache_hit"] is False
+
+    # Second request: Cache Hit (if response had citations)
+    r2 = client.post("/api/chat", json=payload)
+    assert r2.status_code == 200
+    d2 = r2.json()
+    assert "trace" in d2
+    if len(d1.get("citations", [])) > 0:
+        assert d2["trace"]["cache_hit"] is True
+        assert d2["answer"] == d1["answer"]
+
+

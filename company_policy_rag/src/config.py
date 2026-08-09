@@ -71,9 +71,33 @@ class Settings(BaseSettings):
         default="cosine", alias="CHROMA_DISTANCE_FN"
     )
 
+    # ── Semantic Cache ─────────────────────────────────────────────────────
+    semantic_cache_enabled: bool = Field(
+        default=True, alias="SEMANTIC_CACHE_ENABLED"
+    )
+    semantic_cache_threshold: float = Field(
+        default=0.95, alias="SEMANTIC_CACHE_THRESHOLD"
+    )
+    semantic_cache_collection_name: str = Field(
+        default="semantic_cache", alias="SEMANTIC_CACHE_COLLECTION_NAME"
+    )
+
+    @property
+    def SEMANTIC_CACHE_ENABLED(self) -> bool:
+        return self.semantic_cache_enabled
+
+    @property
+    def SEMANTIC_CACHE_THRESHOLD(self) -> float:
+        return self.semantic_cache_threshold
+
+    @property
+    def SEMANTIC_CACHE_COLLECTION_NAME(self) -> str:
+        return self.semantic_cache_collection_name
+
+
     # ── Ollama / Models ────────────────────────────────────────────────────
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
-    llm_model: str = Field(default="gemma4:12b", alias="OLLAMA_LLM_MODEL")
+    llm_model: str = Field(default="qwen2.5:7b", alias="OLLAMA_LLM_MODEL")
     embed_model: str = Field(default="nomic-embed-text", alias="OLLAMA_EMBED_MODEL")
 
     llm_temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")

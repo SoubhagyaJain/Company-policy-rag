@@ -50,6 +50,8 @@ class RAGTrace(BaseModel):
     fallback_reason: str = "none"
     faithfulness_checked: bool = False
     faithfulness_passed: bool = True
+    cache_hit: bool = False
+    cache_similarity: float | None = None
 
 
 class RAGResponse(BaseModel):

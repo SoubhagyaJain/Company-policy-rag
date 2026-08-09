@@ -29,6 +29,15 @@ class ChatService:
         self.telemetry_service = telemetry_service
         self._sessions: dict[str, list[dict[str, Any]]] = {}
 
+    def set_active_model(self, model: str) -> str:
+        """Return a safe guarantee that the backend pipeline is configured for the requested model."""
+        if not model or not str(model).strip():
+            raise ValueError("Model selection cannot be empty.")
+        return self.pipeline.set_active_model(str(model).strip())
+
+    def get_active_model(self) -> str:
+        return self.pipeline.get_active_model()
+
     def execute_query(self, request: ChatRequest) -> ChatResponse:
         """Execute synchronous RAG query and record telemetry trace."""
         if not request.message or not request.message.strip():
@@ -178,6 +187,7 @@ class ChatService:
                         "stage_timings": event.get("stage_timings", {}),
                         "candidate_count": event.get("candidate_count", 0),
                         "context_count": event.get("context_count", 0),
+                        "cache_hit": event.get("cache_hit", False),
                     }
                     yield f"event: retrieval\ndata: {json.dumps(retrieval_payload)}\n\n"
 
@@ -229,13 +239,25 @@ class ChatService:
                     }
                     yield f"event: trace\ndata: {json.dumps(trace_payload)}\n\n"
 
-                    # Done Event
+                    # Done Event - shape the UI can materialize into the assistant message
+                    citations_payload = [c.model_dump() for c in citations]
                     done_payload = {
                         "id": response_id,
+                        "answer": full_answer,
                         "status": "completed",
                         "total_latency_ms": total_latency_ms,
                         "ttft_ms": ttft_ms,
                         "total_tokens": event.get("token_usage", {}).get("completion_tokens", 0),
+                        "citations": citations_payload,
+                        "thinking": None,
+                        "timing": {
+                            "ttft_ms": ttft_ms,
+                            "total_latency_ms": total_latency_ms,
+                        },
+                        "retrieval_trace": trace_summary.model_dump() if trace_summary else None,
+                        "message_id": message_id,
+                        "low_confidence": False,
+                        "grounding_mode": request.grounding_mode or "balanced",
                     }
                     yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
 

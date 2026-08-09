@@ -38,10 +38,13 @@ const CATEGORY_OPTIONS = [
 
 const MODEL_OPTIONS = [
   { id: 'qwen2.5:7b', label: 'Qwen 2.5 7B', desc: 'Fast & balanced' },
-  { id: 'qwen2.5:14b', label: 'Qwen 2.5 14B', desc: 'Higher quality' },
-  { id: 'llama3.1:8b', label: 'Llama 3.1 8B', desc: 'Meta open model' },
-  { id: 'mistral:7b', label: 'Mistral 7B', desc: 'Efficient reasoning' },
-  { id: 'gemma2:9b', label: 'Gemma 2 9B', desc: 'Google compact' },
+  { id: 'gemma4:12b', label: 'Gemma 4 12B', desc: '7.6 GB model' },
+  { id: 'gemma4:latest', label: 'Gemma 4 Latest', desc: '9.6 GB model' },
+  { id: 'llama3.2:3b', label: 'Llama 3.2 3B', desc: '2.0 GB model' },
+  { id: 'gemma2:2b', label: 'Gemma 2 2B', desc: '1.6 GB compact' },
+  { id: 'minimax-m2:cloud', label: 'Minimax M2', desc: 'Cloud model' },
+  { id: 'glm-4.6:cloud', label: 'GLM 4.6', desc: 'Cloud model' },
+  { id: 'deepseek-r1:8b', label: 'Deepseek R1 8B', desc: '5.2 GB model' },
 ];
 
 const SUGGESTED_PROMPTS = [
@@ -80,6 +83,17 @@ export function ChatWindow({
   const [selectedModel, setSelectedModel] = useState('qwen2.5:7b');
   const [showFilters, setShowFilters] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
+
+  useEffect(() => {
+    const storedModel = localStorage.getItem('rag_model');
+    if (storedModel) {
+      setSelectedModel(storedModel);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('rag_model', selectedModel);
+  }, [selectedModel]);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);

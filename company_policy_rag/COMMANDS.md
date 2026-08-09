@@ -58,7 +58,7 @@ cd ..
 ```
 
 ---
-
+np,
 ## 2. Environment files
 
 ### Copy example env files
@@ -146,7 +146,7 @@ npm run start  # Run the built production frontend
 npm run lint   # Run eslint checks
 ```
 
----
+---cd   
 
 ## 6. Docker commands
 

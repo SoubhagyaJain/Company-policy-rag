@@ -139,3 +139,68 @@ def test_post_chat_stream_model_parameter():
         start_obj = [e[1] for e in events if e[0] == "start"][0]
         assert start_obj["model"] == "llama3.1:8b"
 
+
+def test_post_chat_stream_semantic_cache_hit_and_miss():
+    client = TestClient(app)
+    payload = {
+        "message": "What is the policy for remote equipment allowance?",
+        "session_id": "stream_cache_sess_1",
+    }
+    # First stream request (populates cache if citations generated)
+    citations_present = False
+    with client.stream("POST", "/api/chat/stream", json=payload) as r1:
+        assert r1.status_code == 200
+        events = []
+        current_event = None
+        current_data = []
+        for line in r1.iter_lines():
+            if not line:
+                if current_event and current_data:
+                    data_str = "\n".join(current_data)
+                    data_obj = json.loads(data_str)
+                    events.append((current_event, data_obj))
+                    current_event = None
+                    current_data = []
+                continue
+            line_str = line if isinstance(line, str) else line.decode("utf-8")
+            if line_str.startswith("event:"):
+                current_event = line_str[6:].strip()
+            elif line_str.startswith("data:"):
+                current_data.append(line_str[5:].strip())
+
+        retrieval_obj = [e[1] for e in events if e[0] == "retrieval"][0]
+        assert retrieval_obj.get("cache_hit") is False
+        cit_objs = [e[1] for e in events if e[0] == "citation"]
+        if cit_objs and len(cit_objs[0].get("citations", [])) > 0:
+            citations_present = True
+
+    # Give async cache write thread a moment to finish
+    time.sleep(0.2)
+
+    # Second stream request
+    with client.stream("POST", "/api/chat/stream", json=payload) as r2:
+        assert r2.status_code == 200
+        events = []
+        current_event = None
+        current_data = []
+        for line in r2.iter_lines():
+            if not line:
+                if current_event and current_data:
+                    data_str = "\n".join(current_data)
+                    data_obj = json.loads(data_str)
+                    events.append((current_event, data_obj))
+                    current_event = None
+                    current_data = []
+                continue
+            line_str = line if isinstance(line, str) else line.decode("utf-8")
+            if line_str.startswith("event:"):
+                current_event = line_str[6:].strip()
+            elif line_str.startswith("data:"):
+                current_data.append(line_str[5:].strip())
+
+        retrieval_obj2 = [e[1] for e in events if e[0] == "retrieval"][0]
+        if citations_present:
+            assert retrieval_obj2.get("cache_hit") is True
+            assert retrieval_obj2.get("candidate_count") == 0
+
+

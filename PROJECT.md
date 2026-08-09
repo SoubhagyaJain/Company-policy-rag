@@ -7,7 +7,7 @@ c:\Users\jains\OneDrive\Desktop\Rag-chatbot\company_policy_rag\
 ├── backend/
 │   ├── api/          # FastAPI routers (/api/chat, /api/chat/stream, /api/documents, /api/admin, /api/health)
 │   ├── services/     # Business logic & orchestrators (chat_service, document_service, eval_service)
-│   ├── rag/          # Core RAG pipeline, multi-query, query rewriting, context compression, citations
+│   ├── rag/          # Core RAG pipeline, multi-query, query rewriting, context compression, citations, semantic_cache
 │   ├── retrieval/    # Hybrid retriever (BM25 + Dense vector, RRF), reranking (bge-reranker), metadata filters
 │   ├── embeddings/   # Dense vector embedding providers & local cache
 │   ├── ingestion/    # Multi-format loaders (PDF, DOCX, TXT, MD, HTML, CSV, JSON) & adaptive chunkers
@@ -45,6 +45,10 @@ c:\Users\jains\OneDrive\Desktop\Rag-chatbot\company_policy_rag\
 | 11| Redis Caching & System Performance | Response caching, embedding cache, session store, in-memory fallback | M5 | Survey (R4) |
 | 12| Production Docker & CI/CD Pipeline | Multi-stage Docker compose (FastAPI, Next.js, Redis), Pytest/Jest, Pyright/mypy, ESLint | M5 | Survey (R4) |
 | 13| Golden RAG Evaluation Gate | Automated evaluate.py on golden dataset verifying Faithfulness >= 0.90 & Relevancy >= 0.75 | M6 | Survey (Criteria) |
+| 14| Semantic Cache Storage & Metric Config | ChromaDB `semantic_cache` collection, Cosine similarity metric mapping ($1-d$), threshold config, embedding reuse | M_SC1 | User Request (R1, R3) |
+| 15| RAG Pipeline Cache Lookup Hit/Miss | Pre-rewrite lookup in `pipeline.py`, cached answers & citations, retrieval/LLM bypass, non-blocking cache write | M_SC2 | User Request (R2, R4, R5) |
+| 16| Invalidation, Streaming & Concurrency | Document versioning metadata invalidation, hit token streaming simulation, live miss streaming, thread-safe writes | M_SC3 | User Request (R6, R7, R8) |
+| 17| Comprehensive Cache Test Suite & Audit | 13-point automated test suite (hits, misses, threshold, streaming, invalidation, non-blocking, bypass) + Audit | M_SC4 | User Request (Testing) |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
@@ -52,9 +56,13 @@ c:\Users\jains\OneDrive\Desktop\Rag-chatbot\company_policy_rag\
 | M1 | Backend Clean Layout & Ingestion Engine | Modular `backend/` structure, multi-format loaders, adaptive chunkers | None | DONE |
 | M2 | Advanced Retrieval & RAG Pipeline | Hybrid search, multi-query, query rewrite, reranker, context compression, citations | M1 | DONE |
 | M3 | FastAPI Web Application & Observability | API routes, SSE streaming server, admin observability & telemetry endpoints | M2 | DONE |
-| M4 | Next.js 15 Anthropic-inspired UI | Next.js 15 App Router, cream aesthetic, streaming UI, citation cards, document manager | M3 | IN_PROGRESS |
-| M5 | Production Infra, Redis & Testing | Docker compose, Redis cache, pytest/jest test suites, pyright/mypy/eslint config | M4 | IN_PROGRESS |
-| M6 | Golden Evaluation Gate & Victory Audit | Run evaluate.py (Faithfulness >= 0.90, Relevancy >= 0.75), type checks, test suite, docker build | M5 | PLANNED |
+| M4 | Next.js 15 Anthropic-inspired UI | Next.js 15 App Router, cream aesthetic, streaming UI, citation cards, document manager | M3 | DONE |
+| M5 | Production Infra, Redis & Testing | Docker compose, Redis cache, pytest/jest test suites, pyright/mypy/eslint config | M4 | DONE |
+| M6 | Golden Evaluation Gate & Victory Audit | Run evaluate.py (Faithfulness >= 0.90, Relevancy >= 0.75), type checks, test suite, docker build | M5 | DONE |
+| M_SC1 | Semantic Cache Storage & Metric Config | ChromaDB `semantic_cache` collection, Cosine similarity metric mapping, threshold config, $O(1)$ vector cache | None | DONE |
+| M_SC2 | Cache Lookup Integration & Hit/Miss Pipeline | Pre-rewrite lookup in `pipeline.py`, hit retrieval/LLM bypass, citation tracking, non-blocking cache write | M_SC1 | PLANNED |
+| M_SC3 | Cache Invalidation, Streaming & Concurrency | Document versioning invalidation, simulated SSE hit streaming, live miss streaming, thread-safe writes | M_SC2 | PLANNED |
+| M_SC4 | Comprehensive Test Suite & Victory Verification | 13-scenario automated test suite, hit/miss/threshold/streaming/bypass tests, Forensic Auditor check | M_SC3 | PLANNED |
 
 ## Interface Contracts
 

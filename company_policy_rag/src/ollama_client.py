@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from typing import Any
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from backend.utils.logging import logger
 from src.config import settings
 from src.thinking_extract import is_reasoning_model
 
@@ -35,6 +36,36 @@ def format_model_label(model_id: str) -> str:
     if tag:
         formatted = f"{formatted} {tag.upper()}"
     return formatted.strip()
+
+
+def stop_ollama_model(
+    model_name: str,
+    base_url: str | None = None,
+    *,
+    timeout: float = 5.0,
+) -> bool:
+    """Best-effort stop of a running Ollama model so the old generation runtime can be shut down on switch."""
+    if not model_name or not str(model_name).strip():
+        return False
+
+    url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/stop"
+    payload = json.dumps({"name": model_name}).encode("utf-8")
+    req = Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            response.read(1)
+        logger.info("Stopped previous Ollama model '%s' via API stop call", model_name)
+        return True
+    except HTTPError as exc:
+        if exc.code in (404, 405):
+            logger.warning("Ollama stop endpoint is unavailable; cannot unload '%s'", model_name)
+        else:
+            logger.warning("Failed to stop previous Ollama model '%s': %s", model_name, exc)
+        return False
+    except (URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        logger.warning("Failed to stop previous Ollama model '%s': %s", model_name, exc)
+        return False
 
 
 def probe_ollama_tags(

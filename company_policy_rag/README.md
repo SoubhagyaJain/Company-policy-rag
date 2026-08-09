@@ -1,4 +1,4 @@
-# 🚀 Enterprise Policy RAG Chatbot
+# 🚀 Enterprise Policy RAG AI Assistant
 
 ![Architecture: Microservices](https://img.shields.io/badge/Architecture-Microservices-blue)
 ![Backend: FastAPI](https://img.shields.io/badge/Backend-FastAPI_|_Python_3.11-009688?logo=fastapi)
@@ -7,14 +7,14 @@
 ![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)
 ![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)
 
-A production-grade **Retrieval-Augmented Generation (RAG)** chatbot designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, and a real-time streaming UI with **live model switching**.
+A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, and a real-time streaming UI with **live model switching**.
 
 ---
 
 ## ✨ Features
 
 ### 🧠 Conversational Memory
-- **Multi-turn context awareness** — the chatbot remembers previous messages within the same session.
+- **Multi-turn context awareness** — the AI assistant remembers previous messages within the same session.
 - **Pronoun resolution** — follow-up questions like *"Are there any exceptions for it?"* are automatically resolved using conversation history.
 - **Context-aware query rewriting** — the AI Query Rewriter uses past conversation turns to generate better search queries, improving retrieval accuracy.
 
@@ -27,6 +27,11 @@ A production-grade **Retrieval-Augmented Generation (RAG)** chatbot designed to 
 - **Server-Sent Events (SSE)** — tokens stream to the browser in real-time as the LLM generates them.
 - **Sub-second TTFT** — optimized pipeline delivers Time-To-First-Token under 1 second on cached queries.
 - **Live retrieval telemetry** — the UI shows retrieval stage timings, reranking scores, and citation sources in real-time.
+
+### 🧠 Semantic Caching
+- **Instant Answers** — semantically similar queries bypass the LLM and retrieval pipeline.
+- **Cost & Latency Reduction** — sub-100ms response times for cached hits using ChromaDB cosine similarity.
+- **Simulated SSE Streaming** — cache hits are streamed back smoothly to maintain UI consistency.
 
 ### 🎯 High-Precision Retrieval
 - **Hybrid Search (Dense + Sparse)** — combines dense vector similarity (`BAAI/bge-small-en-v1.5`) with sparse BM25 keyword matching via Reciprocal Rank Fusion (RRF).
@@ -219,7 +224,7 @@ Ask any question about your uploaded company documents:
 > *"What is the policy for remote work?"*
 
 ### Follow-up with Memory
-The chatbot remembers context within the same session:
+The AI assistant remembers context within the same session:
 > *"Are there any exceptions for it?"*
 > → Automatically resolves "it" to "remote work" from the previous message.
 
@@ -263,7 +268,7 @@ Key configuration options in `.env`:
 - [x] Live model switching from chat UI
 - [x] Multi-format document upload & management
 - [x] Observability dashboard with trace telemetry
-- [ ] Semantic caching (vector-based cache for similar queries)
+- [x] Semantic caching (vector-based cache for similar queries)
 - [ ] Graph RAG integration (Neo4j for entity relationships)
 - [ ] Multi-user authentication & role-based access
 - [ ] Kubernetes Helm charts for cloud deployment

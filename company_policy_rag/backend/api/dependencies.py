@@ -11,6 +11,7 @@ except Exception:
     Ollama = None
 
 from backend.rag.pipeline import RAGPipeline
+from backend.rag.semantic_cache import SemanticCacheManager
 from backend.retrieval.hybrid import HybridRetriever
 from backend.retrieval.reranker import CrossEncoderReranker
 from backend.retrieval.vector import DenseVectorRetriever
@@ -24,6 +25,7 @@ _lock = threading.RLock()
 
 _telemetry_service: TelemetryService | None = None
 _document_service: DocumentService | None = None
+_semantic_cache_manager: SemanticCacheManager | None = None
 _rag_pipeline: RAGPipeline | None = None
 _chat_service: ChatService | None = None
 
@@ -44,6 +46,19 @@ def get_document_service() -> DocumentService:
             if _document_service is None:
                 _document_service = DocumentService()
     return _document_service
+
+
+def get_semantic_cache_manager() -> SemanticCacheManager:
+    global _semantic_cache_manager
+    if _semantic_cache_manager is None:
+        with _lock:
+            if _semantic_cache_manager is None:
+                doc_service = get_document_service()
+                _semantic_cache_manager = SemanticCacheManager(
+                    vector_store=doc_service.vector_store,
+                    embedding_service=doc_service.embedding_service,
+                )
+    return _semantic_cache_manager
 
 
 def get_rag_pipeline() -> RAGPipeline:
@@ -104,11 +119,13 @@ def get_rag_pipeline() -> RAGPipeline:
                     except Exception:
                         llm = None
                 
+                cache_manager = get_semantic_cache_manager()
                 _rag_pipeline = RAGPipeline(
                     hybrid_retriever=hybrid_retriever,
                     reranker=reranker,
                     docstore=doc_service.docstore,
-                    llm=llm
+                    llm=llm,
+                    semantic_cache=cache_manager,
                 )
     return _rag_pipeline
 
@@ -129,9 +146,17 @@ def get_chat_service() -> ChatService:
 
 def reset_dependencies() -> None:
     """Reset singletons (useful for test isolation)."""
-    global _telemetry_service, _document_service, _rag_pipeline, _chat_service
+    global _telemetry_service, _document_service, _rag_pipeline, _chat_service, _semantic_cache_manager
     with _lock:
+        if _semantic_cache_manager is not None:
+            try:
+                _semantic_cache_manager.clear()
+            except Exception:
+                pass
         _telemetry_service = None
         _document_service = None
         _rag_pipeline = None
         _chat_service = None
+        _semantic_cache_manager = None
+
+

@@ -185,26 +185,38 @@ export async function sendChatStream(
     buffer = rest;
 
     for (const { event, data } of events) {
-      if (event === "retrieval_done") {
+      if (event === "retrieval" || event === "retrieval_done") {
         try {
-          handlers.onRetrievalDone?.(JSON.parse(data) as RetrievalTrace);
+          const payload = JSON.parse(data) as RetrievalTrace;
+          handlers.onRetrievalDone?.(payload);
         } catch {
           /* ignore malformed */
         }
       } else if (event === "thinking") {
         handlers.onThinking?.(data);
-      } else if (event === "token") {
-        handlers.onToken?.(data);
+      } else if (event === "chunk" || event === "token") {
+        try {
+          const payload = JSON.parse(data) as { content?: string };
+          const token = typeof payload === "string" ? payload : payload?.content ?? "";
+          handlers.onToken?.(token);
+        } catch {
+          handlers.onToken?.(data);
+        }
+      } else if (event === "citation") {
+        // Citation frames are informational for the UI and do not need to mutate current assistant state.
+      } else if (event === "trace") {
+        // Trace frames are part of the final telemetry contract; ignore here because ChatThread reads the answer from done.
       } else if (event === "done") {
         try {
-          handlers.onDone?.(JSON.parse(data) as StreamDonePayload);
+          const payload = JSON.parse(data) as StreamDonePayload;
+          handlers.onDone?.(payload);
         } catch {
           handlers.onError?.("Invalid stream completion payload");
         }
       } else if (event === "error") {
         try {
-          const parsed = JSON.parse(data) as { message?: string };
-          handlers.onError?.(parsed.message || "Stream error");
+          const parsed = JSON.parse(data) as { detail?: string; message?: string };
+          handlers.onError?.(parsed.detail || parsed.message || "Stream error");
         } catch {
           handlers.onError?.(data || "Stream error");
         }

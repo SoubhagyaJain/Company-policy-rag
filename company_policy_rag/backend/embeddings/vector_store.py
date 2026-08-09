@@ -69,7 +69,7 @@ class ChromaVectorStore(VectorStoreInterface):
     def __init__(
         self,
         collection_name: str = "company_policy",
-        persist_dir: str = "app/storage/chroma",
+        persist_dir: str = "storage/chroma",
     ) -> None:
         self.collection_name = collection_name
         self.persist_dir = Path(persist_dir)

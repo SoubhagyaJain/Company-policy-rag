@@ -128,7 +128,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
                             error: errMsg,
                             content:
                               msg.content ||
-                              'Unable to connect to backend. Please ensure the FastAPI server is running on port 8001.',
+                              'Unable to connect to backend. Please ensure the FastAPI server is running on port 8000.',
                           }
                         : msg
                     )
