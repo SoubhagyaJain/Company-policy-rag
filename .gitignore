@@ -1,0 +1,9 @@
+node_modules/
+.next/
+__pycache__/
+*.pyc
+storage/
+logs/
+.agents/
+*.tsbuildinfo
+.env

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soubhagya Jain's AI Notes</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- Mermaid JS -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            look: 'handDrawn', // Turns on the rough, hand-drawn sketch style
+            theme: 'base',
+            fontFamily: '"Caveat", cursive',
+            themeVariables: {
+                primaryColor: '#ffffff',
+                primaryTextColor: '#1a1a1a',
+                primaryBorderColor: '#2b2b2b',
+                lineColor: '#2b2b2b',
+                secondaryColor: '#f9f9f9',
+                tertiaryColor: '#ffffff',
+                fontFamily: '"Caveat", cursive',
+                fontSize: '18px'
+            }
+        });
+    </script>
+
+    <style>
+        :root {
+            /* Anthropic-style Light Mode (Cream/Warm) */
+            --bg-color: #FAF9F6;
+            --surface-color: #FFFFFF;
+            --text-primary: #1A1A1A;
+            --text-secondary: #4A4A4A;
+            --accent-color: #D35400; /* Warm terracotta */
+            --border-color: #E5E5E5;
+            --code-bg: #F0EEE9;
+        }
+
+        [data-theme="dark"] {
+            /* Anthropic-style Dark Mode */
+            --bg-color: #121212;
+            --surface-color: #1E1E1E;
+            --text-primary: #EDEDED;
+            --text-secondary: #A0A0A0;
+            --accent-color: #E67E22;
+            --border-color: #333333;
+            --code-bg: #2A2A2A;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.7;
+            transition: background-color 0.5s ease, color 0.5s ease;
+            overflow-x: hidden;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4 {
+            font-family: 'Instrument Serif', serif;
+            font-weight: 400;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        h1 {
+            font-size: clamp(3rem, 8vw, 4.5rem);
+            line-height: 1.1;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .author-subtitle {
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-color);
+            margin-bottom: 4rem;
+            font-weight: 600;
+        }
+
+        h2 {
+            font-size: clamp(2rem, 5vw, 2.5rem);
+            margin-top: 4rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        h3 {
+            font-size: 1.5rem;
+            margin-top: 2.5rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+        }
+
+        p, ul, ol {
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+        }
+
+        ul {
+            padding-left: 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.75rem;
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Cards for Analogies */
+        .analogy-card {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .analogy-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+        }
+
+        .analogy-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Whiteboard Diagram Container */
+        .diagram-container {
+            background-color: #FFFFFF; /* Force white for the whiteboard look */
+            border: 8px solid #E0E0E0; /* Whiteboard frame */
+            border-radius: 4px;
+            padding: 2rem;
+            margin: 3rem 0;
+            box-shadow: 
+                inset 0 0 20px rgba(0,0,0,0.02), 
+                0 10px 30px rgba(0,0,0,0.1);
+            overflow-x: auto;
+            text-align: center;
+            position: relative;
+        }
+        
+        /* Little eraser shelf at the bottom of the whiteboard */
+        .diagram-container::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: -8px;
+            right: -8px;
+            height: 8px;
+            background-color: #D0D0D0;
+            border-radius: 0 0 4px 4px;
+        }
+
+        [data-theme="dark"] .diagram-container {
+            background-color: #E8E8E8; /* Slightly dimmer white in dark mode so it doesn't blind you, but keeps the ink contrast */
+            border-color: #444;
+        }
+        [data-theme="dark"] .diagram-container::after {
+            background-color: #333;
+        }
+
+        /* Code & Math Blocks */
+        .math-formula {
+            background-color: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 1.1rem;
+            text-align: center;
+            overflow-x: auto;
+            margin: 2rem 0;
+            color: var(--text-primary);
+            border-left: 4px solid var(--accent-color);
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            font-size: 0.9rem;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.05);
+        }
+
+        /* Animations */
+        .fade-in-section {
+            opacity: 0;
+            transform: translateY(40px);
+            visibility: hidden;
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            will-change: opacity, visibility;
+        }
+
+        .fade-in-section.is-visible {
+            opacity: 1;
+            transform: none;
+            visibility: visible;
+        }
+
+        /* Decorative background blob */
+        .blob {
+            position: fixed;
+            top: -20%;
+            right: -10%;
+            width: 50vw;
+            height: 50vw;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(211,84,0,0.05) 0%, rgba(250,249,246,0) 70%);
+            z-index: -1;
+            pointer-events: none;
+            transition: background 0.5s ease;
+        }
+
+        [data-theme="dark"] .blob {
+            background: radial-gradient(circle, rgba(230,126,34,0.05) 0%, rgba(18,18,18,0) 70%);
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+            }
+            .analogy-card, .diagram-container {
+                padding: 1.5rem;
+            }
+            .theme-toggle {
+                top: auto;
+                bottom: 20px;
+                right: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="blob"></div>
+
+    <button class="theme-toggle" id="theme-toggle">🌙 Dark Mode</button>
+
+    <div class="container">
+        
+        <!-- HEADER -->
+        <div class="fade-in-section" style="margin-top: 10vh;">
+            <h1>Soubhagya Jain</h1>
+            <div class="author-subtitle">The Architect's AI Blueprint</div>
+            <p style="font-size: 1.3rem; line-height: 1.8;">
+                The 2026 state-of-the-art reality of Applied AI at top-tier labs. A deep dive into robust system architectures, engineering trade-offs, and the mechanical intuition of the mathematics.
+            </p>
+        </div>
+
+        <!-- SECTION 1: Paradigms -->
+        <div class="fade-in-section">
+            <h2>Part 1: The Paradigm Shifts of 2026</h2>
+            <p>If you propose the standard 2023 "LangChain + Pinecone + Cosine Similarity" pipeline today, you will be rejected. The paradigm has shifted massively.</p>
+            
+            <h3>1. The Death of Naive Chunking: CAG</h3>
+            <p>With models possessing 2M-10M token context windows, naive chunking is obsolete. We use <strong>Cache-Augmented Generation (CAG)</strong>. Instead of complex vector chunking, we load the entire corporate wiki into the LLM's context window. We utilize GPU KV-Caching (Key-Value Caching) to hold attention states in memory, eliminating retrieval failures entirely.</p>
+            
+            <h3>2. Native Multi-Modal RAG</h3>
+            <p>We no longer use OCR to rip text out of a PDF. We embed the image of the slide deck directly into <strong>joint latent spaces</strong>. When a user asks a question, the retriever compares the text query directly against the image/video vectors.</p>
+
+            <h3>3. System 2 Reasoning: Agentic Loops</h3>
+            <p>RAG is no longer a static pipeline (query &rarr; retrieve &rarr; generate). It is an autonomous loop. The agent searches, reads the top 5 results, realizes it is missing context, pauses, writes a new search query, retrieves it, synthesizes, and *then* answers the user.</p>
+
+            <h3>4. ColBERT & Late Interaction</h3>
+            <p>Standard Bi-Encoders compress a whole document into one lossy vector. We now use <strong>Late Interaction models (ColBERT)</strong> which create a vector for every single token in the document, allowing for extremely precise token-level matching at search time.</p>
+        </div>
+
+        <!-- SECTION 2: Architecture Data Flow (WHITEBOARD) -->
+        <div class="fade-in-section">
+            <h2>Part 2: Production Architecture Flow</h2>
+            <p>A true production RAG project is defined by how data flows through it. Here is the whiteboard sketch of how semantic caching, routing, parallel retrieval, and System 2 agentic loops connect.</p>
+            
+            <div class="diagram-container">
+                <pre class="mermaid">
+                    graph TD
+                        %% User Input
+                        User[User Query] --> API[FastAPI Gateway]
+                        
+                        %% API & Caching Layer
+                        API --> CacheCheck{Semantic Cache}
+                        CacheCheck -->|Hit| FastResponse[Return Cached Answer]
+                        FastResponse --> User
+                        CacheCheck -->|Miss| Router[Query Router & Rewriter]
+                        
+                        %% Query Processing
+                        Router --> ParallelSearch[Parallel Retrieval]
+                        
+                        %% Retrieval Layer
+                        subgraph Search Layer
+                            ParallelSearch --> Dense[Dense Bi-Encoder]
+                            ParallelSearch --> Sparse[Sparse BM25]
+                            ParallelSearch --> Graph[Knowledge Graph]
+                            
+                            Dense --> RRF[Reciprocal Rank Fusion]
+                            Sparse --> RRF
+                            Graph --> RRF
+                        end
+                        
+                        %% Re-Ranking Layer
+                        RRF --> CrossEncoder[Cross-Encoder Re-ranker]
+                        
+                        %% Generation & Agent Loop
+                        subgraph System 2 Loop
+                            CrossEncoder --> Agent[Agentic LLM]
+                            Agent --> EvalCheck{Context Sufficient?}
+                            EvalCheck -->|No| Router
+                            EvalCheck -->|Yes| Formatter[Response Formatter]
+                        end
+                        
+                        %% Final Output
+                        Formatter --> WriteCache[Update Cache]
+                        Formatter --> API
+                </pre>
+            </div>
+        </div>
+
+        <!-- SECTION 3: Trade-offs -->
+        <div class="fade-in-section">
+            <h2>Part 3: The Architect's Trade-Offs</h2>
+            <p>In a senior AI/ML interview, there are no "right" answers, only trade-offs. You must own every technical decision.</p>
+
+            <div class="analogy-card">
+                <h3>⚖️ Latency vs. Accuracy (The Funnel)</h3>
+                <p><strong>Bi-Encoders</strong> are blazing fast (O(1)) but lack deep semantic interaction. <strong>Cross-Encoders</strong> are incredibly accurate but horrifically slow (O(N)).</p>
+                <p><strong>Solution:</strong> Retrieve the top 100 documents in 50ms using a Bi-encoder/BM25, then use the heavy Cross-Encoder to re-rank only those 100 to find the true Top 5.</p>
+            </div>
+
+            <div class="analogy-card">
+                <h3>🧩 The Chunk Size Dilemma</h3>
+                <p>Small chunks give high retrieval precision but lack LLM context. Large chunks give the LLM context but have diluted vector precision.</p>
+                <p><strong>Solution: Small-to-Big (Parent-Child) Chunking.</strong> Retrieve the highly precise small child chunk, but pass its surrounding parent document to the LLM.</p>
+            </div>
+
+            <div class="analogy-card">
+                <h3>🔍 Dense (Vectors) vs. Sparse (BM25)</h3>
+                <p>Dense vectors understand concepts but fail at exact acronym matches (e.g., "ERR-404"). BM25 perfectly matches keywords but fails if a synonym is used.</p>
+                <p><strong>Solution: Hybrid Search.</strong> Run both, and combine their results mathematically using Reciprocal Rank Fusion (RRF).</p>
+            </div>
+        </div>
+
+        <!-- SECTION 4: Mathematics -->
+        <div class="fade-in-section">
+            <h2>Part 4: The Mathematics & Intuition</h2>
+            <p>Math can be hard to remember. Human brains remember stories and physical objects. Here are the mechanical analogies that drive the systems.</p>
+
+            <div class="analogy-card">
+                <div class="analogy-icon">🔭</div>
+                <h3>Cosine Similarity: The Telescope Analogy</h3>
+                <p>How do we compare a 1-sentence summary and a 1,000-page encyclopedia to a query?</p>
+                <div class="math-formula">
+                    CosineSim(A, B) = (A · B) / (||A|| × ||B||)
+                </div>
+                <p>Think of vectors as telescopes pointing at a specific star. The summary is a tiny plastic telescope; the encyclopedia is the Hubble Space Telescope. If they point at the exact same star ("Dogs"), we want a perfect score.</p>
+                <p>By dividing the raw overlap (A · B) by the physical lengths of both telescopes (||A|| × ||B||), we mathematically erase the size difference. We only care about the <strong>angle</strong> they are pointing.</p>
+            </div>
+
+            <div class="analogy-card">
+                <div class="analogy-icon">🍕</div>
+                <h3>BM25 Term Frequency: The Pizza Analogy</h3>
+                <p>Why does BM25 use a weird asymptotic curve for term frequency?</p>
+                <div class="math-formula">
+                    TF / (TF + k1)
+                </div>
+                <p>Imagine eating slices of pizza. The 1st slice (the word appears once) is amazing. Your happiness (score) shoots up. By the 10th slice, you're sick. If a spammer forces you to eat 1,000 slices (keyword stuffing), your happiness doesn't increase 1,000x; it flatlines.</p>
+                <p>The math enforces this diminishing return. As TF gets massive, the fraction gets closer to 1.0 but never passes it, stopping spammers from cheating the search engine.</p>
+            </div>
+
+            <div class="analogy-card">
+                <div class="analogy-icon">🪡</div>
+                <h3>BM25 Length Penalty: Needle in a Teacup</h3>
+                <p>Why penalize long documents?</p>
+                <div class="math-formula">
+                    |D| / avgdl
+                </div>
+                <p>If you find a needle (keyword) in a small teacup (short tweet), it is highly intentional. If you find a needle in a massive barn full of hay (10,000-page doc), it might just be random chance.</p>
+                <p>Dividing the Current Document Length (|D|) by Average Length (avgdl) creates a ratio. The math actively shrinks the score of the massive barn to prevent it from winning by random chance.</p>
+            </div>
+
+            <div class="analogy-card">
+                <div class="analogy-icon">📢</div>
+                <h3>Softmax ($e^x$): The Megaphone Analogy</h3>
+                <p>How does an LLM pick a word from 100,000 choices?</p>
+                <p>Imagine a noisy room of 100,000 mumbling people. "Apple" is mumbling slightly louder (Logit 2.5) than "Banana" (1.0).</p>
+                <p>We raise the constant <em>e</em> to the power of the logit ($e^{2.5}$). Exponents grow explosively. This acts like handing a massive PA System Megaphone ONLY to the loudest mumblers, exaggerating the model's preferred choice to stand out from the noise.</p>
+            </div>
+
+            <div class="analogy-card">
+                <div class="analogy-icon">🧠</div>
+                <h3>Temperature (T): Strict Boss vs. Drunk Brainstorming</h3>
+                <p>We actually calculate $e^{x / T}$ in Softmax. What does Temperature do?</p>
+                <ul>
+                    <li><strong>Low Temp (T=0.1) is the Strict Boss:</strong> We divide the logit by a tiny number, making the exponent huge. The Strict Boss turns the megaphone to absolute max, hands it only to the #1 choice ("Apple" gets 99.9% probability), and kicks everyone else out. Highly factual, deterministic (Best for RAG).</li>
+                    <li><strong>High Temp (T=2.0) is Drunk Brainstorming:</strong> We divide by a large number, shrinking the exponents. The boss turns the megaphone down and hands it to everyone. The #1 and #5 choices sound equally loud, leading to creative (but hallucination-prone) answers.</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="fade-in-section" style="text-align: center; margin-top: 5rem; margin-bottom: 2rem;">
+            <p style="font-family: 'Instrument Serif', serif; font-size: 1.5rem; color: var(--text-primary);">Built for engineering excellence.</p>
+        </div>
+
+    </div>
+
+    <!-- JS for Animations & Theme -->
+    <script>
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in-section').forEach((section) => {
+            observer.observe(section);
+        });
+
+        // Theme Toggle Logic
+        const themeToggle = document.getElementById('theme-toggle');
+        const root = document.documentElement;
+        
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        let currentTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
+        
+        if (currentTheme === 'dark') {
+            root.setAttribute('data-theme', 'dark');
+            themeToggle.innerText = '☀️ Light Mode';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            if (root.getAttribute('data-theme') === 'dark') {
+                root.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+                themeToggle.innerText = '🌙 Dark Mode';
+            } else {
+                root.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                themeToggle.innerText = '☀️ Light Mode';
+            }
+        });
+    </script>
+</body>
+</html>
