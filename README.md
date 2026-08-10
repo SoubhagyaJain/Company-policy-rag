@@ -28,6 +28,11 @@ A production-grade **Retrieval-Augmented Generation (RAG)** chatbot designed to 
 - **Sub-second TTFT** — optimized pipeline delivers Time-To-First-Token under 1 second on cached queries.
 - **Live retrieval telemetry** — the UI shows retrieval stage timings, reranking scores, and citation sources in real-time.
 
+### ⚡ Semantic Caching
+- **Vector-based Cache** — intercepts incoming queries and instantly returns cached responses for highly similar past queries using dense embeddings.
+- **Graceful Degradation & Concurrency** — non-blocking async writes, lock-protected memory snapshots, and fallback to standard RAG pipeline if the cache store is unavailable.
+- **Local Persistence** — cached queries and citations persist to disk across restarts using ChromaDB.
+
 ### 🎯 High-Precision Retrieval
 - **Hybrid Search (Dense + Sparse)** — combines dense vector similarity (`BAAI/bge-small-en-v1.5`) with sparse BM25 keyword matching via Reciprocal Rank Fusion (RRF).
 - **Cross-Encoder Reranking** — `BAAI/bge-reranker-large` running on **CUDA GPU** re-scores candidates for maximum precision.
@@ -58,7 +63,9 @@ graph TD
     end
 
     subgraph RAG [Advanced RAG Pipeline]
-        Orchestrator --> |Context-Aware Rewrite| LLM_Q[Query Rewriter]
+        Orchestrator --> Cache[(Semantic Cache)]
+        Cache --> |Cache Hit: Instant Response| UI
+        Cache --> |Cache Miss: Context-Aware Rewrite| LLM_Q[Query Rewriter]
         Orchestrator --> |Hybrid Search| VectorDB[(ChromaDB)]
         VectorDB --> |BM25 + Dense Vectors| RRF[Reciprocal Rank Fusion]
         RRF --> |Top K Candidates| Reranker[BGE Cross-Encoder · CUDA]
@@ -251,6 +258,8 @@ Key configuration options in `.env`:
 | `ENABLE_QUERY_REWRITE` | `true` | Enable LLM-based query rewriting |
 | `ENABLE_RERANKER` | `true` | Enable cross-encoder reranking |
 | `GROUNDING_STRICTNESS` | `balanced` | `balanced` or `strict` |
+| `SEMANTIC_CACHE_ENABLED` | `true` | Enable vector-based semantic cache |
+| `SEMANTIC_CACHE_THRESHOLD` | `0.95` | Cosine similarity threshold for cache hits |
 
 ---
 
@@ -263,7 +272,7 @@ Key configuration options in `.env`:
 - [x] Live model switching from chat UI
 - [x] Multi-format document upload & management
 - [x] Observability dashboard with trace telemetry
-- [ ] Semantic caching (vector-based cache for similar queries)
+- [x] Semantic caching (vector-based cache for similar queries)
 - [ ] Graph RAG integration (Neo4j for entity relationships)
 - [ ] Multi-user authentication & role-based access
 - [ ] Kubernetes Helm charts for cloud deployment
