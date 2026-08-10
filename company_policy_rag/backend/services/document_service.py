@@ -67,7 +67,8 @@ class DocumentService:
         file_type = ext.lstrip(".") or "txt"
 
         # Write to temporary file for loader processing
-        temp_path = self.storage_dir / f"{document_id}_{filename}"
+        safe_filename = Path(filename).name
+        temp_path = self.storage_dir / f"{document_id}_{safe_filename}"
         try:
             temp_path.write_bytes(content_bytes)
 

@@ -4,8 +4,11 @@ import asyncio
 import json
 import time
 import uuid
+import threading
 from collections.abc import AsyncGenerator
 from typing import Any
+
+from cachetools import TTLCache
 
 from backend.models.api_dto import ChatRequest, ChatResponse
 from backend.models.rag import RAGResponse
@@ -27,7 +30,15 @@ class ChatService:
     ) -> None:
         self.pipeline = rag_pipeline
         self.telemetry_service = telemetry_service
-        self._sessions: dict[str, list[dict[str, Any]]] = {}
+        
+        # Thread-safe TTL cache: Max 1000 sessions, 24-hour expiration
+        self._sessions = TTLCache(maxsize=1000, ttl=86400)
+        self._session_lock = threading.Lock()
+
+    def delete_session(self, session_id: str) -> None:
+        """Safely evict a session from the LRU/TTL cache."""
+        with self._session_lock:
+            self._sessions.pop(session_id, None)
 
     def set_active_model(self, model: str) -> str:
         """Return a safe guarantee that the backend pipeline is configured for the requested model."""
@@ -47,8 +58,8 @@ class ChatService:
         message_id = f"msg_{uuid.uuid4().hex[:12]}"
         t_start = time.perf_counter()
 
-        # Retrieve session conversation history before execution
-        history = self._sessions.get(session_id, [])
+        with self._session_lock:
+            history = self._sessions.get(session_id, [])
 
         # Run pipeline
         rag_res: RAGResponse = self.pipeline.query(
@@ -59,28 +70,27 @@ class ChatService:
         )
         elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
 
-        # Record in Telemetry
         self.telemetry_service.record_from_rag_response(rag_res)
 
-        # Record in session history
-        if session_id not in self._sessions:
-            self._sessions[session_id] = []
-        self._sessions[session_id].append(
-            {
-                "message_id": message_id,
-                "role": "user",
-                "content": request.message,
-                "timestamp": time.time(),
-            }
-        )
-        self._sessions[session_id].append(
-            {
-                "message_id": rag_res.id,
-                "role": "assistant",
-                "content": rag_res.answer,
-                "timestamp": time.time(),
-            }
-        )
+        with self._session_lock:
+            if session_id not in self._sessions:
+                self._sessions[session_id] = []
+            self._sessions[session_id].append(
+                {
+                    "message_id": message_id,
+                    "role": "user",
+                    "content": request.message,
+                    "timestamp": time.time(),
+                }
+            )
+            self._sessions[session_id].append(
+                {
+                    "message_id": rag_res.id,
+                    "role": "assistant",
+                    "content": rag_res.answer,
+                    "timestamp": time.time(),
+                }
+            )
 
         return ChatResponse(
             id=rag_res.id,
@@ -102,18 +112,19 @@ class ChatService:
             token_usage=rag_res.token_usage or {},
         )
 
-    async def stream_query(self, request: ChatRequest) -> AsyncGenerator[str, None]:
+    async def stream_query(self, request: ChatRequest, cancel_token: asyncio.Event | None = None) -> AsyncGenerator[str, None]:
         """
         Stream RAG response via Server-Sent Events (SSE) with real-time LLM token streaming.
-        Uses pipeline.stream_query() generator to get genuine tokens from Ollama as they are generated.
-        Emits events: start, retrieval, chunk, citation, trace, done, error.
+        Uses fully async pipeline.stream_query().
         """
         t_start = time.perf_counter()
         session_id = request.session_id or f"sess_{uuid.uuid4().hex[:12]}"
         message_id = f"msg_{uuid.uuid4().hex[:12]}"
         response_id = f"resp_{uuid.uuid4().hex[:12]}"
         model_name = request.model or "qwen2.5:7b"
-        history = self._sessions.get(session_id, [])
+        
+        with self._session_lock:
+            history = self._sessions.get(session_id, [])
 
         try:
             if not request.message or not request.message.strip():
@@ -121,7 +132,7 @@ class ChatService:
                 yield f"event: error\ndata: {err_data}\n\n"
                 return
 
-            # 1. Immediate start event (< 50ms TTFT header)
+            # 1. Immediate start event
             start_payload = {
                 "id": response_id,
                 "message_id": message_id,
@@ -132,55 +143,24 @@ class ChatService:
             }
             yield f"event: start\ndata: {json.dumps(start_payload)}\n\n"
 
-            # 2. Run the streaming pipeline in a background thread, forward events via queue
-            queue: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
-
-            def _run_stream_pipeline():
-                """Runs in a thread — iterates the synchronous generator and pushes events to the async queue safely."""
-                try:
-                    for event in self.pipeline.stream_query(
-                        user_query=request.message,
-                        filters=request.filters,
-                        history=history,
-                        model=request.model,
-                    ):
-                        loop.call_soon_threadsafe(queue.put_nowait, event)
-                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "__end__"})
-                except Exception as exc:
-                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "__error__", "detail": str(exc)})
-
-            # Launch the pipeline in a thread
-            loop.run_in_executor(None, _run_stream_pipeline)
-
-            # Small delay to let the thread start
-            await asyncio.sleep(0.01)
-
             ttft_recorded = False
             ttft_ms = 0.0
             full_answer = ""
             token_index = 0
 
-            # 3. Consume events from the queue and yield SSE events
-            while True:
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=600.0)
-                except TimeoutError:
-                    err_data = json.dumps({"detail": "LLM generation timed out after 10 minutes.", "status": 504})
-                    yield f"event: error\ndata: {err_data}\n\n"
-                    return
-
-                if event["type"] == "__end__":
+            pipeline_stream = self.pipeline.stream_query(
+                user_query=request.message,
+                filters=request.filters,
+                history=history,
+                model=request.model,
+                cancel_token=cancel_token
+            )
+            
+            async for event in pipeline_stream:
+                if cancel_token and cancel_token.is_set():
                     break
-
-                if event["type"] == "__error__":
-                    logger.exception("Pipeline stream error: %s", event["detail"])
-                    err_data = json.dumps({"detail": event["detail"], "status": 500})
-                    yield f"event: error\ndata: {err_data}\n\n"
-                    return
-
+                    
                 if event["type"] == "retrieval_done":
-                    # Signal frontend that retrieval is complete, LLM generation starting
                     retrieval_payload = {
                         "id": response_id,
                         "status": "generating",
@@ -210,7 +190,6 @@ class ChatService:
                 elif event["type"] == "done":
                     total_latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
 
-                    # Stream Citations
                     citations = event.get("citations", [])
                     citations_payload = {
                         "id": response_id,
@@ -218,7 +197,6 @@ class ChatService:
                     }
                     yield f"event: citation\ndata: {json.dumps(citations_payload)}\n\n"
 
-                    # Record & Stream Telemetry Trace
                     trace = event.get("trace")
                     rag_response = RAGResponse(
                         id=response_id,
@@ -239,8 +217,6 @@ class ChatService:
                     }
                     yield f"event: trace\ndata: {json.dumps(trace_payload)}\n\n"
 
-                    # Done Event - shape the UI can materialize into the assistant message
-                    citations_payload = [c.model_dump() for c in citations]
                     done_payload = {
                         "id": response_id,
                         "answer": full_answer,
@@ -248,7 +224,7 @@ class ChatService:
                         "total_latency_ms": total_latency_ms,
                         "ttft_ms": ttft_ms,
                         "total_tokens": event.get("token_usage", {}).get("completion_tokens", 0),
-                        "citations": citations_payload,
+                        "citations": [c.model_dump() for c in citations],
                         "thinking": None,
                         "timing": {
                             "ttft_ms": ttft_ms,
@@ -261,7 +237,8 @@ class ChatService:
                     }
                     yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
 
-                    # Record session history
+            if full_answer and not (cancel_token and cancel_token.is_set()):
+                with self._session_lock:
                     if session_id not in self._sessions:
                         self._sessions[session_id] = []
                     self._sessions[session_id].append(

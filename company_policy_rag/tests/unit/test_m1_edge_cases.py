@@ -188,7 +188,12 @@ def test_unpulled_model_and_llm_exception_fallback():
     assert res.answer is not None
 
     # 2. Stream query execution
-    events = list(pipeline_with_llm.stream_query(user_query="What is the waiting period for health insurance?", model="unpulled_model:latest"))
+    async def collect_events():
+        return [e async for e in pipeline_with_llm.stream_query(user_query="What is the waiting period for health insurance?", model="unpulled_model:latest")]
+        
+    import asyncio
+    events = asyncio.run(collect_events())
+    
     event_types = [e["type"] for e in events]
     assert "retrieval_done" in event_types
     assert "token" in event_types

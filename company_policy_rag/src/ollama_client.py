@@ -38,33 +38,51 @@ def format_model_label(model_id: str) -> str:
     return formatted.strip()
 
 
-def stop_ollama_model(
+def unload_model(
     model_name: str,
     base_url: str | None = None,
     *,
     timeout: float = 5.0,
 ) -> bool:
-    """Best-effort stop of a running Ollama model so the old generation runtime can be shut down on switch."""
+    """Best-effort unload of a running Ollama model from VRAM."""
     if not model_name or not str(model_name).strip():
         return False
 
-    url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/stop"
-    payload = json.dumps({"name": model_name}).encode("utf-8")
+    url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/generate"
+    payload = json.dumps({"model": model_name, "keep_alive": 0}).encode("utf-8")
     req = Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
 
     try:
         with urlopen(req, timeout=timeout) as response:
-            response.read(1)
-        logger.info("Stopped previous Ollama model '%s' via API stop call", model_name)
+            response.read()
+        logger.info("Unloaded Ollama model '%s' via keep_alive=0", model_name)
         return True
-    except HTTPError as exc:
-        if exc.code in (404, 405):
-            logger.warning("Ollama stop endpoint is unavailable; cannot unload '%s'", model_name)
-        else:
-            logger.warning("Failed to stop previous Ollama model '%s': %s", model_name, exc)
+    except Exception as exc:
+        logger.warning("Failed to unload Ollama model '%s': %s", model_name, exc)
         return False
-    except (URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-        logger.warning("Failed to stop previous Ollama model '%s': %s", model_name, exc)
+
+
+def preload_model(
+    model_name: str,
+    base_url: str | None = None,
+    *,
+    timeout: float = 30.0,
+) -> bool:
+    """Best-effort preload of an Ollama model into VRAM."""
+    if not model_name or not str(model_name).strip():
+        return False
+
+    url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/generate"
+    payload = json.dumps({"model": model_name, "keep_alive": -1}).encode("utf-8")
+    req = Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            response.read()
+        logger.info("Preloaded Ollama model '%s' via keep_alive=-1", model_name)
+        return True
+    except Exception as exc:
+        logger.warning("Failed to preload Ollama model '%s': %s", model_name, exc)
         return False
 
 

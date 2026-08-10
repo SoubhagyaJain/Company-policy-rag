@@ -79,7 +79,7 @@ export function useSessions() {
   }, []);
 
   const deleteSession = useCallback(
-    (id: string) => {
+    async (id: string) => {
       const updated = sessions.filter((s) => s.id !== id);
       if (updated.length === 0) {
         const fallback = [
@@ -98,6 +98,15 @@ export function useSessions() {
         if (activeSessionId === id) {
           setActiveSessionId(updated[0].id);
         }
+      }
+
+      // Sync with backend
+      try {
+        await fetch(`/api/chat/session/${id}`, {
+          method: 'DELETE',
+        });
+      } catch (error) {
+        console.warn('Failed to delete session on backend:', error);
       }
     },
     [sessions, activeSessionId, persistSessions]
