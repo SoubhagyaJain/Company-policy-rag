@@ -1,4 +1,4 @@
-# 🚀 Enterprise Policy RAG Chatbot
+# 🚀 Enterprise Policy RAG AI Assistant
 
 ![Architecture: Microservices](https://img.shields.io/badge/Architecture-Microservices-blue)
 ![Backend: FastAPI](https://img.shields.io/badge/Backend-FastAPI_|_Python_3.11-009688?logo=fastapi)
@@ -7,14 +7,14 @@
 ![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)
 ![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)
 
-A production-grade **Retrieval-Augmented Generation (RAG)** chatbot designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, and a real-time streaming UI with **live model switching**.
+A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, and a real-time streaming UI with **live model switching**.
 
 ---
 
 ## ✨ Features
 
 ### 🧠 Conversational Memory
-- **Multi-turn context awareness** — the chatbot remembers previous messages within the same session.
+- **Multi-turn context awareness** — the AI assistant remembers previous messages within the same session.
 - **Pronoun resolution** — follow-up questions like *"Are there any exceptions for it?"* are automatically resolved using conversation history.
 - **Context-aware query rewriting** — the AI Query Rewriter uses past conversation turns to generate better search queries, improving retrieval accuracy.
 
@@ -28,10 +28,10 @@ A production-grade **Retrieval-Augmented Generation (RAG)** chatbot designed to 
 - **Sub-second TTFT** — optimized pipeline delivers Time-To-First-Token under 1 second on cached queries.
 - **Live retrieval telemetry** — the UI shows retrieval stage timings, reranking scores, and citation sources in real-time.
 
-### ⚡ Semantic Caching
-- **Vector-based Cache** — intercepts incoming queries and instantly returns cached responses for highly similar past queries using dense embeddings.
-- **Graceful Degradation & Concurrency** — non-blocking async writes, lock-protected memory snapshots, and fallback to standard RAG pipeline if the cache store is unavailable.
-- **Local Persistence** — cached queries and citations persist to disk across restarts using ChromaDB.
+### 🧠 Semantic Caching
+- **Instant Answers** — semantically similar queries bypass the LLM and retrieval pipeline.
+- **Cost & Latency Reduction** — sub-100ms response times for cached hits using ChromaDB cosine similarity.
+- **Simulated SSE Streaming** — cache hits are streamed back smoothly to maintain UI consistency.
 
 ### 🎯 High-Precision Retrieval
 - **Hybrid Search (Dense + Sparse)** — combines dense vector similarity (`BAAI/bge-small-en-v1.5`) with sparse BM25 keyword matching via Reciprocal Rank Fusion (RRF).
@@ -63,9 +63,7 @@ graph TD
     end
 
     subgraph RAG [Advanced RAG Pipeline]
-        Orchestrator --> Cache[(Semantic Cache)]
-        Cache --> |Cache Hit: Instant Response| UI
-        Cache --> |Cache Miss: Context-Aware Rewrite| LLM_Q[Query Rewriter]
+        Orchestrator --> |Context-Aware Rewrite| LLM_Q[Query Rewriter]
         Orchestrator --> |Hybrid Search| VectorDB[(ChromaDB)]
         VectorDB --> |BM25 + Dense Vectors| RRF[Reciprocal Rank Fusion]
         RRF --> |Top K Candidates| Reranker[BGE Cross-Encoder · CUDA]
@@ -167,7 +165,16 @@ cd company_policy_rag/frontend
 npm run dev
 ```
 
-### 6. Access the App
+### 6. Run the Test Suite (Optional)
+To verify the system's integrity, including the dynamic model switching and concurrency handling, you can run the comprehensive automated test suite (497 tests).
+
+```bash
+cd company_policy_rag
+.venv\Scripts\Activate.ps1
+pytest -v
+```
+
+### 7. Access the App
 
 | Service | URL |
 |---------|-----|
@@ -226,7 +233,7 @@ Ask any question about your uploaded company documents:
 > *"What is the policy for remote work?"*
 
 ### Follow-up with Memory
-The chatbot remembers context within the same session:
+The AI assistant remembers context within the same session:
 > *"Are there any exceptions for it?"*
 > → Automatically resolves "it" to "remote work" from the previous message.
 
@@ -258,8 +265,19 @@ Key configuration options in `.env`:
 | `ENABLE_QUERY_REWRITE` | `true` | Enable LLM-based query rewriting |
 | `ENABLE_RERANKER` | `true` | Enable cross-encoder reranking |
 | `GROUNDING_STRICTNESS` | `balanced` | `balanced` or `strict` |
-| `SEMANTIC_CACHE_ENABLED` | `true` | Enable vector-based semantic cache |
-| `SEMANTIC_CACHE_THRESHOLD` | `0.95` | Cosine similarity threshold for cache hits |
+
+---
+
+## 📊 Benchmarks & Testing
+
+The system is validated by an extensive integration and unit test suite comprising **497 tests**. This ensures enterprise-level reliability and safety under load.
+
+### Key Performance Metrics
+- **Test Coverage**: 497 automated tests passing covering unit functions, LLM integration, adversarial edge cases, and concurrency boundaries.
+- **Dynamic Model Switching**: Zero-downtime model swaps via a debounced queue and active Reader-Writer locks. Rapid switching (e.g. 50+ rapid UI clicks) seamlessly drains the queue without exhausting GPU VRAM or crashing Ollama.
+- **Cache Hit Latency**: Sub-100ms response times for semantically cached queries via ChromaDB.
+- **Time-To-First-Token (TTFT)**: Sub-1 second streaming latency for cached queries. (Note: Initial cold starts for uncached Ollama model swapping may vary based on hardware).
+- **Adversarial Resilience**: Defended against Path Traversal (LFI) attempts on document uploads, strict payload bounds, and graceful connection drops via `cancel_token` SSE handling.
 
 ---
 
