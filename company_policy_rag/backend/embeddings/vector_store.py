@@ -75,6 +75,58 @@ def get_shared_chroma_client(persist_dir: Path) -> Any:
     return _shared_clients[dir_str]
 
 
+def unpack_chroma_metadata(meta_dict: dict[str, Any]) -> ChunkMetadata:
+    """Safely unpacks ChromaDB primitive metadata dictionary back into structured ChunkMetadata."""
+    def _split_csv(val: Any) -> list[str]:
+        if not val or not isinstance(val, str):
+            return []
+        return [x.strip() for x in val.split(",") if x.strip()]
+
+    extra: dict[str, Any] = {}
+    for k, v in meta_dict.items():
+        if k.startswith("extra_"):
+            extra[k[len("extra_"):]] = v
+
+    node_role_str = str(meta_dict.get("node_role", "standalone"))
+    try:
+        node_role = ChunkRole(node_role_str)
+    except Exception:
+        node_role = ChunkRole.STANDALONE
+
+    content_type_str = str(meta_dict.get("content_type", "prose"))
+    try:
+        content_type = ContentType(content_type_str)
+    except Exception:
+        content_type = ContentType.PROSE
+
+    return ChunkMetadata(
+        document_id=str(meta_dict.get("document_id", "unknown")),
+        source_file=str(meta_dict.get("source_file", "unknown")),
+        file_path=str(meta_dict.get("file_path", "")),
+        file_hash=str(meta_dict.get("file_hash", "")),
+        document_type=str(meta_dict.get("document_type", "unknown")),
+        category=str(meta_dict.get("category", "general")),
+        chunk_index=int(meta_dict.get("chunk_index", 0)),
+        page_number=int(meta_dict["page_number"]) if meta_dict.get("page_number") is not None else None,
+        section_title=str(meta_dict["section_title"]) if meta_dict.get("section_title") is not None else None,
+        section_number=str(meta_dict["section_number"]) if meta_dict.get("section_number") is not None else None,
+        section_path=str(meta_dict["section_path"]) if meta_dict.get("section_path") is not None else None,
+        section_level=int(meta_dict["section_level"]) if meta_dict.get("section_level") is not None else None,
+        chunk_strategy=str(meta_dict.get("chunk_strategy", "recursive")),
+        node_role=node_role,
+        parent_id=str(meta_dict["parent_id"]) if meta_dict.get("parent_id") is not None else None,
+        child_ids=_split_csv(meta_dict.get("child_ids")),
+        content_type=content_type,
+        is_atomic=bool(meta_dict.get("is_atomic", False)),
+        department=str(meta_dict["department"]) if meta_dict.get("department") is not None else None,
+        effective_date=str(meta_dict["effective_date"]) if meta_dict.get("effective_date") is not None else None,
+        policy_id=str(meta_dict["policy_id"]) if meta_dict.get("policy_id") is not None else None,
+        key_entities=_split_csv(meta_dict.get("key_entities")),
+        topic_tags=_split_csv(meta_dict.get("topic_tags")),
+        extra=extra,
+    )
+
+
 class ChromaVectorStore(VectorStoreInterface):
     """
     ChromaDB implementation of VectorStoreInterface with fallback in-memory store.
@@ -165,11 +217,23 @@ class ChromaVectorStore(VectorStoreInterface):
             actual = meta_dict.get(key)
             if actual is None and hasattr(chunk.metadata, key):
                 actual = getattr(chunk.metadata, key)
-            if isinstance(value, list):
-                if actual not in value:
-                    return False
-            elif actual != value:
+            if actual is None and chunk.metadata.extra:
+                actual = chunk.metadata.extra.get(key)
+            if actual is None:
                 return False
+            if isinstance(value, list):
+                if isinstance(actual, list):
+                    if not any(v in actual for v in value):
+                        return False
+                else:
+                    if actual not in value:
+                        return False
+            else:
+                if isinstance(actual, list):
+                    if value not in actual:
+                        return False
+                elif actual != value:
+                    return False
         return True
 
     def search(
@@ -220,19 +284,7 @@ class ChromaVectorStore(VectorStoreInterface):
 
                         chunk = self._memory_chunks.get(str(cid))
                         if chunk is None:
-                            meta_obj = ChunkMetadata(
-                                document_id=str(meta_dict.get("document_id", "unknown")),
-                                source_file=str(meta_dict.get("source_file", "unknown")),
-                                file_path=str(meta_dict.get("file_path", "")),
-                                file_hash=str(meta_dict.get("file_hash", "")),
-                                document_type=str(meta_dict.get("document_type", "unknown")),
-                                category=str(meta_dict.get("category", "general")),
-                                chunk_index=int(meta_dict.get("chunk_index", 0)),
-                                page_number=int(meta_dict["page_number"]) if meta_dict.get("page_number") is not None else None,
-                                section_title=str(meta_dict["section_title"]) if meta_dict.get("section_title") is not None else None,
-                                section_path=str(meta_dict["section_path"]) if meta_dict.get("section_path") is not None else None,
-                                chunk_strategy=str(meta_dict.get("chunk_strategy", "recursive")),
-                            )
+                            meta_obj = unpack_chroma_metadata(meta_dict)
                             chunk = Chunk(id=str(cid), text=str(doc or ""), metadata=meta_obj)
 
                         scored_chunks.append(

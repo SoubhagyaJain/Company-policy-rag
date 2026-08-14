@@ -74,11 +74,23 @@ class BM25SearchIndex:
             actual = meta_dict.get(key)
             if actual is None and hasattr(chunk.metadata, key):
                 actual = getattr(chunk.metadata, key)
-            if isinstance(value, list):
-                if actual not in value:
-                    return False
-            elif actual != value:
+            if actual is None and chunk.metadata.extra:
+                actual = chunk.metadata.extra.get(key)
+            if actual is None:
                 return False
+            if isinstance(value, list):
+                if isinstance(actual, list):
+                    if not any(v in actual for v in value):
+                        return False
+                else:
+                    if actual not in value:
+                        return False
+            else:
+                if isinstance(actual, list):
+                    if value not in actual:
+                        return False
+                elif actual != value:
+                    return False
         return True
 
     def search(

@@ -94,6 +94,81 @@ class Settings(BaseSettings):
     def SEMANTIC_CACHE_COLLECTION_NAME(self) -> str:
         return self.semantic_cache_collection_name
 
+    # ── Agentic Intelligence Layer: Feature Flags ───────────────────────────
+    enable_query_routing: bool = Field(default=True, alias="ENABLE_QUERY_ROUTING")
+    enable_answer_verification: bool = Field(default=True, alias="ENABLE_ANSWER_VERIFICATION")
+    enable_metadata_extraction: bool = Field(default=True, alias="ENABLE_METADATA_EXTRACTION")
+    enable_query_metadata_filtering: bool = Field(default=True, alias="ENABLE_QUERY_METADATA_FILTERING")
+
+    @property
+    def ENABLE_QUERY_ROUTING(self) -> bool:
+        return self.enable_query_routing
+
+    @property
+    def ENABLE_ANSWER_VERIFICATION(self) -> bool:
+        return self.enable_answer_verification
+
+    @property
+    def ENABLE_METADATA_EXTRACTION(self) -> bool:
+        return self.enable_metadata_extraction
+
+    @property
+    def ENABLE_QUERY_METADATA_FILTERING(self) -> bool:
+        return self.enable_query_metadata_filtering
+
+    # ── Dynamic Metadata Extraction & Filtering ─────────────────────────────
+    metadata_extraction_mode: Literal["heuristic", "llm", "hybrid"] = Field(
+        default="heuristic", alias="METADATA_EXTRACTION_MODE"
+    )
+    metadata_extractor_model: str = Field(default="qwen2.5:7b", alias="METADATA_EXTRACTOR_MODEL")
+    metadata_filter_fallback_relaxation: bool = Field(
+        default=True, alias="METADATA_FILTER_FALLBACK_RELAXATION"
+    )
+    enable_filter_fallback_relaxation: bool = Field(
+        default=True, alias="ENABLE_FILTER_FALLBACK_RELAXATION"
+    )
+    metadata_filter_min_confidence: float = Field(
+        default=0.60, alias="METADATA_FILTER_MIN_CONFIDENCE"
+    )
+    metadata_confidence_threshold: float = Field(
+        default=0.60, alias="METADATA_CONFIDENCE_THRESHOLD"
+    )
+    metadata_max_entities_per_chunk: int = Field(
+        default=20, alias="METADATA_MAX_ENTITIES_PER_CHUNK"
+    )
+
+    @property
+    def METADATA_EXTRACTION_MODE(self) -> str:
+        return self.metadata_extraction_mode
+
+    # ── Query Routing Thresholds ────────────────────────────────────────────
+    query_router_confidence_threshold: float = Field(
+        default=0.70, alias="QUERY_ROUTER_CONFIDENCE_THRESHOLD"
+    )
+    enable_conversational_bypass: bool = Field(
+        default=True, alias="ENABLE_CONVERSATIONAL_BYPASS"
+    )
+
+    # ── Self-Reflection & Answer Verification Thresholds ────────────────────
+    verification_faithfulness_threshold: float = Field(
+        default=0.75, alias="VERIFICATION_FAITHFULNESS_THRESHOLD"
+    )
+    verification_completeness_threshold: float = Field(
+        default=0.70, alias="VERIFICATION_COMPLETENESS_THRESHOLD"
+    )
+    verification_citation_threshold: float = Field(
+        default=0.60, alias="VERIFICATION_CITATION_THRESHOLD"
+    )
+    verification_coherence_threshold: float = Field(
+        default=0.70, alias="VERIFICATION_COHERENCE_THRESHOLD"
+    )
+    verification_composite_threshold: float = Field(
+        default=0.70, alias="VERIFICATION_COMPOSITE_THRESHOLD"
+    )
+    verification_max_retries: int = Field(
+        default=2, alias="VERIFICATION_MAX_RETRIES"
+    )
+
 
     # ── Ollama / Models ────────────────────────────────────────────────────
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")

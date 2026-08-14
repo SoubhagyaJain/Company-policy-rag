@@ -27,6 +27,11 @@ class ChunkMetadata(BaseModel):
     file_hash: str
     document_type: str
     category: str = "general"
+    department: str | None = Field(default=None, description="Extracted department / organizational scope")
+    effective_date: str | None = Field(default=None, description="Extracted document effective date")
+    policy_id: str | None = Field(default=None, description="Extracted policy ID / document number")
+    key_entities: list[str] = Field(default_factory=list, description="Extracted key entities")
+    topic_tags: list[str] = Field(default_factory=list, description="Extracted topic tags")
     chunk_index: int = 0
     page_number: int | None = None
     section_title: str | None = None

@@ -23,12 +23,14 @@ class ContextCompressor:
         self,
         chunks: list[ScoredChunk],
         docstore: dict[str, Chunk] | None = None,
+        enable_expansion: bool | None = None,
     ) -> list[ScoredChunk]:
         """
         Replace child chunks with parent document sections when available,
         deduplicating by parent_id while retaining highest relevance score.
         """
-        if not self.enable_parent_expansion or not chunks:
+        effective_expansion = self.enable_parent_expansion if enable_expansion is None else enable_expansion
+        if not effective_expansion or not chunks:
             return chunks
 
         expanded: list[ScoredChunk] = []

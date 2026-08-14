@@ -103,7 +103,7 @@ _COMPREHENSIVE_QUERY_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 
 _CONVERSATIONAL_PATTERN: re.Pattern[str] = re.compile(
-    r"^(hi|hello|hey|heya|hiya|wssup|what'?s\s*up|whats\s*up|sup|yo|good\s*(morning|afternoon|evening|day)|greetings|howdy|how\s*are\s*you|who\s*are\s*you|what\s*can\s*you\s*do|help|thanks|thank\s*you|bye|goodbye)[!.? ]*$",
+    r"^(hi|hello|hey|heya|hiya|wssup|what'?s\s*up|whats\s*up|sup|yo|good\s*(morning|afternoon|evening|day)|greetings|howdy|how\s*are\s*you|who\s*are\s*you|what\s*can\s*you\s*do|help|thanks|thank\s*you|bye|goodbye)(\s+(there|everyone|all|assistant|bot|today|me|friend))?[!.? ]*$",
     re.IGNORECASE,
 )
 
@@ -140,7 +140,7 @@ class QueryRewriter:
     def is_conversational(self, query: str) -> bool:
         """Detect pure greetings, smalltalk, and pleasantries that do not require document retrieval."""
         cleaned = query.strip()
-        if len(cleaned.split()) <= 4 and _CONVERSATIONAL_PATTERN.match(cleaned):
+        if len(cleaned.split()) <= 6 and _CONVERSATIONAL_PATTERN.match(cleaned):
             return True
         return False
 

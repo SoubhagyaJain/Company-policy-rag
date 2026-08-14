@@ -77,10 +77,33 @@ async def post_chat_stream(
 
 
 @router.delete("/api/chat/session/{session_id}")
+@router.delete("/api/chat/sessions/{session_id}")
 def delete_chat_session(
     session_id: str,
     chat_service: ChatService = Depends(get_chat_service),
 ):
-    """Evict a session explicitly to prevent memory leaks."""
+    """Evict a session and all its multi-turn history completely."""
     chat_service.delete_session(session_id)
     return {"status": "success", "detail": f"Session {session_id} deleted."}
+
+
+@router.post("/api/chat/session/{session_id}/clear")
+@router.delete("/api/chat/session/{session_id}/messages")
+@router.delete("/api/chat/sessions/{session_id}/messages")
+def clear_chat_session_messages(
+    session_id: str,
+    chat_service: ChatService = Depends(get_chat_service),
+):
+    """Clear all conversation history for a specific session."""
+    chat_service.clear_session(session_id)
+    return {"status": "success", "detail": f"Messages for session {session_id} cleared."}
+
+
+@router.delete("/api/chat/sessions")
+def clear_all_chat_sessions(
+    chat_service: ChatService = Depends(get_chat_service),
+):
+    """Purge all conversation sessions across the entire system."""
+    chat_service.clear_all_sessions()
+    return {"status": "success", "detail": "All conversation sessions purged."}
+

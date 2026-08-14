@@ -9,6 +9,7 @@ from backend.embeddings.embeddings import EmbeddingService
 from backend.embeddings.vector_store import ChromaVectorStore
 from backend.ingestion.chunkers.adaptive_chunker import AdaptiveChunker
 from backend.ingestion.loaders.loader_factory import load_document
+from backend.ingestion.metadata_extractor import DocumentMetadataExtractor
 from backend.models.api_dto import (
     DocumentDetailResponse,
     DocumentListResponse,
@@ -84,16 +85,35 @@ class DocumentService:
             if not raw_docs:
                 raise ValueError(f"Could not extract content from file '{filename}'.")
 
+            # 1b. Ingestion Metadata Extraction
+            full_text = "\n\n".join(doc.content for doc in raw_docs)
+            extractor = DocumentMetadataExtractor()
+            extracted_meta = extractor.extract(full_text, doc_metadata=raw_docs[0].metadata)
+
+            for doc in raw_docs:
+                doc.metadata.department = extracted_meta.department
+                doc.metadata.effective_date = extracted_meta.effective_date
+                doc.metadata.policy_id = extracted_meta.policy_id
+                doc.metadata.key_entities = list(extracted_meta.key_entities)
+                doc.metadata.topic_tags = list(extracted_meta.topic_tags)
+
             # 2. Adaptive Chunking
             chunker = AdaptiveChunker(chunk_size=512, chunk_overlap=64, override_strategy=chunk_strategy)
             chunks = chunker.chunk(raw_docs)
 
-            # Ensure document_id and source_file metadata are set on chunks
+            # Ensure document_id, source_file, and extracted metadata are set on chunks
             used_strategy = "auto"
             for idx, c in enumerate(chunks):
                 c.metadata.document_id = document_id
                 c.metadata.source_file = filename
                 c.metadata.category = category
+                c.metadata.department = extracted_meta.department
+                c.metadata.effective_date = extracted_meta.effective_date
+                c.metadata.policy_id = extracted_meta.policy_id
+                if not c.metadata.key_entities:
+                    c.metadata.key_entities = list(extracted_meta.key_entities)
+                if not c.metadata.topic_tags:
+                    c.metadata.topic_tags = list(extracted_meta.topic_tags)
                 used_strategy = c.metadata.chunk_strategy or used_strategy
 
             # 3. Embedding Generation
@@ -121,6 +141,11 @@ class DocumentService:
                 "chunk_count": len(chunks),
                 "chunk_strategy": used_strategy,
                 "category": category,
+                "department": extracted_meta.department,
+                "effective_date": extracted_meta.effective_date,
+                "policy_id": extracted_meta.policy_id,
+                "key_entities": list(extracted_meta.key_entities),
+                "topic_tags": list(extracted_meta.topic_tags),
                 "created_at": created_at,
                 "status": "indexed",
                 "chunks": [
@@ -153,6 +178,11 @@ class DocumentService:
                 chunks_indexed=len(chunks),
                 chunk_strategy=used_strategy,
                 category=category,
+                department=extracted_meta.department,
+                effective_date=extracted_meta.effective_date,
+                policy_id=extracted_meta.policy_id,
+                key_entities=list(extracted_meta.key_entities),
+                topic_tags=list(extracted_meta.topic_tags),
                 status="indexed",
                 created_at=created_at,
             )

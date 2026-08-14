@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChatSession, ChatMessageData } from '../lib/types';
 import { generateId } from '../lib/utils';
+import { apiClient } from '../lib/api-client';
 
 const STORAGE_KEY = 'rag_company_policy_sessions_v2';
+
 
 function createBlankSession(title = 'New Conversation'): ChatSession {
   const now = new Date().toISOString();
@@ -102,14 +104,30 @@ export function useSessions() {
       });
 
       // Background sync with backend
-      try {
-        fetch(`/api/chat/session/${id}`, { method: 'DELETE' }).catch(() => null);
-      } catch {
-        // ignore
-      }
+      apiClient.deleteSession(id).catch(() => {});
     },
     [activeSessionId]
   );
+
+  const clearSessionMessages = useCallback(
+    (id: string) => {
+      setSessions((prev) => {
+        const updated = prev.map((s) =>
+          s.id === id ? { ...s, messages: [], updatedAt: new Date().toISOString() } : s
+        );
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Failed to save sessions after clear', e);
+        }
+        return updated;
+      });
+
+      apiClient.clearSession(id).catch(() => {});
+    },
+    []
+  );
+
 
   const renameSession = useCallback(
     (id: string, newTitle: string) => {
@@ -181,7 +199,9 @@ export function useSessions() {
     createNewSession,
     switchSession,
     deleteSession,
+    clearSessionMessages,
     renameSession,
     updateSessionMessages,
   };
 }
+

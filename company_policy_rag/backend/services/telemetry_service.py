@@ -80,6 +80,12 @@ class TelemetryService:
             query=rag_response.query,
             rewritten_query=t.rewritten_query if t else None,
             sub_queries=t.sub_queries if t else [],
+            query_type=t.query_type if t else None,
+            routing_confidence=t.routing_confidence if t else None,
+            retrieval_strategy=t.retrieval_strategy if t else None,
+            inferred_filters=t.inferred_filters if t else {},
+            applied_filters=t.applied_filters if t else {},
+            filter_relaxed=t.filter_relaxed if t else False,
             candidate_count=t.retrieved_candidate_count if t else len(context_chunks),
             post_rerank_count=t.post_rerank_count if t else len(context_chunks),
             final_context_count=t.final_context_count if t else len(context_chunks),
@@ -93,6 +99,10 @@ class TelemetryService:
             sources_used=sorted(list(sources_set)),
             token_usage=rag_response.token_usage or {},
             faithfulness_passed=t.faithfulness_passed if t else True,
+            verification=t.verification_report if t else None,
+            verification_score=t.verification_score if t else None,
+            retry_count=t.retry_count if t else 0,
+            retry_reasons=t.retry_reasons if t else [],
         )
 
         return self.record_trace(trace_summary)

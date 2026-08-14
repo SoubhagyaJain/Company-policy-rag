@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from enum import Enum
 import uuid
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -38,10 +40,56 @@ class QueryRewriteResult(BaseModel):
     inferred_corpus: str | None = None
 
 
+class QueryCategory(str, Enum):
+    FACTUAL = "factual"
+    COMPARISON = "comparison"
+    ENUMERATION = "enumeration"
+    PROCEDURAL = "procedural"
+    CONVERSATIONAL = "conversational"
+
+
+class RetrievalStrategy(BaseModel):
+    name: str = "balanced_hybrid"
+    dense_top_k: int = 25
+    bm25_top_k: int = 25
+    rrf_k: int = 60
+    rerank_top_n: int = 6
+    min_score_ratio: float = 0.40
+    enable_multi_query: bool = False
+    enable_parent_expansion: bool = True
+    temperature: float = 0.1
+
+
+class QueryClassification(BaseModel):
+    category: QueryCategory = QueryCategory.FACTUAL
+    confidence: float = 1.0
+    strategy: RetrievalStrategy = Field(default_factory=RetrievalStrategy)
+    reasoning: str = ""
+
+
+class VerificationReport(BaseModel):
+    faithfulness: float = 1.0
+    completeness: float = 1.0
+    citation_coverage: float = 1.0
+    coherence: float = 1.0
+    composite_score: float = 1.0
+    passed: bool = True
+    critique: str | None = None
+    missing_aspects: list[str] = Field(default_factory=list)
+    unsupported_claims: list[str] = Field(default_factory=list)
+    retry_count: int = 0
+
+
 class RAGTrace(BaseModel):
     query: str
     rewritten_query: str | None = None
     sub_queries: list[str] = Field(default_factory=list)
+    query_type: str | None = None
+    routing_confidence: float | None = None
+    retrieval_strategy: str | None = None
+    inferred_filters: dict[str, Any] = Field(default_factory=dict)
+    applied_filters: dict[str, Any] = Field(default_factory=dict)
+    filter_relaxed: bool = False
     retrieved_candidate_count: int = 0
     post_rerank_count: int = 0
     final_context_count: int = 0
@@ -50,6 +98,10 @@ class RAGTrace(BaseModel):
     fallback_reason: str = "none"
     faithfulness_checked: bool = False
     faithfulness_passed: bool = True
+    verification_report: dict[str, Any] | None = None
+    verification_score: float | None = None
+    retry_count: int = 0
+    retry_reasons: list[str] = Field(default_factory=list)
     cache_hit: bool = False
     cache_similarity: float | None = None
 

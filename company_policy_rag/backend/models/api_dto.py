@@ -17,6 +17,9 @@ class ChatRequest(BaseModel):
     corpus_scope: str | None = Field(default="all", description="all | policy | guidebook")
     chat_mode: str | None = Field(default="direct", description="direct | agent")
     filters: dict[str, Any] | None = Field(default=None, description="Metadata filters")
+    inferred_filters: dict[str, Any] | None = Field(default=None, description="Inferred metadata filters")
+    enable_verification: bool | None = Field(default=None, description="Enable answer verification override")
+    enable_routing: bool | None = Field(default=None, description="Enable query routing override")
     stream: bool = Field(default=False, description="Enable SSE streaming mode")
 
 
@@ -34,6 +37,10 @@ class ChatResponse(BaseModel):
     grounding_mode: str = "balanced"
     model: str = "qwen2.5:7b"
     token_usage: dict[str, int] = Field(default_factory=dict)
+    query_type: str | None = None
+    routing_confidence: float | None = None
+    inferred_filters: dict[str, Any] = Field(default_factory=dict)
+    verification: dict[str, Any] | None = None
 
 
 class DocumentUploadResponse(BaseModel):
@@ -45,6 +52,11 @@ class DocumentUploadResponse(BaseModel):
     chunk_strategy: str
     status: str = "indexed"
     category: str = "general"
+    department: str | None = None
+    effective_date: str | None = None
+    policy_id: str | None = None
+    topic_tags: list[str] = Field(default_factory=list)
+    key_entities: list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -55,6 +67,11 @@ class DocumentSummary(BaseModel):
     file_size_bytes: int
     chunk_count: int
     category: str = "general"
+    department: str | None = None
+    effective_date: str | None = None
+    policy_id: str | None = None
+    topic_tags: list[str] = Field(default_factory=list)
+    key_entities: list[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     status: str = "indexed"
 
@@ -71,6 +88,11 @@ class DocumentDetailResponse(BaseModel):
     file_size_bytes: int
     chunk_count: int
     category: str = "general"
+    department: str | None = None
+    effective_date: str | None = None
+    policy_id: str | None = None
+    topic_tags: list[str] = Field(default_factory=list)
+    key_entities: list[str] = Field(default_factory=list)
     created_at: str
     status: str = "indexed"
     chunks: list[dict[str, Any]] = Field(default_factory=list)
@@ -82,6 +104,12 @@ class TraceSummary(BaseModel):
     query: str
     rewritten_query: str | None = None
     sub_queries: list[str] = Field(default_factory=list)
+    query_type: str | None = None
+    routing_confidence: float | None = None
+    retrieval_strategy: str | None = None
+    inferred_filters: dict[str, Any] = Field(default_factory=dict)
+    applied_filters: dict[str, Any] = Field(default_factory=dict)
+    filter_relaxed: bool = False
     candidate_count: int = 0
     post_rerank_count: int = 0
     final_context_count: int = 0
@@ -95,6 +123,10 @@ class TraceSummary(BaseModel):
     sources_used: list[str] = Field(default_factory=list)
     token_usage: dict[str, int] = Field(default_factory=dict)
     faithfulness_passed: bool = True
+    verification: dict[str, Any] | None = None
+    verification_score: float | None = None
+    retry_count: int = 0
+    retry_reasons: list[str] = Field(default_factory=list)
 
 
 class ObservabilityMetrics(BaseModel):

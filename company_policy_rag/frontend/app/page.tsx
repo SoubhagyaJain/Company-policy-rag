@@ -13,8 +13,10 @@ import { AdminView } from '@/components/AdminView';
 import { useChatStream } from '@/hooks/useChatStream';
 import { useSessions } from '@/hooks/useSessions';
 import { useObservability } from '@/hooks/useObservability';
+import { apiClient } from '@/lib/api-client';
 
 import type { FilterOptions } from '@/lib/types';
+
 
 export default function HomePage() {
   /* ─── Dark mode ──────────────────────────────── */
@@ -120,11 +122,33 @@ export default function HomePage() {
   );
 
   const handleClearChat = useCallback(() => {
+    cancelStream();
+    closeCitationDrawer();
     clearMessages();
     if (activeSessionId) {
       updateSessionMessages(activeSessionId, []);
+      apiClient.clearSession(activeSessionId).catch(() => {});
     }
-  }, [clearMessages, activeSessionId, updateSessionMessages]);
+  }, [cancelStream, closeCitationDrawer, clearMessages, activeSessionId, updateSessionMessages]);
+
+  const handleDeleteSession = useCallback(
+    (id: string) => {
+      cancelStream();
+      closeCitationDrawer();
+      deleteSession(id);
+      if (id === activeSessionId) {
+        const remaining = sessions.filter((s) => s.id !== id);
+        if (remaining.length > 0) {
+          prevActiveSessionIdRef.current = remaining[0].id;
+          setMessages(remaining[0].messages || []);
+        } else {
+          prevActiveSessionIdRef.current = '';
+          setMessages([]);
+        }
+      }
+    },
+    [activeSessionId, cancelStream, closeCitationDrawer, deleteSession, sessions, setMessages]
+  );
 
   /* ─── Tab content ────────────────────────────── */
   const renderContent = () => {
@@ -171,10 +195,11 @@ export default function HomePage() {
             activeSessionId={activeSessionId}
             onSelectSession={handleSwitchSession}
             onNewSession={handleNewSession}
-            onDeleteSession={deleteSession}
+            onDeleteSession={handleDeleteSession}
             onRenameSession={renameSession}
           />
         )}
+
 
         {/* Page content with page-transition animation */}
         <AnimatePresence mode="wait">

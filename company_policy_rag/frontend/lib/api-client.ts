@@ -509,7 +509,50 @@ export class ApiClient {
       return false;
     }
   }
+
+  /**
+   * Session API: DELETE /api/chat/session/{sessionId}
+   */
+  async deleteSession(sessionId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/chat/session/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Session API: POST /api/chat/session/{sessionId}/clear
+   */
+  async clearSession(sessionId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/chat/session/${encodeURIComponent(sessionId)}/clear`, {
+        method: 'POST',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Session API: DELETE /api/chat/sessions
+   */
+  async clearAllSessions(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/chat/sessions`, {
+        method: 'DELETE',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
 }
+
 
 
 export const apiClient = new ApiClient();

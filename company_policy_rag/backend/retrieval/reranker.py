@@ -17,10 +17,11 @@ class RelativeScoreThresholdPostprocessor:
         self.min_ratio = min_ratio
         self.min_keep = min_keep
 
-    def filter(self, chunks: list[ScoredChunk]) -> list[ScoredChunk]:
+    def filter(self, chunks: list[ScoredChunk], min_ratio: float | None = None) -> list[ScoredChunk]:
         if not chunks:
             return chunks
 
+        effective_ratio = self.min_ratio if min_ratio is None else min_ratio
         scored = [c for c in chunks if c.rerank_score is not None]
         if not scored:
             # Fall back to using candidate .score
@@ -31,7 +32,7 @@ class RelativeScoreThresholdPostprocessor:
             sorted_chunks = sorted(chunks, key=lambda c: c.rerank_score if c.rerank_score is not None else c.score, reverse=True)
             return sorted_chunks[: self.min_keep]
 
-        threshold = top_score * self.min_ratio
+        threshold = top_score * effective_ratio
         filtered = [
             c for c in chunks
             if (c.rerank_score if c.rerank_score is not None else c.score) >= threshold
@@ -50,7 +51,7 @@ class RelativeScoreThresholdPostprocessor:
             len(chunks),
             top_score,
             threshold,
-            self.min_ratio,
+            effective_ratio,
         )
         return filtered
 
@@ -112,14 +113,24 @@ class CrossEncoderReranker:
         _shared_reranker_model = self._model
         _shared_reranker_model_loaded = True
 
-    def rerank(self, query: str, candidates: list[ScoredChunk]) -> list[ScoredChunk]:
+    def rerank(
+        self,
+        query: str,
+        candidates: list[ScoredChunk],
+        top_n: int | None = None,
+        min_ratio: float | None = None,
+    ) -> list[ScoredChunk]:
         """Rerank candidate chunks using cross-encoder logit scoring and relative thresholding."""
         if not candidates:
             return []
 
         self._init_model()
 
-        candidates_to_rerank = candidates[:8]
+        effective_top_n = self.top_n if top_n is None else top_n
+        effective_min_ratio = self.min_ratio if min_ratio is None else min_ratio
+
+        candidate_pool_limit = max(len(candidates), effective_top_n * 3, 30)
+        candidates_to_rerank = candidates[:candidate_pool_limit]
         if self._model is not None:
             try:
                 # Truncate text to first 350 chars for high-speed cross-encoder scoring
@@ -168,8 +179,8 @@ class CrossEncoderReranker:
             ]
             reranked_candidates.sort(key=lambda c: c.score, reverse=True)
 
-        filtered = self.postprocessor.filter(reranked_candidates)
-        result = filtered[: self.top_n]
+        filtered = self.postprocessor.filter(reranked_candidates, min_ratio=effective_min_ratio)
+        result = filtered[: effective_top_n]
         for rank, sc in enumerate(result, start=1):
             sc.rank = rank
         return result

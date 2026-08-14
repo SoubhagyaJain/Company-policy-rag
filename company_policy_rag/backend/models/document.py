@@ -32,6 +32,11 @@ class DocumentMetadata(BaseModel):
     file_hash: str = Field(..., description="SHA-256 or fast hash for change detection")
     document_type: DocumentType = Field(default=DocumentType.UNKNOWN)
     category: str = Field(default="general")
+    department: str | None = Field(default=None, description="Department owner e.g. HR, Legal, IT, Finance")
+    effective_date: str | None = Field(default=None, description="Effective or revision date (ISO 8601)")
+    policy_id: str | None = Field(default=None, description="Formal policy identifier e.g. POL-HR-001")
+    key_entities: list[str] = Field(default_factory=list, description="Extracted key entities")
+    topic_tags: list[str] = Field(default_factory=list, description="Extracted domain topic tags")
     page_number: int | None = Field(default=None, description="1-indexed page number if applicable")
     page_label: str | None = Field(default=None)
     total_pages: int | None = Field(default=None)
@@ -42,6 +47,19 @@ class DocumentMetadata(BaseModel):
     has_tables: bool = Field(default=False)
     has_code: bool = Field(default=False)
     extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExtractedDocumentMetadata(BaseModel):
+    department: str = Field(default="General", description="Normalized canonical department code (HR, IT, Finance, Legal, Operations, Engineering, General)")
+    category: str = Field(default="general", description="Document category (policy, legal, guidebook, general)")
+    effective_date: str | None = Field(default=None, description="ISO 8601 formatted date string YYYY-MM-DD")
+    policy_id: str | None = Field(default=None, description="Alphanumeric policy identifier/code e.g. POL-HR-001")
+    key_entities: list[str] = Field(default_factory=list, description="Extracted roles, monetary limits, durations, deadlines")
+    topic_tags: list[str] = Field(default_factory=list, description="Categorized topic taxonomy tags")
+    confidence: float = Field(default=1.0, description="Overall confidence metric (0.0 - 1.0)")
+    confidence_scores: dict[str, float] = Field(default_factory=dict, description="Confidence metric per extracted field (0.0 - 1.0)")
+    extraction_method: str = Field(default="heuristic", description="heuristic | llm | hybrid")
+    extra: dict[str, Any] = Field(default_factory=dict, description="Additional unstructured extracted attributes")
 
 
 class RawDocument(BaseModel):

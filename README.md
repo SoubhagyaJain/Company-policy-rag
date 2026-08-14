@@ -7,7 +7,7 @@
 ![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)
 ![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)
 
-A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, and a real-time streaming UI with **live model switching**.
+A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, an **Agentic Intelligence Layer** (query routing, self-reflection & verification, dynamic metadata filtering), and a real-time streaming UI with **live model switching**.
 
 ---
 
@@ -48,6 +48,29 @@ A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designe
 - **Adaptive chunking** — intelligent section-aware chunking preserves document structure.
 - **Live document stats** — the UI shows total documents, chunks, file sizes, and indexing status.
 
+### 🧭 Agentic Intelligence Layer
+
+#### Query Router & Strategy Selector
+- **5-type intent classification** — automatically classifies every query as `factual`, `comparison`, `enumeration`, `procedural`, or `conversational` using regex-based heuristics with sub-millisecond latency.
+- **Dynamic retrieval tuning** — each query type triggers a different retrieval strategy with tuned parameters (`dense_top_k`, `bm25_top_k`, `rerank_top_n`, `min_score_ratio`, `multi_query`, `parent_expansion`, `temperature`).
+- **Conversational bypass** — greetings and pleasantries skip the vector database entirely for instant responses.
+- **Trace telemetry** — classification decision, confidence score, and selected strategy appear in SSE `trace` events and the observability dashboard.
+
+#### Self-Reflection & Answer Verification Engine
+- **4-dimensional evaluation** — every generated answer is scored on **Faithfulness** (grounding to source chunks), **Completeness** (coverage of query aspects), **Citation Coverage** (presence and validity of `[Source N]` tags), and **Coherence** (structural quality).
+- **Composite scoring** — weighted composite: `0.35 × Faithfulness + 0.30 × Completeness + 0.20 × Citation + 0.15 × Coherence`, with per-dimension pass gates.
+- **Autonomous retry engine** — when verification fails, the system automatically retries with adjusted retrieval parameters (broader top-k, tighter min-score-ratio, enabled multi-query) for up to **2 retry cycles** with a hard cap and graceful fallback.
+- **Dimension-specific fixes** — faithfulness failures tighten grounding; completeness failures broaden search; citation failures force explicit sourcing; coherence failures restructure output.
+- **Full observability** — verification scores, retry attempts, and adjustment reasons are logged in traces and SSE events.
+
+#### Dynamic Metadata Extraction & Filtering
+- **Ingestion-time metadata extraction** — automatically extracts department/category (HR, IT, Legal, Finance, etc.), effective dates (normalized to ISO 8601), policy identifiers, key entities (roles, dollar amounts, time periods), and topic tags from document content.
+- **ChromaDB metadata indexing** — extracted metadata is flattened and stored alongside chunk embeddings for pre-retrieval filtering.
+- **Query-time filter inference** — the `QueryMetadataInferer` detects departments, policy IDs, topics, and categories from natural language queries with intelligent disambiguation (e.g., English pronoun "it" vs. IT department).
+- **Multi-turn context inheritance** — follow-up questions inherit department context from conversation history.
+- **Filter relaxation fallback** — if filtered retrieval returns zero candidates, filters are automatically dropped and search retries unfiltered to prevent empty responses.
+- **Configurable** — all metadata features are togglable via environment variables (`ENABLE_METADATA_EXTRACTION`, `ENABLE_QUERY_METADATA_FILTERING`, `ENABLE_FILTER_FALLBACK_RELAXATION`).
+
 ---
 
 ## 📐 System Architecture
@@ -62,17 +85,30 @@ graph TD
         Orchestrator --> Memory[Session Memory]
     end
 
+    subgraph Agentic [Agentic Intelligence Layer]
+        Orchestrator --> |Step 0a| Router[Query Router · 5-Type Classifier]
+        Router --> |Strategy Selection| Strategy[Dynamic Retrieval Config]
+        Orchestrator --> |Step 1b| FilterInfer[Metadata Filter Inferer]
+    end
+
     subgraph RAG [Advanced RAG Pipeline]
-        Orchestrator --> |Context-Aware Rewrite| LLM_Q[Query Rewriter]
-        Orchestrator --> |Hybrid Search| VectorDB[(ChromaDB)]
+        Strategy --> |Context-Aware Rewrite| LLM_Q[Query Rewriter]
+        FilterInfer --> |Pre-Filter| VectorDB[(ChromaDB)]
+        LLM_Q --> |Hybrid Search| VectorDB
         VectorDB --> |BM25 + Dense Vectors| RRF[Reciprocal Rank Fusion]
         RRF --> |Top K Candidates| Reranker[BGE Cross-Encoder · CUDA]
         Reranker --> |Context Expansion| Context[Filtered Context]
         Context --> |Grounded Generation| LLM[Ollama LLM · GPU]
     end
 
-    LLM --> |Verification| Guardrail[Faithfulness Evaluator]
-    LLM --> |Stream Tokens| UI
+    subgraph Verification [Self-Reflection Engine]
+        LLM --> Verifier[4D Verifier · Faithfulness · Completeness · Citations · Coherence]
+        Verifier --> |Failed| RetryEngine[Retry Engine · Max 2 Cycles]
+        RetryEngine --> |Adjusted Params| Strategy
+        Verifier --> |Passed| Output[Verified Answer]
+    end
+
+    Output --> |Stream Tokens| UI
 ```
 
 ---
@@ -194,11 +230,20 @@ company_policy_rag/
 │   │   ├── dependencies.py      # Dependency injection factory
 │   │   └── routes/              # API route handlers
 │   ├── embeddings/              # Embedding service & vector store
-│   ├── models/                  # Pydantic data models
+│   ├── ingestion/
+│   │   ├── chunkers/            # Adaptive chunking strategies
+│   │   ├── loaders/             # Multi-format document loaders
+│   │   └── metadata_extractor.py # 🆕 Ingestion metadata extraction
+│   ├── models/                  # Pydantic data models (QueryClassification, VerificationReport, RAGTrace)
 │   ├── rag/
 │   │   ├── pipeline.py          # Master RAG pipeline orchestrator
+│   │   ├── query_router.py      # 🆕 5-type query classifier & strategy selector
+│   │   ├── filter_extractor.py  # 🆕 Query-time metadata filter inferer
+│   │   ├── verifier.py          # 🆕 4-dimensional self-reflection verifier
+│   │   ├── retry_engine.py      # 🆕 Autonomous retry & parameter adjustment engine
 │   │   ├── query_rewrite.py     # Context-aware query rewriter
 │   │   ├── citations.py         # Citation extraction engine
+│   │   ├── semantic_cache.py    # Semantic caching manager
 │   │   └── context_compression.py
 │   ├── retrieval/
 │   │   ├── hybrid.py            # Hybrid dense + BM25 retriever
@@ -220,6 +265,9 @@ company_policy_rag/
 │   │   └── CitationDrawer.tsx   # Source citation viewer
 │   ├── hooks/                   # Custom React hooks
 │   └── lib/                     # API client, types, utilities
+├── tests/
+│   ├── unit/                    # Unit tests (chunkers, verifier, retry engine, etc.)
+│   └── e2e/                     # 🆕 End-to-end agentic layer tests (Tiers 1-4)
 ├── .env                         # Environment configuration
 └── requirements.txt             # Python dependencies
 ```
@@ -265,6 +313,16 @@ Key configuration options in `.env`:
 | `ENABLE_QUERY_REWRITE` | `true` | Enable LLM-based query rewriting |
 | `ENABLE_RERANKER` | `true` | Enable cross-encoder reranking |
 | `GROUNDING_STRICTNESS` | `balanced` | `balanced` or `strict` |
+| `ENABLE_QUERY_ROUTING` | `true` | 🆕 Enable agentic query classification & strategy selection |
+| `ENABLE_ANSWER_VERIFICATION` | `true` | 🆕 Enable self-reflection verification after generation |
+| `VERIFICATION_MAX_RETRIES` | `2` | 🆕 Max retry cycles when verification fails |
+| `VERIFICATION_FAITHFULNESS_THRESHOLD` | `0.75` | 🆕 Minimum faithfulness score to pass |
+| `VERIFICATION_COMPOSITE_THRESHOLD` | `0.70` | 🆕 Minimum composite verification score |
+| `QUERY_ROUTER_CONFIDENCE_THRESHOLD` | `0.70` | 🆕 Minimum confidence for query classification |
+| `ENABLE_CONVERSATIONAL_BYPASS` | `true` | 🆕 Skip retrieval for greetings/pleasantries |
+| `ENABLE_METADATA_EXTRACTION` | `true` | 🆕 Extract metadata during document ingestion |
+| `ENABLE_QUERY_METADATA_FILTERING` | `true` | 🆕 Infer metadata filters from queries |
+| `ENABLE_FILTER_FALLBACK_RELAXATION` | `true` | 🆕 Drop filters and retry if zero results |
 
 ---
 
@@ -291,6 +349,11 @@ The system is validated by an extensive integration and unit test suite comprisi
 - [x] Multi-format document upload & management
 - [x] Observability dashboard with trace telemetry
 - [x] Semantic caching (vector-based cache for similar queries)
+- [x] 🆕 Query Router & Strategy Selector (5-type intent classification)
+- [x] 🆕 Self-Reflection & Answer Verification (4D scoring + autonomous retry)
+- [x] 🆕 Dynamic Metadata Extraction & Filtering (ingestion tagging + query-time inference)
+- [x] 🆕 Filter Relaxation Fallback (zero-result recovery)
+- [ ] Frontend agentic visual indicators (routing badges, verification pills, filter tags)
 - [ ] Graph RAG integration (Neo4j for entity relationships)
 - [ ] Multi-user authentication & role-based access
 - [ ] Kubernetes Helm charts for cloud deployment

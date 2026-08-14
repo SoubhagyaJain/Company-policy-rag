@@ -81,10 +81,13 @@ class HybridRetriever:
         dense_top_k: int = 25,
         bm25_top_k: int = 25,
         filters: dict[str, Any] | None = None,
+        rrf_k: int | None = None,
     ) -> list[ScoredChunk]:
         """Execute hybrid search with Reciprocal Rank Fusion."""
         if not query.strip():
             return []
+
+        effective_rrf_k = rrf_k if rrf_k is not None else self.rrf_k
 
         logger.info(f"Executing dense retrieval for query: {query}")
         dense_hits = self.dense_retriever.retrieve(query, top_k=dense_top_k, filters=filters)
@@ -105,6 +108,6 @@ class HybridRetriever:
                 sc.rank = rank
             return bm25_hits
 
-        fused = reciprocal_rank_fusion([dense_hits, bm25_hits], rrf_k=self.rrf_k)
-        logger.debug("Hybrid search fused %d dense + %d BM25 -> %d chunks", len(dense_hits), len(bm25_hits), len(fused))
+        fused = reciprocal_rank_fusion([dense_hits, bm25_hits], rrf_k=effective_rrf_k)
+        logger.debug("Hybrid search fused %d dense + %d BM25 -> %d chunks (rrf_k=%d)", len(dense_hits), len(bm25_hits), len(fused), effective_rrf_k)
         return fused

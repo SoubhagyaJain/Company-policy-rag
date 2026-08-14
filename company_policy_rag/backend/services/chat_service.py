@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 import uuid
-import threading
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -30,7 +30,7 @@ class ChatService:
     ) -> None:
         self.pipeline = rag_pipeline
         self.telemetry_service = telemetry_service
-        
+
         # Thread-safe TTL cache: Max 1000 sessions, 24-hour expiration
         self._sessions = TTLCache(maxsize=1000, ttl=86400)
         self._session_lock = threading.Lock()
@@ -39,6 +39,16 @@ class ChatService:
         """Safely evict a session from the LRU/TTL cache."""
         with self._session_lock:
             self._sessions.pop(session_id, None)
+
+    def clear_session(self, session_id: str) -> None:
+        """Clear conversation messages for a specific session."""
+        with self._session_lock:
+            self._sessions.pop(session_id, None)
+
+    def clear_all_sessions(self) -> None:
+        """Purge all cached conversation sessions from memory."""
+        with self._session_lock:
+            self._sessions.clear()
 
     def set_active_model(self, model: str) -> str:
         """Return a safe guarantee that the backend pipeline is configured for the requested model."""
@@ -92,6 +102,12 @@ class ChatService:
                 }
             )
 
+        low_confidence = (
+            (not rag_res.trace.faithfulness_passed)
+            if (rag_res.trace and rag_res.trace.faithfulness_checked)
+            else False
+        )
+
         return ChatResponse(
             id=rag_res.id,
             message_id=message_id,
@@ -106,13 +122,19 @@ class ChatService:
                 "execution_time_ms": elapsed_ms,
             },
             trace=rag_res.trace,
-            low_confidence=False,
+            low_confidence=low_confidence,
             grounding_mode=request.grounding_mode or "balanced",
             model=rag_res.model or request.model or "qwen2.5:7b",
             token_usage=rag_res.token_usage or {},
+            query_type=rag_res.trace.query_type if rag_res.trace else None,
+            routing_confidence=rag_res.trace.routing_confidence if rag_res.trace else None,
+            inferred_filters=rag_res.trace.inferred_filters if rag_res.trace else {},
+            verification=rag_res.trace.verification_report if rag_res.trace else None,
         )
 
-    async def stream_query(self, request: ChatRequest, cancel_token: asyncio.Event | None = None) -> AsyncGenerator[str, None]:
+    async def stream_query(
+        self, request: ChatRequest, cancel_token: asyncio.Event | None = None
+    ) -> AsyncGenerator[str, None]:
         """
         Stream RAG response via Server-Sent Events (SSE) with real-time LLM token streaming.
         Uses fully async pipeline.stream_query().
@@ -122,13 +144,15 @@ class ChatService:
         message_id = f"msg_{uuid.uuid4().hex[:12]}"
         response_id = f"resp_{uuid.uuid4().hex[:12]}"
         model_name = request.model or "qwen2.5:7b"
-        
+
         with self._session_lock:
             history = self._sessions.get(session_id, [])
 
         try:
             if not request.message or not request.message.strip():
-                err_data = json.dumps({"detail": "Chat query message cannot be empty.", "status": 400})
+                err_data = json.dumps(
+                    {"detail": "Chat query message cannot be empty.", "status": 400}
+                )
                 yield f"event: error\ndata: {err_data}\n\n"
                 return
 
@@ -153,13 +177,13 @@ class ChatService:
                 filters=request.filters,
                 history=history,
                 model=request.model,
-                cancel_token=cancel_token
+                cancel_token=cancel_token,
             )
-            
+
             async for event in pipeline_stream:
                 if cancel_token and cancel_token.is_set():
                     break
-                    
+
                 if event["type"] == "retrieval_done":
                     retrieval_payload = {
                         "id": response_id,
@@ -209,7 +233,8 @@ class ChatService:
                         token_usage=event.get("token_usage", {}),
                     )
                     trace_summary = self.telemetry_service.record_from_rag_response(
-                        rag_response, ttft_ms=ttft_ms,
+                        rag_response,
+                        ttft_ms=ttft_ms,
                     )
                     trace_payload = {
                         "id": response_id,
@@ -217,6 +242,11 @@ class ChatService:
                     }
                     yield f"event: trace\ndata: {json.dumps(trace_payload)}\n\n"
 
+                    low_confidence = (
+                        (not trace.faithfulness_passed)
+                        if (trace and trace.faithfulness_checked)
+                        else False
+                    )
                     done_payload = {
                         "id": response_id,
                         "answer": full_answer,
@@ -230,9 +260,18 @@ class ChatService:
                             "ttft_ms": ttft_ms,
                             "total_latency_ms": total_latency_ms,
                         },
-                        "retrieval_trace": trace_summary.model_dump() if trace_summary else None,
+                        "retrieval_trace": (
+                            trace_summary.model_dump()
+                            if trace_summary
+                            else (trace.model_dump() if trace else None)
+                        ),
+                        "verification": (
+                            trace_summary.verification
+                            if trace_summary
+                            else (trace.verification_report if trace else None)
+                        ),
                         "message_id": message_id,
-                        "low_confidence": False,
+                        "low_confidence": low_confidence,
                         "grounding_mode": request.grounding_mode or "balanced",
                     }
                     yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
@@ -242,14 +281,23 @@ class ChatService:
                     if session_id not in self._sessions:
                         self._sessions[session_id] = []
                     self._sessions[session_id].append(
-                        {"message_id": message_id, "role": "user", "content": request.message, "timestamp": time.time()}
+                        {
+                            "message_id": message_id,
+                            "role": "user",
+                            "content": request.message,
+                            "timestamp": time.time(),
+                        }
                     )
                     self._sessions[session_id].append(
-                        {"message_id": response_id, "role": "assistant", "content": full_answer, "timestamp": time.time()}
+                        {
+                            "message_id": response_id,
+                            "role": "assistant",
+                            "content": full_answer,
+                            "timestamp": time.time(),
+                        }
                     )
 
         except Exception as exc:
             logger.exception("Error during chat stream query: %s", exc)
             err_payload = {"detail": str(exc), "status": 500}
             yield f"event: error\ndata: {json.dumps(err_payload)}\n\n"
-
