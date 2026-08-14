@@ -478,6 +478,38 @@ export class ApiClient {
       backend_version: data.collection ? `Collection: ${data.collection}` : 'FastAPI RAG',
     };
   }
+
+  /**
+   * Models API: GET /api/models
+   */
+  async getModels(): Promise<{ active_model: string; models: Array<{ id: string; name: string; type: string; is_active: boolean }> }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/models`);
+      if (!res.ok) {
+        return { active_model: 'qwen2.5:7b', models: [] };
+      }
+      return await res.json();
+    } catch {
+      return { active_model: 'qwen2.5:7b', models: [] };
+    }
+  }
+
+  /**
+   * Models API: POST /api/models/select
+   */
+  async selectModel(model: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/models/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
 }
+
 
 export const apiClient = new ApiClient();

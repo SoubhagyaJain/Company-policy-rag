@@ -26,67 +26,27 @@ _llm_lock = threading.Lock()
 
 
 
-class AsyncModelManager:
+class ModelManager:
     """
-    Background worker that manages unloading and preloading models via a thread queue.
-    Uses an active_readers counter and is_switching boolean gate to implement a non-blocking
-    Reader-Writer lock. This ensures we never unload a model while active streams are reading from it.
+    Lightweight, stateless model router modeled after Antigravity.
+    Manages active model pointers and non-blocking background preloading
+    without thread starvation, write-lock bottlenecks, or reader deadlocks.
     """
     def __init__(self, initial_model: str):
         self.current_model = initial_model
-        import queue
-        self.queue: queue.Queue = queue.Queue()
-        self.is_switching = False
-        self.active_readers = 0
-        self.reader_lock = threading.Lock()
-        
-        self._worker_thread = threading.Thread(target=self._worker, daemon=True)
-        self._worker_thread.start()
 
-    def _worker(self):
-        """Background daemon processing model switch requests with Debounce."""
-        import queue
-        while True:
+    def set_model(self, model_name: str) -> None:
+        """Update active model and optionally trigger non-blocking background preload."""
+        self.current_model = model_name
+        def _bg_preload():
             try:
-                target_model = self.queue.get()
-            except Exception:
-                continue
-            
-            # DEBOUNCE: Drain the queue if user clicked rapidly, only process the latest
-            try:
-                while True:
-                    target_model = self.queue.get_nowait()
-                    self.queue.task_done()
-            except queue.Empty:
-                pass
-                
-            if target_model == self.current_model:
-                self.queue.task_done()
-                continue
-                
-            # Engage the is_switching gate to prevent new readers from starting (Writer Starvation)
-            self.is_switching = True
-            
-            # Acquire Write Lock: wait until all active streams (readers) finish
-            while True:
-                with self.reader_lock:
-                    if self.active_readers == 0:
-                        break
-                time.sleep(0.1)
-                
-            logger.info(f"Unloading '{self.current_model}' and preloading '{target_model}'")
-            try:
-                # Synchronous HTTP calls to Ollama
-                unload_model(self.current_model)
-                preload_model(target_model)
-                self.current_model = target_model
-                logger.info(f"Successfully switched active model to '{target_model}'")
+                preload_model(model_name)
             except Exception as e:
-                logger.error(f"Error during model switch: {e}")
-            finally:
-                # Disengage the switching gate so waiting streams can proceed
-                self.is_switching = False
-                self.queue.task_done()
+                logger.warning("Background preload for %s failed: %s", model_name, e)
+        try:
+            threading.Thread(target=_bg_preload, daemon=True).start()
+        except Exception:
+            pass
 
 class _LLMProxy:
     """Per-request thread-safe wrapper overriding the model attribute for shared LLM instances."""
@@ -187,14 +147,14 @@ class RAGPipeline:
         self.docstore = docstore or {}
         self.llm = llm
         self.semantic_cache = semantic_cache
-        self.model_manager = AsyncModelManager(initial_model=getattr(self.llm, "model", None) or "qwen2.5:7b")
+        self.model_manager = ModelManager(initial_model=getattr(self.llm, "model", None) or "qwen2.5:7b")
 
         if self.query_rewriter.llm is None and self.llm is not None:
             self.query_rewriter.llm = self.llm
 
     def set_active_model(self, model: str) -> str:
-        """Switch the backend pipeline to a new model."""
-        self.model_manager.queue.put(model)
+        """Switch the backend pipeline to a new model without blocking."""
+        self.model_manager.set_model(model)
         return model
 
     def get_active_model(self) -> str:
@@ -273,17 +233,8 @@ class RAGPipeline:
         model: str | None = None,
     ) -> RAGResponse:
         """Execute end-to-end RAG pipeline and return structured RAGResponse with trace telemetry."""
-        while self.model_manager.is_switching:
-            time.sleep(0.1)
-            
-        with self.model_manager.reader_lock:
-            self.model_manager.active_readers += 1
-            
-        try:
-            return self._query_internal(user_query, filters, history, model)
-        finally:
-            with self.model_manager.reader_lock:
-                self.model_manager.active_readers -= 1
+        return self._query_internal(user_query, filters, history, model)
+
 
     def _query_internal(
         self,
@@ -499,20 +450,12 @@ class RAGPipeline:
           - {'type': 'token', 'content': str}
           - {'type': 'done', 'answer': str, 'citations': [...], 'trace': RAGTrace, ...}
         """
-        import asyncio
-        while self.model_manager.is_switching:
-            await asyncio.sleep(0.1)
-            
-        with self.model_manager.reader_lock:
-            self.model_manager.active_readers += 1
-            
-        try:
-            from starlette.concurrency import iterate_in_threadpool
-            async for chunk in iterate_in_threadpool(self._stream_query_internal(user_query, filters, history, model, cancel_token)):
-                yield chunk
-        finally:
-            with self.model_manager.reader_lock:
-                self.model_manager.active_readers -= 1
+        from starlette.concurrency import iterate_in_threadpool
+        async for chunk in iterate_in_threadpool(
+            self._stream_query_internal(user_query, filters, history, model, cancel_token)
+        ):
+            yield chunk
+
 
     def _stream_query_internal(
         self,

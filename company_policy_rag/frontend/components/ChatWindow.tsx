@@ -91,6 +91,7 @@ export function ChatWindow({
   const [availableDocs, setAvailableDocs] = useState<DocumentItem[]>([]);
   const [filterTab, setFilterTab] = useState<'documents' | 'categories'>('documents');
   const [filterSearch, setFilterSearch] = useState('');
+  const [modelsList, setModelsList] = useState<Array<{ id: string; label: string; desc: string }>>(MODEL_OPTIONS);
   const [selectedModel, setSelectedModel] = useState('qwen2.5:7b');
   const [showFilters, setShowFilters] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -102,6 +103,31 @@ export function ChatWindow({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const filterRef = useRef<HTMLDivElement | null>(null);
   const modelPickerRef = useRef<HTMLDivElement | null>(null);
+
+  // Load available models from backend API
+  const loadModels = useCallback(async () => {
+    try {
+      const res = await apiClient.getModels();
+      if (res && Array.isArray(res.models) && res.models.length > 0) {
+        const chatModels = res.models
+          .filter((m) => m.type === 'llm' || !m.type.includes('embed'))
+          .map((m) => ({
+            id: m.id,
+            label: m.name || m.id,
+            desc: m.id.includes('3b') ? 'Compact & Fast (2.0 GB)' : m.id.includes('7b') ? 'Balanced (4.7 GB)' : m.id.includes('8b') ? 'Reasoning (5.2 GB)' : 'Installed model',
+          }));
+        if (chatModels.length > 0) {
+          setModelsList(chatModels);
+        }
+      }
+    } catch {
+      // fallback to MODEL_OPTIONS
+    }
+  }, []);
+
+  useEffect(() => {
+    loadModels();
+  }, [loadModels]);
 
   // Load available documents from backend
   const loadDocuments = useCallback(async () => {
@@ -124,7 +150,10 @@ export function ChatWindow({
     if (showFilters) {
       loadDocuments();
     }
-  }, [showFilters, loadDocuments]);
+    if (showModelPicker) {
+      loadModels();
+    }
+  }, [showFilters, showModelPicker, loadDocuments, loadModels]);
 
   // Click-outside listener for dropdowns
   useEffect(() => {
@@ -159,9 +188,13 @@ export function ChatWindow({
     }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('rag_model', selectedModel);
-  }, [selectedModel]);
+  const handleSelectModel = (modelId: string) => {
+    setSelectedModel(modelId);
+    setShowModelPicker(false);
+    localStorage.setItem('rag_model', modelId);
+    apiClient.selectModel(modelId).catch(() => {});
+  };
+
 
   // Derive unique categories from available docs merged with standard categories
   const categoriesList = useMemo(() => {
@@ -523,23 +556,21 @@ export function ChatWindow({
             >
               <Cpu className="w-3 h-3 text-terracotta-600 dark:text-terracotta-400" />
               <span className="font-medium">
-                {MODEL_OPTIONS.find((m) => m.id === selectedModel)?.label || selectedModel}
+                {modelsList.find((m) => m.id === selectedModel)?.label || selectedModel}
               </span>
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
 
             {showModelPicker && (
-              <div className="absolute right-0 top-full mt-1.5 w-60 rounded-2xl bg-white dark:bg-[#1E1D1A] border border-[#DDD5C5] dark:border-[#33302B] shadow-xl z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-2.5 py-1 text-[10px] uppercase font-semibold text-[#8C867B] dark:text-[#7A756C] tracking-wider">
-                  Select Inference Model
+              <div className="absolute right-0 top-full mt-1.5 w-60 rounded-2xl bg-white dark:bg-[#1E1D1A] border border-[#DDD5C5] dark:border-[#33302B] shadow-xl z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100 max-h-72 overflow-y-auto custom-scrollbar">
+                <div className="px-2.5 py-1 text-[10px] uppercase font-semibold text-[#8C867B] dark:text-[#7A756C] tracking-wider flex items-center justify-between">
+                  <span>Select Inference Model</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
-                {MODEL_OPTIONS.map((m) => (
+                {modelsList.map((m) => (
                   <button
                     key={m.id}
-                    onClick={() => {
-                      setSelectedModel(m.id);
-                      setShowModelPicker(false);
-                    }}
+                    onClick={() => handleSelectModel(m.id)}
                     className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${
                       selectedModel === m.id
                         ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-700 dark:text-terracotta-400 font-medium'
@@ -553,9 +584,14 @@ export function ChatWindow({
                           : 'text-[#8C867B] dark:text-[#7A756C]'
                       }`}
                     />
-                    <div>
-                      <div className="text-xs font-semibold">{m.label}</div>
-                      <div className="text-[10px] text-[#8C867B] dark:text-[#7A756C]">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold flex items-center justify-between">
+                        <span className="truncate">{m.label}</span>
+                        {selectedModel === m.id && (
+                          <Check className="w-3 h-3 text-terracotta-600 shrink-0" />
+                        )}
+                      </div>
+                      <div className="text-[10px] text-[#8C867B] dark:text-[#7A756C] truncate">
                         {m.desc}
                       </div>
                     </div>
