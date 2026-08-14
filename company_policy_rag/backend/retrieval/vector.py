@@ -29,5 +29,10 @@ class DenseVectorRetriever:
         """Generate query vector embedding and perform top-k vector store similarity search."""
         if not query.strip():
             return []
+        from backend.utils.logging import logger
+        logger.info(f"Dense retrieve: computing embedding for {query}")
         query_emb = self.embedding_service.embed_text(query)
-        return self.vector_store.search(query_emb, top_k=top_k, filters=filters)
+        logger.info("Dense retrieve: embedding computed, querying vector store")
+        res = self.vector_store.search(query_emb, top_k=top_k, filters=filters)
+        logger.info("Dense retrieve: vector store query complete")
+        return res

@@ -120,6 +120,24 @@ SECTION_PATTERNS: list[SectionPattern] = _build_section_patterns()
 
 def is_noise_line(line: str) -> bool:
     lower = line.lower().strip()
+    if not lower:
+        return True
+
+    # Exact noise phrases
+    exact_noise = {
+        "contents",
+        "table of contents",
+        "index",
+        "preface",
+        "foreword",
+        "acknowledgments",
+        "acknowledgements",
+        "all rights reserved",
+        "strictly confidential",
+    }
+    if lower in exact_noise:
+        return True
+
     noise_prefixes = (
         "page ",
         "confidential and proprietary",
@@ -128,9 +146,22 @@ def is_noise_line(line: str) -> bool:
         "revised ",
         "effective date",
         "last updated",
+        "copyright ",
+        "all rights reserved",
+        "isbn:",
+        "isbn ",
     )
     if any(lower.startswith(p) for p in noise_prefixes):
         return True
+
+    # Check for TOC leader dots e.g. "Chapter 1 ............. 45"
+    if re.search(r"(?:\.{3,}|_{3,}|\-{3,}|\s{4,})\s*\d+$", lower):
+        return True
+
+    # Standalone page numbers e.g. "Page 74", "- 74 -", "[74]"
+    if re.match(r"^(?:page\s+)?[-–—\[(]?\s*\d+\s*[-–—\])]?$", lower):
+        return True
+
     alpha = sum(c.isalpha() for c in line)
     return alpha < max(3, len(line) * 0.3)
 

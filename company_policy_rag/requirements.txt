@@ -43,6 +43,10 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 python-multipart>=0.0.9
 
+# Async Task Queue & Caching
+celery[redis]>=5.3.6
+redis>=5.0.0
+
 # Evaluation & exploration (notebook)
 jupyter>=1.0.0
 ipykernel>=6.0.0

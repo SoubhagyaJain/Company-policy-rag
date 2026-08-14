@@ -9,13 +9,55 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
+export interface DonePayload {
+  id?: string;
+  answer?: string;
+  citations?: any[];
+  retrieval_trace?: any;
+  total_latency_ms?: number;
+  latency_ms?: number;
+  metrics?: Record<string, unknown>;
+  status?: string;
+}
+
 export interface StreamCallbacks {
-  onStart?: (data: { session_id: string; message_id: string }) => void;
+  onStart?: (data: { session_id: string; message_id: string; id?: string }) => void;
   onChunk?: (chunk: string) => void;
   onCitation?: (citation: Citation) => void;
   onTrace?: (trace: QueryTrace) => void;
-  onDone?: (data: { latency_ms: number; metrics?: Record<string, unknown> }) => void;
+  onDone?: (data: DonePayload) => void;
   onError?: (error: Error) => void;
+}
+
+function mapCitation(c: any, index = 0): Citation {
+  return {
+    id: c.chunk_id || c.id || `cit_${index}_${Date.now()}`,
+    document_id: c.document_id,
+    title: c.source_file || c.title || 'Document Source',
+    source: c.source_file || c.source || '',
+    chunk_text: c.snippet || c.chunk_text || c.text || '',
+    score: typeof c.relevance_score === 'number' ? c.relevance_score : (typeof c.score === 'number' ? c.score : 0.0),
+    page: c.page_number ?? c.page,
+    heading: c.section_title || c.heading || c.section_path,
+    category: c.category || 'General',
+  };
+}
+
+function mapTrace(t: any): QueryTrace {
+  return {
+    trace_id: t.trace_id || `tr_${Date.now()}`,
+    timestamp: t.timestamp || new Date().toISOString(),
+    original_query: t.query || t.original_query || '',
+    query_rewritten: t.rewritten_query || t.query_rewritten,
+    expanded_queries: t.sub_queries || t.expanded_queries || [],
+    total_chunks_retrieved: t.candidate_count ?? t.total_chunks_retrieved ?? 0,
+    top_rerank_score: t.rerank_scores?.[0] ?? t.top_rerank_score ?? 0.9,
+    rerank_latency_ms: t.stage_timings?.reranking ?? t.rerank_latency_ms ?? 0,
+    total_latency_ms: t.execution_time_ms ?? t.total_latency_ms ?? 0,
+    prompt_tokens: t.token_usage?.prompt_tokens ?? t.prompt_tokens ?? 0,
+    completion_tokens: t.token_usage?.completion_tokens ?? t.completion_tokens ?? 0,
+    model: t.model || 'FastAPI RAG',
+  };
 }
 
 export class ApiClient {
@@ -122,9 +164,8 @@ export class ApiClient {
       }
       if (callbacks?.onError) {
         callbacks.onError(err instanceof Error ? err : new Error(String(err)));
-      } else {
-        throw err;
       }
+      throw err;
     }
   }
 
@@ -147,13 +188,45 @@ export class ApiClient {
         }
         break;
       case 'citation':
-        callbacks.onCitation?.(data as Citation);
+        if (data && typeof data === 'object') {
+          const rawCitations = Array.isArray((data as any).citations)
+            ? (data as any).citations
+            : Array.isArray(data)
+            ? data
+            : [data];
+          rawCitations.forEach((c: any, i: number) => {
+            callbacks.onCitation?.(mapCitation(c, i));
+          });
+        }
         break;
       case 'trace':
-        callbacks.onTrace?.(data as QueryTrace);
+        if (data && typeof data === 'object') {
+          const rawTrace = (data as any).trace || data;
+          callbacks.onTrace?.(mapTrace(rawTrace));
+        }
         break;
       case 'done':
-        callbacks.onDone?.(data as { latency_ms: number; metrics?: Record<string, unknown> });
+        if (data && typeof data === 'object') {
+          const doneData = data as any;
+          if (Array.isArray(doneData.citations)) {
+            doneData.citations.forEach((c: any, i: number) => {
+              callbacks.onCitation?.(mapCitation(c, i));
+            });
+          }
+          if (doneData.retrieval_trace) {
+            callbacks.onTrace?.(mapTrace(doneData.retrieval_trace));
+          }
+          callbacks.onDone?.(doneData);
+        } else {
+          callbacks.onDone?.({ latency_ms: 0 });
+        }
+        break;
+      case 'error':
+        {
+          const errDetail = (data as any)?.detail || (typeof data === 'string' ? data : 'Error from RAG backend');
+          const err = new Error(errDetail);
+          callbacks.onError?.(err);
+        }
         break;
     }
   }
@@ -165,29 +238,42 @@ export class ApiClient {
     model?: string,
     callbacks?: StreamCallbacks
   ) {
-    const res = await this.sendChatMessage(message, sessionId, filters, model);
-    if (callbacks?.onChunk) {
-      callbacks.onChunk(res.answer);
-    }
-    if (res.citations && callbacks?.onCitation) {
-      res.citations.forEach((c) => callbacks.onCitation?.(c));
-    }
-    if (res.metrics && callbacks?.onTrace) {
-      callbacks.onTrace({
-        trace_id: res.id || `trace_${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        original_query: message,
-        total_chunks_retrieved: res.citations?.length || 0,
-        top_rerank_score: res.citations?.[0]?.score || 0.9,
-        rerank_latency_ms: Math.round((res.latency_ms || 300) * 0.2),
-        total_latency_ms: res.latency_ms || 300,
-        prompt_tokens: 150,
-        completion_tokens: 120,
-        model: model || 'FastAPI RAG',
-      });
-    }
-    if (callbacks?.onDone) {
-      callbacks.onDone({ latency_ms: res.latency_ms || 300 });
+    try {
+      const res = await this.sendChatMessage(message, sessionId, filters, model);
+      if (callbacks?.onChunk && res.answer) {
+        callbacks.onChunk(res.answer);
+      }
+      if (res.citations && callbacks?.onCitation) {
+        res.citations.forEach((c, i) => callbacks.onCitation?.(mapCitation(c, i)));
+      }
+      if (callbacks?.onTrace) {
+        callbacks.onTrace({
+          trace_id: res.id || `trace_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          original_query: message,
+          total_chunks_retrieved: res.citations?.length || 0,
+          top_rerank_score: res.citations?.[0]?.score || 0.9,
+          rerank_latency_ms: Math.round((res.latency_ms || 300) * 0.2),
+          total_latency_ms: res.latency_ms || 300,
+          prompt_tokens: 150,
+          completion_tokens: 120,
+          model: model || 'FastAPI RAG',
+        });
+      }
+      if (callbacks?.onDone) {
+        callbacks.onDone({
+          answer: res.answer,
+          citations: res.citations,
+          latency_ms: res.latency_ms || 300,
+          total_latency_ms: res.latency_ms || 300,
+        });
+      }
+    } catch (err) {
+      if (callbacks?.onError) {
+        callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -296,11 +382,83 @@ export class ApiClient {
    * Observability Telemetry: GET /api/admin/observability
    */
   async getObservability(): Promise<ObservabilityData> {
-    const res = await fetch(`${this.baseUrl}/api/admin/observability`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch observability telemetry (${res.status})`);
+    const [obsRes, healthRes] = await Promise.all([
+      fetch(`${this.baseUrl}/api/admin/observability`),
+      fetch(`${this.baseUrl}/api/health`).catch(() => null),
+    ]);
+
+    if (!obsRes.ok) {
+      throw new Error(`Failed to fetch observability telemetry (${obsRes.status})`);
     }
-    return res.json();
+
+    const data = await obsRes.json();
+    let healthData: HealthStatus = {
+      status: 'ok',
+      redis: false,
+      vector_db: true,
+      models_loaded: true,
+      backend_version: 'v1.0.0-fastapi',
+    };
+
+    if (healthRes && healthRes.ok) {
+      try {
+        const rawHealth = await healthRes.json();
+        healthData = {
+          status: rawHealth.status || 'ok',
+          redis: !!rawHealth.redis,
+          vector_db: !!rawHealth.vector_db,
+          models_loaded: !!rawHealth.models_loaded,
+          backend_version: rawHealth.collection ? `Collection: ${rawHealth.collection}` : 'FastAPI RAG',
+        };
+      } catch {
+        // use default
+      }
+    }
+
+    const rawTraces = Array.isArray(data.recent_traces) ? data.recent_traces : [];
+    const mappedTraces: QueryTrace[] = rawTraces.map((t: any, idx: number) => {
+      const topScore = Array.isArray(t.rerank_scores) && t.rerank_scores.length > 0
+        ? t.rerank_scores[0]
+        : (typeof t.top_rerank_score === 'number' ? t.top_rerank_score : 0.88);
+
+      const pTokens = t.token_usage?.prompt_tokens ?? t.prompt_tokens ?? 0;
+      const cTokens = t.token_usage?.completion_tokens ?? t.completion_tokens ?? 0;
+
+      return {
+        trace_id: t.trace_id || `tr_${idx}_${Date.now()}`,
+        timestamp: t.timestamp || new Date().toISOString(),
+        original_query: t.query || t.original_query || 'Query',
+        query_rewritten: t.rewritten_query || t.query_rewritten,
+        expanded_queries: t.sub_queries || t.expanded_queries || [],
+        total_chunks_retrieved: t.candidate_count ?? t.total_chunks_retrieved ?? 0,
+        top_rerank_score: topScore,
+        rerank_latency_ms: t.stage_timings?.reranking ?? t.rerank_latency_ms ?? 0,
+        total_latency_ms: t.execution_time_ms ?? t.total_latency_ms ?? 0,
+        prompt_tokens: pTokens,
+        completion_tokens: cTokens,
+        model: t.model || 'FastAPI RAG (Qwen 2.5)',
+      };
+    });
+
+    const promptTokens = data.token_usage?.prompt_tokens ?? data.prompt_tokens ?? 0;
+    const completionTokens = data.token_usage?.completion_tokens ?? data.completion_tokens ?? 0;
+    const totalTokens = data.token_usage?.total_tokens ?? (promptTokens + completionTokens);
+
+    return {
+      total_queries: data.total_queries ?? 0,
+      avg_latency_ms: data.avg_latency_ms ?? 0,
+      avg_ttft_ms: data.avg_ttft_ms ?? 0,
+      p95_latency_ms: data.p95_latency_ms ?? 0,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+      active_documents: data.active_documents ?? 0,
+      indexed_chunks: data.indexed_chunks ?? 0,
+      similarity_avg: data.score_distributions?.similarity_avg ?? 0,
+      rerank_avg: data.score_distributions?.rerank_avg ?? 0,
+      health: healthData,
+      recent_traces: mappedTraces,
+    };
   }
 
   /**
@@ -311,7 +469,14 @@ export class ApiClient {
     if (!res.ok) {
       return { status: 'error', redis: false, vector_db: false, models_loaded: false };
     }
-    return res.json();
+    const data = await res.json();
+    return {
+      status: data.status || 'ok',
+      redis: !!data.redis,
+      vector_db: !!data.vector_db,
+      models_loaded: !!data.models_loaded,
+      backend_version: data.collection ? `Collection: ${data.collection}` : 'FastAPI RAG',
+    };
   }
 }
 

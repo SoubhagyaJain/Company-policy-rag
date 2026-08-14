@@ -1,10 +1,42 @@
 from __future__ import annotations
 
+import math
 import re
 
 from backend.models.rag import Citation, ScoredChunk
+from backend.utils.section_tracker import is_noise_line
 
 _SOURCE_TAG_PATTERN = re.compile(r"\[Source\s+([^\]]+)\]", re.IGNORECASE)
+
+
+def _compute_confidence(sc: ScoredChunk) -> float:
+    """Normalize rerank logit score or candidate score into [0.05, 0.99] confidence range."""
+    raw = sc.rerank_score if sc.rerank_score is not None else sc.score
+    if raw is None:
+        return 0.75
+    try:
+        raw_val = float(raw)
+        # If score is already a bounded probability [0.0, 1.0]
+        if 0.0 <= raw_val <= 1.0 and sc.rerank_score is None:
+            return max(0.50, min(0.99, raw_val))
+        # CrossEncoder raw logits (-10 to +10) -> Sigmoid
+        if raw_val > 15.0:
+            return 0.99
+        if raw_val < -15.0:
+            return 0.15
+        prob = 1.0 / (1.0 + math.exp(-raw_val))
+        return max(0.20, min(0.99, round(prob, 4)))
+    except Exception:
+        return 0.80
+
+
+def _clean_section_title(title: str | None) -> str | None:
+    if not title:
+        return None
+    cleaned = title.strip()
+    if is_noise_line(cleaned):
+        return None
+    return cleaned
 
 
 class CitationEngine:
@@ -43,7 +75,11 @@ class CitationEngine:
                 if 1 <= idx <= len(generation_chunks):
                     sc = generation_chunks[idx - 1]
                     meta = sc.chunk.metadata
-                    snippet = sc.chunk.text[:250].strip() + ("..." if len(sc.chunk.text) > 250 else "")
+                    # Provide verbatim chunk text up to 2000 characters
+                    full_text = sc.chunk.text.strip()
+                    snippet = full_text[:2000].strip() + ("..." if len(full_text) > 2000 else "")
+                    sec_title = _clean_section_title(meta.section_title)
+
                     citations.append(
                         Citation(
                             source_index=idx,
@@ -51,10 +87,10 @@ class CitationEngine:
                             document_id=meta.document_id,
                             source_file=meta.source_file,
                             page_number=meta.page_number,
-                            section_title=meta.section_title,
-                            section_path=meta.section_path,
+                            section_title=sec_title,
+                            section_path=meta.section_path if sec_title else None,
                             snippet=snippet,
-                            relevance_score=sc.rerank_score if sc.rerank_score is not None else sc.score,
+                            relevance_score=_compute_confidence(sc),
                             selection_reason=selection_mode,
                         )
                     )
@@ -73,7 +109,10 @@ class CitationEngine:
             for sc in filtered[:3]:
                 idx = sc.rank if sc.rank is not None else 1
                 meta = sc.chunk.metadata
-                snippet = sc.chunk.text[:250].strip() + ("..." if len(sc.chunk.text) > 250 else "")
+                full_text = sc.chunk.text.strip()
+                snippet = full_text[:2000].strip() + ("..." if len(full_text) > 2000 else "")
+                sec_title = _clean_section_title(meta.section_title)
+
                 citations.append(
                     Citation(
                         source_index=idx,
@@ -81,10 +120,10 @@ class CitationEngine:
                         document_id=meta.document_id,
                         source_file=meta.source_file,
                         page_number=meta.page_number,
-                        section_title=meta.section_title,
-                        section_path=meta.section_path,
+                        section_title=sec_title,
+                        section_path=meta.section_path if sec_title else None,
                         snippet=snippet,
-                        relevance_score=sc.rerank_score if sc.rerank_score is not None else sc.score,
+                        relevance_score=_compute_confidence(sc),
                         selection_reason=selection_mode,
                     )
                 )

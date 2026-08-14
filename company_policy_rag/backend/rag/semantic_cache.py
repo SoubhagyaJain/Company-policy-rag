@@ -69,13 +69,9 @@ class SemanticCacheManager:
 
     def _init_collection(self) -> None:
         try:
-            import chromadb
-            from chromadb.config import Settings as ChromaSettings
+            from backend.embeddings.vector_store import get_shared_chroma_client
 
-            client = chromadb.PersistentClient(
-                path=str(self.persist_dir),
-                settings=ChromaSettings(anonymized_telemetry=False),
-            )
+            client = get_shared_chroma_client(self.persist_dir)
             self._collection = client.get_or_create_collection(
                 name=self.collection_name,
                 metadata={"hnsw:space": "cosine"},

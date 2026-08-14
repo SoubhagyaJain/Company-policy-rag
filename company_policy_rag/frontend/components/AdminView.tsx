@@ -89,14 +89,7 @@ const rowVariants = {
 
 /* ─── Admin Observability View ─────────────────── */
 export function AdminView() {
-  const { data, health, loading, refreshMetrics } = useObservability();
-
-  /* Auto-refresh every 10 seconds (additional to the hook's 30s) */
-  useEffect(() => {
-    const interval = setInterval(refreshMetrics, 10_000);
-    return () => clearInterval(interval);
-  }, [refreshMetrics]);
-
+  const { data, health, loading, lastUpdated, refreshMetrics } = useObservability();
   const [expandedTrace, setExpandedTrace] = useState<string | null>(null);
 
   const toggleTrace = (id: string) => {
@@ -109,22 +102,33 @@ export function AdminView() {
         {/* ── Page heading ────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="font-serif font-bold text-2xl text-charcoal dark:text-cream-100">
-              Observability & Telemetry
-            </h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="font-serif font-bold text-2xl text-charcoal dark:text-cream-100">
+                Observability & Telemetry
+              </h1>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>LIVE · 2.5s</span>
+              </div>
+            </div>
             <p className="text-sm text-charcoal-muted dark:text-cream-400 mt-0.5">
-              Real-time RAG pipeline metrics, query traces, and system health.
+              Real-time RAG pipeline telemetry, query execution traces, and index metrics.
             </p>
           </div>
 
-          <button
-            onClick={refreshMetrics}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs font-medium text-charcoal dark:text-cream-200 hover:bg-cream-200 dark:hover:bg-[#2A2925] transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh Now
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-mono text-charcoal-muted dark:text-cream-500 hidden sm:inline">
+              Updated {lastUpdated?.toLocaleTimeString()}
+            </span>
+            <button
+              onClick={refreshMetrics}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs font-medium text-charcoal dark:text-cream-200 hover:bg-cream-200 dark:hover:bg-[#2A2925] transition-colors disabled:opacity-50 shadow-sm"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh Now
+            </button>
+          </div>
         </div>
 
         {/* ── Stats cards ─────────────────────────── */}
@@ -139,17 +143,29 @@ export function AdminView() {
             <p className="text-2xl font-bold font-mono text-charcoal dark:text-cream-100">
               {data.total_queries.toLocaleString()}
             </p>
+            {data.avg_ttft_ms ? (
+              <p className="text-[10px] font-mono text-charcoal-muted dark:text-cream-500 mt-0.5">
+                Avg TTFT: {formatLatency(data.avg_ttft_ms)}
+              </p>
+            ) : (
+              <p className="text-[10px] font-mono text-charcoal-muted dark:text-cream-500 mt-0.5">
+                Sub-1s TTFT enabled
+              </p>
+            )}
           </LiquidGlassCard>
 
           <LiquidGlassCard className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-4 h-4 text-amber-500" />
               <span className="text-[11px] font-medium text-charcoal-muted dark:text-cream-400">
-                Avg Latency
+                Avg / P95 Latency
               </span>
             </div>
             <p className="text-2xl font-bold font-mono text-charcoal dark:text-cream-100">
               {formatLatency(data.avg_latency_ms)}
+            </p>
+            <p className="text-[10px] font-mono text-charcoal-muted dark:text-cream-500 mt-0.5">
+              P95: {formatLatency(data.p95_latency_ms || data.avg_latency_ms)}
             </p>
           </LiquidGlassCard>
 
@@ -157,7 +173,7 @@ export function AdminView() {
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-4 h-4 text-sky-500" />
               <span className="text-[11px] font-medium text-charcoal-muted dark:text-cream-400">
-                Token Usage
+                Token Consumption
               </span>
             </div>
             <p className="text-2xl font-bold font-mono text-charcoal dark:text-cream-100">
@@ -172,7 +188,7 @@ export function AdminView() {
             <div className="flex items-center gap-2 mb-2">
               <Heart className="w-4 h-4 text-rose-500" />
               <span className="text-[11px] font-medium text-charcoal-muted dark:text-cream-400">
-                System Health
+                System Status
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -181,26 +197,24 @@ export function AdminView() {
                 {health.status}
               </p>
             </div>
-            {health.backend_version && (
-              <p className="text-[10px] font-mono text-charcoal-muted dark:text-cream-500 mt-0.5">
-                {health.backend_version}
-              </p>
-            )}
+            <p className="text-[10px] font-mono text-charcoal-muted dark:text-cream-500 mt-0.5 truncate">
+              {data.indexed_chunks ?? 0} chunks indexed ({data.active_documents ?? 0} docs)
+            </p>
           </LiquidGlassCard>
         </div>
 
         {/* ── Service health row ──────────────────── */}
         <LiquidGlassCard className="p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-charcoal-muted dark:text-cream-400 mb-3">
-            Service Dependencies
+            Service Infrastructure
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-cream-100/70 dark:bg-sand-dark/70">
               <Database className="w-4 h-4 text-terracotta-600" />
               <div className="flex-1">
-                <p className="text-xs font-medium text-charcoal dark:text-cream-200">Vector DB</p>
+                <p className="text-xs font-medium text-charcoal dark:text-cream-200">Vector & BM25 Store</p>
                 <p className="text-[10px] text-charcoal-muted dark:text-cream-500 font-mono">
-                  Chroma / FAISS
+                  {data.indexed_chunks ?? 0} Chunks Ready
                 </p>
               </div>
               <ServiceDot active={health.vector_db} />
@@ -209,20 +223,20 @@ export function AdminView() {
             <div className="flex items-center gap-3 p-3 rounded-xl bg-cream-100/70 dark:bg-sand-dark/70">
               <Layers className="w-4 h-4 text-amber-500" />
               <div className="flex-1">
-                <p className="text-xs font-medium text-charcoal dark:text-cream-200">Redis Cache</p>
+                <p className="text-xs font-medium text-charcoal dark:text-cream-200">Semantic Cache</p>
                 <p className="text-[10px] text-charcoal-muted dark:text-cream-500 font-mono">
-                  Session Store
+                  ChromaDB Embeddings
                 </p>
               </div>
-              <ServiceDot active={health.redis} />
+              <ServiceDot active={health.vector_db} />
             </div>
 
             <div className="flex items-center gap-3 p-3 rounded-xl bg-cream-100/70 dark:bg-sand-dark/70">
               <Cpu className="w-4 h-4 text-sky-500" />
               <div className="flex-1">
-                <p className="text-xs font-medium text-charcoal dark:text-cream-200">ML Models</p>
+                <p className="text-xs font-medium text-charcoal dark:text-cream-200">Neural Inference</p>
                 <p className="text-[10px] text-charcoal-muted dark:text-cream-500 font-mono">
-                  BGE + Reranker
+                  BGE + Qwen 2.5
                 </p>
               </div>
               <ServiceDot active={health.models_loaded} />
@@ -285,7 +299,7 @@ export function AdminView() {
                       {formatLatency(trace.total_latency_ms)}
                     </p>
                     <p className="text-xs font-mono text-center text-charcoal-muted dark:text-cream-400">
-                      {trace.prompt_tokens + trace.completion_tokens}
+                      {(trace.prompt_tokens || 0) + (trace.completion_tokens || 0)}
                     </p>
                   </div>
 

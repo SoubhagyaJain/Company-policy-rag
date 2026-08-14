@@ -71,14 +71,23 @@ export interface HealthStatus {
 export interface ObservabilityData {
   total_queries: number;
   avg_latency_ms: number;
+  avg_ttft_ms?: number;
+  p95_latency_ms?: number;
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  active_documents?: number;
+  indexed_chunks?: number;
+  similarity_avg?: number;
+  rerank_avg?: number;
   health: HealthStatus;
   recent_traces: QueryTrace[];
 }
 
 export interface FilterOptions {
   category?: string;
+  source_file?: string;
   document_id?: string;
 }
+
+

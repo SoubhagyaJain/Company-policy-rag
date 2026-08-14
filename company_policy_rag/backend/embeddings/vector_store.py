@@ -60,6 +60,21 @@ class VectorStoreInterface(ABC):
         pass
 
 
+_shared_clients: dict[str, Any] = {}
+
+def get_shared_chroma_client(persist_dir: Path) -> Any:
+    global _shared_clients
+    dir_str = str(persist_dir.absolute())
+    if dir_str not in _shared_clients:
+        import chromadb  # type: ignore
+        from chromadb.config import Settings  # type: ignore
+        _shared_clients[dir_str] = chromadb.PersistentClient(
+            path=str(persist_dir),
+            settings=Settings(anonymized_telemetry=False),
+        )
+    return _shared_clients[dir_str]
+
+
 class ChromaVectorStore(VectorStoreInterface):
     """
     ChromaDB implementation of VectorStoreInterface with fallback in-memory store.
@@ -80,13 +95,7 @@ class ChromaVectorStore(VectorStoreInterface):
 
     def _init_chroma(self) -> None:
         try:
-            import chromadb  # type: ignore
-            from chromadb.config import Settings  # type: ignore
-
-            client = chromadb.PersistentClient(
-                path=str(self.persist_dir),
-                settings=Settings(anonymized_telemetry=False),
-            )
+            client = get_shared_chroma_client(self.persist_dir)
             self._collection = client.get_or_create_collection(
                 name=self.collection_name,
                 metadata={"hnsw:space": "cosine"},

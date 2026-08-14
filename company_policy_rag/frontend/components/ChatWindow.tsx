@@ -1,22 +1,29 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
   Square,
   Sparkles,
   Filter,
   Trash2,
-  SlidersHorizontal,
   Compass,
   FileQuestion,
   ShieldCheck,
   Zap,
   Cpu,
   ChevronDown,
+  ArrowDown,
+  FileText,
+  Layers,
+  Search,
+  X,
+  Check,
 } from 'lucide-react';
-import { ChatMessageData, Citation, FilterOptions } from '../lib/types';
+import { ChatMessageData, Citation, FilterOptions, DocumentItem } from '../lib/types';
 import { ChatMessage } from './ChatMessage';
+import { apiClient } from '../lib/api-client';
 
 interface ChatWindowProps {
   messages: ChatMessageData[];
@@ -27,13 +34,13 @@ interface ChatWindowProps {
   onOpenCitation: (citation: Citation) => void;
 }
 
-const CATEGORY_OPTIONS = [
-  'All Categories',
+const DEFAULT_CATEGORIES = [
   'HR & Benefits',
   'Operations',
   'IT & Security',
   'Finance',
-  'Compliance',
+  'Legal & Compliance',
+  'General',
 ];
 
 const MODEL_OPTIONS = [
@@ -49,22 +56,22 @@ const MODEL_OPTIONS = [
 
 const SUGGESTED_PROMPTS = [
   {
-    title: 'Remote Work & Telecommuting',
+    title: 'Remote Work & Stipends',
     prompt: 'What are the rules and eligible stipends for working remotely?',
     icon: Compass,
   },
   {
-    title: 'PTO & Leave Rollover',
+    title: 'PTO & Rollover Policy',
     prompt: 'How many PTO days can I carry over into the next calendar year?',
     icon: FileQuestion,
   },
   {
-    title: 'Travel Expense Policy',
+    title: 'Travel Expense Guidelines',
     prompt: 'What is the daily meal and hotel reimbursement limit for business travel?',
     icon: ShieldCheck,
   },
   {
-    title: 'IT & Security Guidelines',
+    title: 'IT Security & Passwords',
     prompt: 'What is the password rotation policy and MFA requirement for corporate laptops?',
     icon: Zap,
   },
@@ -79,10 +86,71 @@ export function ChatWindow({
   onOpenCitation,
 }: ChatWindowProps) {
   const [input, setInput] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedDoc, setSelectedDoc] = useState<string>('All');
+  const [availableDocs, setAvailableDocs] = useState<DocumentItem[]>([]);
+  const [filterTab, setFilterTab] = useState<'documents' | 'categories'>('documents');
+  const [filterSearch, setFilterSearch] = useState('');
   const [selectedModel, setSelectedModel] = useState('qwen2.5:7b');
   const [showFilters, setShowFilters] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const isUserScrolledUp = useRef<boolean>(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const filterRef = useRef<HTMLDivElement | null>(null);
+  const modelPickerRef = useRef<HTMLDivElement | null>(null);
+
+  // Load available documents from backend
+  const loadDocuments = useCallback(async () => {
+    try {
+      const docs = await apiClient.getDocuments();
+      if (Array.isArray(docs)) {
+        setAvailableDocs(docs);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
+
+  // When filter dropdown opens, refresh document list
+  useEffect(() => {
+    if (showFilters) {
+      loadDocuments();
+    }
+  }, [showFilters, loadDocuments]);
+
+  // Click-outside listener for dropdowns
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setShowFilters(false);
+      }
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setShowModelPicker(false);
+      }
+    };
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowFilters(false);
+        setShowModelPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
 
   useEffect(() => {
     const storedModel = localStorage.getItem('rag_model');
@@ -95,23 +163,113 @@ export function ChatWindow({
     localStorage.setItem('rag_model', selectedModel);
   }, [selectedModel]);
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Derive unique categories from available docs merged with standard categories
+  const categoriesList = useMemo(() => {
+    const set = new Set<string>(DEFAULT_CATEGORIES);
+    availableDocs.forEach((d) => {
+      if (d.category && d.category.trim()) {
+        set.add(d.category.trim());
+      }
+    });
+    return Array.from(set);
+  }, [availableDocs]);
 
-  // Auto scroll to bottom when messages update
+  // Filtered lists for the search input inside filter popover
+  const filteredDocs = useMemo(() => {
+    if (!filterSearch.trim()) return availableDocs;
+    const q = filterSearch.toLowerCase();
+    return availableDocs.filter(
+      (d) =>
+        d.filename.toLowerCase().includes(q) ||
+        (d.category && d.category.toLowerCase().includes(q))
+    );
+  }, [availableDocs, filterSearch]);
+
+  const filteredCategories = useMemo(() => {
+    if (!filterSearch.trim()) return categoriesList;
+    const q = filterSearch.toLowerCase();
+    return categoriesList.filter((c) => c.toLowerCase().includes(q));
+  }, [categoriesList, filterSearch]);
+
+  // Check if any filter is active
+  const isFilterActive = selectedDoc !== 'All' || selectedCategory !== 'All';
+
+  // Filter label to display in the button
+  const filterButtonLabel = useMemo(() => {
+    if (selectedDoc !== 'All') {
+      return selectedDoc.length > 18 ? selectedDoc.slice(0, 15) + '...' : selectedDoc;
+    }
+    if (selectedCategory !== 'All') {
+      return selectedCategory;
+    }
+    return 'Filter Documents';
+  }, [selectedDoc, selectedCategory]);
+
+  const clearAllFilters = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedDoc('All');
+    setSelectedCategory('All');
+  };
+
+  // Scroll detection handler
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    if (distanceFromBottom > 140) {
+      isUserScrolledUp.current = true;
+      setShowScrollBottom(true);
+    } else {
+      isUserScrolledUp.current = false;
+      setShowScrollBottom(false);
+    }
+  }, []);
+
+  // Smooth scroll to bottom function
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+      isUserScrolledUp.current = false;
+      setShowScrollBottom(false);
+    }
+  }, []);
+
+  // Auto-scroll when messages update or during streaming, UNLESS user scrolled up
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!isUserScrolledUp.current && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   }, [messages, isStreaming]);
 
   const handleSend = () => {
     if (!input.trim() || isStreaming) return;
-    const categoryFilter =
-      selectedCategory !== 'All Categories' ? selectedCategory : undefined;
-    onSendMessage(input.trim(), { category: categoryFilter }, selectedModel);
+
+    const filters: FilterOptions = {};
+    if (selectedDoc !== 'All') {
+      filters.source_file = selectedDoc;
+    }
+    if (selectedCategory !== 'All') {
+      filters.category = selectedCategory;
+    }
+
+    isUserScrolledUp.current = false;
+    setShowScrollBottom(false);
+    onSendMessage(
+      input.trim(),
+      Object.keys(filters).length > 0 ? filters : undefined,
+      selectedModel
+    );
     setInput('');
+
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
+
+    setTimeout(() => scrollToBottom(true), 50);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -122,134 +280,344 @@ export function ChatWindow({
   };
 
   const handlePromptClick = (promptText: string) => {
-    onSendMessage(promptText, undefined, selectedModel);
+    isUserScrolledUp.current = false;
+    const filters: FilterOptions = {};
+    if (selectedDoc !== 'All') filters.source_file = selectedDoc;
+    if (selectedCategory !== 'All') filters.category = selectedCategory;
+
+    onSendMessage(
+      promptText,
+      Object.keys(filters).length > 0 ? filters : undefined,
+      selectedModel
+    );
+    setTimeout(() => scrollToBottom(true), 50);
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-57px)] bg-[#FAF9F5] dark:bg-[#141413] relative overflow-hidden">
-      {/* Top Bar inside Chat */}
-      <div className="px-4 py-2 border-b border-[#E5E0D8]/60 dark:border-[#2A2925]/60 flex items-center justify-between backdrop-blur-md bg-[#FAF9F5]/70 dark:bg-[#141413]/70 z-10">
+    <div className="flex-1 flex flex-col h-[calc(100vh-57px)] bg-[#FAF8F5] dark:bg-[#161513] relative overflow-hidden font-sans">
+      {/* Top Bar - Minimalist Anthropic Header */}
+      <div className="px-4 py-2.5 border-b border-[#E8E2D5]/70 dark:border-[#262421]/70 flex items-center justify-between backdrop-blur-md bg-[#FAF8F5]/80 dark:bg-[#161513]/80 z-20">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowFilters((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs text-charcoal dark:text-cream-200 hover:bg-cream-200 transition-colors"
-          >
-            <Filter className="w-3.5 h-3.5 text-terracotta-600" />
-            <span className="font-medium">Category: {selectedCategory}</span>
-          </button>
-
-          {showFilters && (
-            <div className="flex items-center gap-1 overflow-x-auto py-1">
-              {CATEGORY_OPTIONS.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => {
-                    setSelectedCategory(cat);
-                    setShowFilters(false);
-                  }}
-                  className={`px-2.5 py-0.5 rounded-lg text-xs font-mono transition-colors ${
-                    selectedCategory === cat
-                      ? 'bg-terracotta-600 text-white font-bold'
-                      : 'bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-300 hover:bg-cream-300'
-                  }`}
+          {/* Enhanced Document / Category Filter Pill */}
+          <div className="relative" ref={filterRef}>
+            <button
+              onClick={() => setShowFilters((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all ${
+                isFilterActive
+                  ? 'bg-terracotta-500/15 dark:bg-terracotta-500/25 border border-terracotta-500/50 text-terracotta-800 dark:text-terracotta-300 font-semibold shadow-xs'
+                  : 'bg-[#EFECE2]/80 hover:bg-[#E8E3D5] dark:bg-[#23211E] dark:hover:bg-[#2B2925] border border-[#E0D9CB] dark:border-[#33302B] text-[#38342F] dark:text-[#E2DDD5]'
+              }`}
+              title="Filter retrieval to specific documents or categories"
+            >
+              <Filter
+                className={`w-3 h-3 ${
+                  isFilterActive
+                    ? 'text-terracotta-600 dark:text-terracotta-400'
+                    : 'text-terracotta-600 dark:text-terracotta-400'
+                }`}
+              />
+              <span className="font-medium text-xs truncate max-w-[160px]">
+                {filterButtonLabel}
+              </span>
+              {isFilterActive ? (
+                <span
+                  role="button"
+                  onClick={clearAllFilters}
+                  className="hover:bg-terracotta-500/20 p-0.5 rounded-full ml-0.5 transition-colors"
+                  title="Clear filter"
                 >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+                  <X className="w-3 h-3" />
+                </span>
+              ) : (
+                <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+              )}
+            </button>
 
-        {/* Model Switcher */}
-        <div className="relative">
-          <button
-            onClick={() => setShowModelPicker((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs text-charcoal dark:text-cream-200 hover:bg-cream-200 transition-colors"
-          >
-            <Cpu className="w-3.5 h-3.5 text-sky-500" />
-            <span className="font-medium">
-              {MODEL_OPTIONS.find((m) => m.id === selectedModel)?.label || selectedModel}
-            </span>
-            <ChevronDown className="w-3 h-3 opacity-50" />
-          </button>
-
-          {showModelPicker && (
-            <div className="absolute right-0 top-full mt-1 w-56 rounded-xl bg-white dark:bg-[#1E1D1A] border border-sand-border dark:border-sand-darkBorder shadow-xl z-50 py-1 animate-in fade-in slide-in-from-top-1 duration-150">
-              {MODEL_OPTIONS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    setSelectedModel(m.id);
-                    setShowModelPicker(false);
-                  }}
-                  className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors ${
-                    selectedModel === m.id
-                      ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20'
-                      : 'hover:bg-cream-100 dark:hover:bg-sand-dark'
-                  }`}
-                >
-                  <Cpu className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
-                    selectedModel === m.id ? 'text-terracotta-600' : 'text-charcoal-muted dark:text-cream-400'
-                  }`} />
-                  <div>
-                    <div className={`text-xs font-semibold ${
-                      selectedModel === m.id
-                        ? 'text-terracotta-600'
-                        : 'text-charcoal dark:text-cream-200'
-                    }`}>{m.label}</div>
-                    <div className="text-[10px] text-charcoal-muted dark:text-cream-400">{m.desc}</div>
+            {/* Filter Dropdown Modal / Popover */}
+            {showFilters && (
+              <div className="absolute left-0 top-full mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-[#1E1D1A] border border-[#DDD5C5] dark:border-[#33302B] shadow-2xl z-50 p-3 animate-in fade-in zoom-in-95 duration-100 space-y-3">
+                {/* Popover Header */}
+                <div className="flex items-center justify-between pb-1 border-b border-[#EAE4D8] dark:border-[#2C2A26]">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-[#2D2A26] dark:text-[#FAF8F5]">
+                    <Filter className="w-3.5 h-3.5 text-terracotta-600" />
+                    <span>Filter Knowledge Base</span>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
+                  {isFilterActive && (
+                    <button
+                      onClick={clearAllFilters}
+                      className="text-[11px] text-terracotta-600 hover:text-terracotta-700 dark:text-terracotta-400 font-medium hover:underline flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Reset Filter
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#8C867B] dark:text-[#7A756C]" />
+                  <input
+                    type="text"
+                    value={filterSearch}
+                    onChange={(e) => setFilterSearch(e.target.value)}
+                    placeholder="Search documents or categories..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-[#F6F3EB] dark:bg-[#252320] rounded-xl text-xs text-[#2D2A26] dark:text-[#E8E4DD] placeholder:text-[#8C867B] dark:placeholder:text-[#7A756C] border border-[#E5DFD2] dark:border-[#34312C] focus:outline-none focus:border-terracotta-500/60"
+                  />
+                  {filterSearch && (
+                    <button
+                      onClick={() => setFilterSearch('')}
+                      className="absolute right-2.5 top-2.5 text-[#8C867B] hover:text-[#2D2A26]"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Segmented Filter Mode Tabs */}
+                <div className="flex items-center gap-1 p-1 bg-[#F3EFE6] dark:bg-[#181715] rounded-xl text-xs font-medium">
+                  <button
+                    onClick={() => setFilterTab('documents')}
+                    className={`flex-1 py-1 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                      filterTab === 'documents'
+                        ? 'bg-white dark:bg-[#262420] text-[#2D2A26] dark:text-[#FAF8F5] shadow-xs font-semibold'
+                        : 'text-[#6C665C] dark:text-[#9A9386] hover:text-[#2D2A26]'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Documents ({availableDocs.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setFilterTab('categories')}
+                    className={`flex-1 py-1 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                      filterTab === 'categories'
+                        ? 'bg-white dark:bg-[#262420] text-[#2D2A26] dark:text-[#FAF8F5] shadow-xs font-semibold'
+                        : 'text-[#6C665C] dark:text-[#9A9386] hover:text-[#2D2A26]'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Categories ({categoriesList.length})</span>
+                  </button>
+                </div>
+
+                {/* Scrollable Options List */}
+                <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                  {filterTab === 'documents' ? (
+                    <>
+                      {/* All Documents Option */}
+                      <button
+                        onClick={() => {
+                          setSelectedDoc('All');
+                          setShowFilters(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors ${
+                          selectedDoc === 'All'
+                            ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-800 dark:text-terracotta-300 font-semibold border border-terracotta-500/30'
+                            : 'hover:bg-[#F3EFE6] dark:hover:bg-[#262420] text-[#332F2A] dark:text-[#DCD5C9]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Layers className="w-3.5 h-3.5 text-terracotta-600" />
+                          <span>All Documents (Unfiltered)</span>
+                        </div>
+                        {selectedDoc === 'All' && (
+                          <Check className="w-3.5 h-3.5 text-terracotta-600" />
+                        )}
+                      </button>
+
+                      {filteredDocs.length === 0 ? (
+                        <div className="text-center py-4 text-xs text-[#8C867B] dark:text-[#7A756C]">
+                          No documents match "{filterSearch}"
+                        </div>
+                      ) : (
+                        filteredDocs.map((doc) => (
+                          <button
+                            key={doc.id || doc.filename}
+                            onClick={() => {
+                              setSelectedDoc(doc.filename);
+                              setShowFilters(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors ${
+                              selectedDoc === doc.filename
+                                ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-800 dark:text-terracotta-300 font-semibold border border-terracotta-500/30'
+                                : 'hover:bg-[#F3EFE6] dark:hover:bg-[#262420] text-[#332F2A] dark:text-[#DCD5C9]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-2">
+                              <FileText className="w-3.5 h-3.5 shrink-0 text-terracotta-600" />
+                              <div className="truncate">
+                                <div className="truncate font-medium">{doc.filename}</div>
+                                <div className="text-[10px] text-[#8C867B] dark:text-[#7A756C] flex items-center gap-2">
+                                  <span>{doc.category || 'General'}</span>
+                                  {doc.chunks_count ? (
+                                    <span>• {doc.chunks_count} chunks</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                            {selectedDoc === doc.filename && (
+                              <Check className="w-3.5 h-3.5 shrink-0 text-terracotta-600" />
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* All Categories Option */}
+                      <button
+                        onClick={() => {
+                          setSelectedCategory('All');
+                          setShowFilters(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors ${
+                          selectedCategory === 'All'
+                            ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-800 dark:text-terracotta-300 font-semibold border border-terracotta-500/30'
+                            : 'hover:bg-[#F3EFE6] dark:hover:bg-[#262420] text-[#332F2A] dark:text-[#DCD5C9]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Layers className="w-3.5 h-3.5 text-terracotta-600" />
+                          <span>All Categories</span>
+                        </div>
+                        {selectedCategory === 'All' && (
+                          <Check className="w-3.5 h-3.5 text-terracotta-600" />
+                        )}
+                      </button>
+
+                      {filteredCategories.map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            setSelectedCategory(cat);
+                            setShowFilters(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors ${
+                            selectedCategory === cat
+                              ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-800 dark:text-terracotta-300 font-semibold border border-terracotta-500/30'
+                              : 'hover:bg-[#F3EFE6] dark:hover:bg-[#262420] text-[#332F2A] dark:text-[#DCD5C9]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-terracotta-600/70" />
+                            <span>{cat}</span>
+                          </div>
+                          {selectedCategory === cat && (
+                            <Check className="w-3.5 h-3.5 text-terracotta-600" />
+                          )}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {messages.length > 0 && (
-          <button
-            onClick={onClearChat}
-            className="flex items-center gap-1 text-xs text-charcoal-muted dark:text-cream-400 hover:text-rose-600 transition-colors"
-            title="Clear Chat Messages"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Clear Chat</span>
-          </button>
-        )}
+        {/* Right side: Model Selector & Clear Chat */}
+        <div className="flex items-center gap-2">
+          {/* Model Switcher */}
+          <div className="relative" ref={modelPickerRef}>
+            <button
+              onClick={() => setShowModelPicker((prev) => !prev)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#EFECE2]/80 hover:bg-[#E8E3D5] dark:bg-[#23211E] dark:hover:bg-[#2B2925] border border-[#E0D9CB] dark:border-[#33302B] text-xs text-[#38342F] dark:text-[#E2DDD5] transition-colors"
+            >
+              <Cpu className="w-3 h-3 text-terracotta-600 dark:text-terracotta-400" />
+              <span className="font-medium">
+                {MODEL_OPTIONS.find((m) => m.id === selectedModel)?.label || selectedModel}
+              </span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+
+            {showModelPicker && (
+              <div className="absolute right-0 top-full mt-1.5 w-60 rounded-2xl bg-white dark:bg-[#1E1D1A] border border-[#DDD5C5] dark:border-[#33302B] shadow-xl z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-2.5 py-1 text-[10px] uppercase font-semibold text-[#8C867B] dark:text-[#7A756C] tracking-wider">
+                  Select Inference Model
+                </div>
+                {MODEL_OPTIONS.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      setSelectedModel(m.id);
+                      setShowModelPicker(false);
+                    }}
+                    className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${
+                      selectedModel === m.id
+                        ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-700 dark:text-terracotta-400 font-medium'
+                        : 'hover:bg-[#F3F0E6] dark:hover:bg-[#282622] text-[#38342F] dark:text-[#E2DDD5]'
+                    }`}
+                  >
+                    <Cpu
+                      className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                        selectedModel === m.id
+                          ? 'text-terracotta-600'
+                          : 'text-[#8C867B] dark:text-[#7A756C]'
+                      }`}
+                    />
+                    <div>
+                      <div className="text-xs font-semibold">{m.label}</div>
+                      <div className="text-[10px] text-[#8C867B] dark:text-[#7A756C]">
+                        {m.desc}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {messages.length > 0 && (
+            <button
+              onClick={onClearChat}
+              className="p-1.5 rounded-full text-[#8C867B] dark:text-[#7A756C] hover:text-rose-600 dark:hover:text-rose-400 hover:bg-[#EFECE2] dark:hover:bg-[#23211E] transition-colors"
+              title="Clear current chat"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Message Stream Scroll View */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
+      {/* Main Messages & Welcome View */}
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-4 custom-scrollbar"
+      >
         {messages.length === 0 ? (
-          <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6">
-            <div className="w-14 h-14 mx-auto rounded-3xl bg-terracotta-500/10 dark:bg-terracotta-500/20 border border-terracotta-500/30 text-terracotta-600 dark:text-terracotta-500 flex items-center justify-center shadow-lg shadow-terracotta-500/10">
-              <Sparkles className="w-7 h-7" />
+          /* Anthropic-Style Elegant Welcome Screen */
+          <div className="max-w-2xl mx-auto py-10 sm:py-16 text-center space-y-8 animate-in fade-in duration-300">
+            {/* Claude-style warm sun / star emblem */}
+            <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-b from-terracotta-500/20 to-terracotta-600/10 text-terracotta-600 dark:text-terracotta-400 flex items-center justify-center border border-terracotta-500/30 shadow-sm">
+              <Sparkles className="w-8 h-8 stroke-[1.8]" />
             </div>
 
-            <div className="space-y-2">
-              <h2 className="font-serif font-bold text-2xl text-charcoal dark:text-cream-100">
-                Company Policy & Guidebook Assistant
-              </h2>
-              <p className="text-sm text-charcoal-muted dark:text-cream-400 max-w-md mx-auto leading-relaxed">
-                Powered by FastAPI, Dense Vector + BM25 Hybrid Retrieval, and BGE Cross-Encoder Reranking.
+            <div className="space-y-2.5">
+              <h1 className="font-serif font-normal text-3xl sm:text-4xl text-[#23201C] dark:text-[#FAF8F5] tracking-tight">
+                Company Policy & Guidebook
+              </h1>
+              <p className="text-sm text-[#635E54] dark:text-[#A8A295] max-w-md mx-auto leading-relaxed">
+                Ask anything about employee benefits, leave rollover, travel policies, or IT
+                security compliance.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4">
+            {/* Prompt Suggestion Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left pt-2">
               {SUGGESTED_PROMPTS.map((item, idx) => {
-                const IconComponent = item.icon;
+                const Icon = item.icon;
                 return (
                   <button
                     key={idx}
                     onClick={() => handlePromptClick(item.prompt)}
-                    className="p-4 text-left rounded-2xl bg-cream-100/70 dark:bg-sand-dark/70 border border-sand-border/80 dark:border-sand-darkBorder/80 hover:border-terracotta-500/40 hover:bg-cream-100 dark:hover:bg-sand-dark transition-all duration-200 group shadow-sm"
+                    className="p-4 rounded-2xl bg-[#F3EFE6]/70 dark:bg-[#1E1D1A]/80 border border-[#E5E0D5] dark:border-[#2D2B27] hover:border-terracotta-500/50 hover:bg-[#EDE8DC] dark:hover:bg-[#252420] transition-all duration-200 group shadow-xs"
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <IconComponent className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400 group-hover:scale-110 transition-transform" />
-                      <h3 className="text-xs font-semibold text-charcoal dark:text-cream-100">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Icon className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400 group-hover:scale-105 transition-transform" />
+                      <h3 className="text-xs font-semibold text-[#2D2A26] dark:text-[#E8E4DD]">
                         {item.title}
                       </h3>
                     </div>
-                    <p className="text-xs text-charcoal-muted dark:text-cream-400 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-[#6B655B] dark:text-[#A8A295] leading-relaxed line-clamp-2">
                       "{item.prompt}"
                     </p>
                   </button>
@@ -258,7 +626,7 @@ export function ChatWindow({
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className="max-w-3xl mx-auto space-y-4 pb-4">
             {messages.map((msg) => (
               <ChatMessage key={msg.id} message={msg} onOpenCitation={onOpenCitation} />
             ))}
@@ -267,54 +635,101 @@ export function ChatWindow({
         )}
       </div>
 
-      {/* Input Box Footer */}
-      <div className="p-4 border-t border-[#E5E0D8]/80 dark:border-[#2A2925]/80 backdrop-blur-xl bg-[#FAF9F5]/90 dark:bg-[#141413]/90">
-        <div className="max-w-4xl mx-auto space-y-2">
-          <div className="relative flex items-end gap-2 p-2 rounded-2xl bg-[#F3F0E6] dark:bg-[#1E1D1A] border border-[#E5E0D8] dark:border-[#2E2C27] focus-within:border-terracotta-500 shadow-inner">
+      {/* Floating "Scroll to Bottom" Button */}
+      <AnimatePresence>
+        {showScrollBottom && (
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-24 right-6 sm:right-12 z-30"
+          >
+            <button
+              onClick={() => scrollToBottom(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#FAF8F5] dark:bg-[#252420] text-[#2D2A26] dark:text-[#EAE5DC] border border-[#DDD5C5] dark:border-[#383530] shadow-lg hover:bg-[#F3EFE6] dark:hover:bg-[#2F2D28] text-xs font-medium transition-all active:scale-95 group"
+            >
+              {isStreaming ? (
+                <span className="w-2 h-2 rounded-full bg-terracotta-600 animate-ping" />
+              ) : (
+                <ArrowDown className="w-3.5 h-3.5 text-terracotta-600 group-hover:translate-y-0.5 transition-transform" />
+              )}
+              <span>{isStreaming ? 'Streaming response...' : 'Scroll to bottom'}</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Claude-Style Input Container */}
+      <div className="p-4 sm:p-5 bg-gradient-to-t from-[#FAF8F5] via-[#FAF8F5]/90 to-transparent dark:from-[#161513] dark:via-[#161513]/90 z-20">
+        <div className="max-w-3xl mx-auto space-y-2">
+          {/* Main Rounded Input Box */}
+          <div className="relative rounded-3xl bg-[#F4F0E6] dark:bg-[#201F1C] border border-[#E2DBD0] dark:border-[#2F2D29] focus-within:border-terracotta-500/70 focus-within:ring-2 focus-within:ring-terracotta-500/15 shadow-sm p-2 sm:p-3 transition-all">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => {
                 setInput(e.target.value);
                 e.target.style.height = 'auto';
-                e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 180)}px`;
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Ask any question about company policies, benefits, travel, or IT guidelines..."
+              placeholder={
+                isFilterActive
+                  ? `Ask about ${selectedDoc !== 'All' ? selectedDoc : selectedCategory}...`
+                  : 'Ask about policies, benefits, expenses, travel...'
+              }
               rows={1}
-              className="flex-1 bg-transparent border-none text-sm text-charcoal dark:text-cream-100 placeholder:text-charcoal-muted dark:placeholder:text-cream-500 focus:outline-none resize-none px-2 py-1.5 custom-scrollbar min-h-[40px] max-h-[160px]"
+              className="w-full bg-transparent border-none text-sm text-[#1E1C1A] dark:text-[#FAF8F5] placeholder:text-[#8E887D] dark:placeholder:text-[#7A756C] focus:outline-none resize-none px-2 py-1 custom-scrollbar min-h-[38px] max-h-[180px] leading-relaxed font-sans"
             />
 
-            {isStreaming ? (
-              <button
-                onClick={onCancelStream}
-                className="p-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-all active:scale-95"
-                title="Stop Response Generation"
-              >
-                <Square className="w-4 h-4 fill-white" />
-              </button>
-            ) : (
-              <button
-                onClick={handleSend}
-                disabled={!input.trim()}
-                className="p-2.5 rounded-xl bg-terracotta-600 hover:bg-terracotta-700 disabled:opacity-40 disabled:hover:bg-terracotta-600 text-white shadow-md shadow-terracotta-600/20 transition-all active:scale-95"
-                title="Send Message"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            )}
+            {/* Bottom Toolbar inside the Input Box */}
+            <div className="flex items-center justify-between pt-1 px-1">
+              <div className="flex items-center gap-2 text-[11px] text-[#7A7468] dark:text-[#8C867B]">
+                <span className="flex items-center gap-1 font-mono text-[10px]">
+                  <Zap className="w-3 h-3 text-terracotta-600" /> SSE Grounded
+                </span>
+                {isFilterActive && (
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-terracotta-500/15 text-terracotta-800 dark:text-terracotta-300 font-medium text-[10px] border border-terracotta-500/30">
+                    Scoped: {filterButtonLabel}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isStreaming ? (
+                  <button
+                    onClick={onCancelStream}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E5DFD0] dark:bg-[#302E29] hover:bg-[#DCD5C4] text-[#2D2A26] dark:text-[#E8E4DD] border border-[#D5CDBC] dark:border-[#3D3A34] text-xs font-medium shadow-xs transition-all active:scale-95"
+                    title="Stop generation"
+                  >
+                    <Square className="w-3 h-3 fill-terracotta-600 text-terracotta-600" />
+                    <span>Stop</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    className="w-8 h-8 rounded-full bg-terracotta-600 hover:bg-terracotta-700 disabled:opacity-30 disabled:hover:bg-terracotta-600 text-white flex items-center justify-center shadow-sm shadow-terracotta-600/30 transition-all active:scale-95"
+                    title="Send message"
+                  >
+                    <Send className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-charcoal-muted dark:text-cream-500 px-1">
-            <span className="flex items-center gap-1 font-mono">
-              <Zap className="w-3 h-3 text-amber-500" /> SSE Streaming Active
-            </span>
-            <span className="hidden sm:inline">
-              Press <kbd className="font-mono bg-cream-200 dark:bg-sand-dark px-1 rounded">Enter</kbd> to send, <kbd className="font-mono bg-cream-200 dark:bg-sand-dark px-1 rounded">Shift + Enter</kbd> for newline
-            </span>
+          <div className="text-center text-[10px] text-[#8C867B] dark:text-[#6C675E] select-none">
+            Grounded responses based on indexed company documentation. Press{' '}
+            <kbd className="font-mono bg-[#EFECE2] dark:bg-[#201F1C] px-1 py-0.5 rounded border border-[#DDD5C5] dark:border-[#2E2C28]">
+              Enter
+            </kbd>{' '}
+            to send.
           </div>
         </div>
       </div>
     </div>
   );
 }
+

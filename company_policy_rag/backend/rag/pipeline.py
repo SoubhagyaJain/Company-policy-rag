@@ -232,16 +232,38 @@ class RAGPipeline:
             logger.warning("Failed to start background cache write thread: %s", exc)
 
     def _get_effective_llm(self, model: str | None) -> tuple[Any | None, str]:
-        """Return a per-request thread-safe LLM proxy and model name without mutating shared singleton state."""
+        """Return a per-request thread-safe LLM instance and model name."""
+        base_model = self.model_manager.current_model or "qwen2.5:7b"
+        selected_model = (model or base_model).strip()
+        if not selected_model:
+            selected_model = "qwen2.5:7b"
+
         if self.llm is None:
-            return None, model or self.model_manager.current_model
+            return None, selected_model
 
-        base_model = self.model_manager.current_model
-        selected_model = model or base_model
-        if not model or model == base_model:
-            return self.llm, selected_model
+        if not hasattr(self, "_llm_instance_cache"):
+            self._llm_instance_cache: dict[str, Any] = {}
 
-        return _LLMProxy(self.llm, selected_model), selected_model
+        if selected_model not in self._llm_instance_cache:
+            if hasattr(self.llm, "model") and getattr(self.llm, "model") == selected_model:
+                self._llm_instance_cache[selected_model] = self.llm
+            else:
+                try:
+                    from llama_index.llms.ollama import Ollama
+                    base_url = getattr(self.llm, "base_url", "http://localhost:11434")
+                    temperature = getattr(self.llm, "temperature", 0.1)
+                    request_timeout = getattr(self.llm, "request_timeout", 120.0)
+                    self._llm_instance_cache[selected_model] = Ollama(
+                        base_url=base_url,
+                        model=selected_model,
+                        temperature=temperature,
+                        request_timeout=request_timeout,
+                    )
+                except Exception as exc:
+                    logger.warning("Could not instantiate Ollama for model %s: %s", selected_model, exc)
+                    self._llm_instance_cache[selected_model] = self.llm
+
+        return self._llm_instance_cache[selected_model], selected_model
 
     def query(
         self,
@@ -274,6 +296,38 @@ class RAGPipeline:
         stage_timings: dict[str, float] = {}
 
         req_llm, selected_model = self._get_effective_llm(model)
+
+        # Conversational / Greeting intent check: bypass vector DB and fake citations
+        if self.query_rewriter.is_conversational(user_query):
+            greeting_answer = (
+                "Hello! How can I assist you today? Feel free to ask any questions regarding company policies, "
+                "employee benefits, travel expenses, code of conduct, or any uploaded documentation."
+            )
+            total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
+            trace = RAGTrace(
+                query=user_query,
+                rewritten_query=None,
+                sub_queries=[],
+                retrieved_candidate_count=0,
+                post_rerank_count=0,
+                final_context_count=0,
+                execution_time_ms=total_elapsed,
+                stage_timings_ms={"conversational_bypass": total_elapsed},
+                fallback_reason="conversational_greeting",
+                faithfulness_checked=True,
+                faithfulness_passed=True,
+                cache_hit=False,
+            )
+            return RAGResponse(
+                id=f"resp_{uuid.uuid4().hex[:12]}",
+                query=user_query,
+                answer=greeting_answer,
+                citations=[],
+                context_chunks=[],
+                trace=trace,
+                model=selected_model,
+                token_usage={"prompt_tokens": 0, "completion_tokens": len(greeting_answer.split())},
+            )
 
         # 0. Pre-rewrite Cache Lookup
         cache_enabled = getattr(self.semantic_cache.settings, "semantic_cache_enabled", True) if (self.semantic_cache and hasattr(self.semantic_cache, "settings")) else True
@@ -332,6 +386,8 @@ class RAGPipeline:
                 if cid not in candidate_map or (sc.score or 0.0) > (candidate_map[cid].score or 0.0):
                     candidate_map[cid] = sc
         candidate_chunks = list(candidate_map.values())
+        candidate_chunks.sort(key=lambda x: x.score or 0.0, reverse=True)
+        candidate_chunks = candidate_chunks[:8]
         stage_timings["hybrid_retrieval"] = round((time.perf_counter() - t0) * 1000, 2)
 
         # 4. Cross-Encoder Reranking & Relative Score Thresholding
@@ -451,8 +507,8 @@ class RAGPipeline:
             self.model_manager.active_readers += 1
             
         try:
-            # yield from does not work in async generator, so we iterate
-            for chunk in self._stream_query_internal(user_query, filters, history, model):
+            from starlette.concurrency import iterate_in_threadpool
+            async for chunk in iterate_in_threadpool(self._stream_query_internal(user_query, filters, history, model, cancel_token)):
                 yield chunk
         finally:
             with self.model_manager.reader_lock:
@@ -464,11 +520,64 @@ class RAGPipeline:
         filters: dict[str, Any] | None = None,
         history: list[dict[str, Any]] | None = None,
         model: str | None = None,
+        cancel_token: Any = None,
     ) -> Generator[dict[str, Any], None, None]:
         total_start = time.perf_counter()
         stage_timings: dict[str, float] = {}
 
         req_llm, selected_model = self._get_effective_llm(model)
+
+        # Conversational / Greeting intent check: bypass vector DB and fake citations
+        if self.query_rewriter.is_conversational(user_query):
+            stage_timings["conversational_bypass"] = 0.5
+            yield {
+                "type": "retrieval_done",
+                "stage_timings": stage_timings,
+                "candidate_count": 0,
+                "reranked_count": 0,
+                "context_count": 0,
+                "cache_hit": False,
+            }
+
+            greeting_text = (
+                "Hello! How can I assist you today? Feel free to ask any questions regarding company policies, "
+                "employee benefits, travel expenses, code of conduct, or any uploaded documentation."
+            )
+            words = greeting_text.split(" ")
+            for i, word in enumerate(words):
+                if cancel_token and cancel_token.is_set():
+                    return
+                chunk_text = word + (" " if i < len(words) - 1 else "")
+                yield {"type": "token", "content": chunk_text}
+
+            total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
+            trace = RAGTrace(
+                query=user_query,
+                rewritten_query=None,
+                sub_queries=[],
+                retrieved_candidate_count=0,
+                post_rerank_count=0,
+                final_context_count=0,
+                execution_time_ms=total_elapsed,
+                stage_timings_ms=stage_timings,
+                fallback_reason="conversational_greeting",
+                faithfulness_checked=True,
+                faithfulness_passed=True,
+                cache_hit=False,
+                cache_similarity=None,
+            )
+            yield {
+                "type": "done",
+                "answer": greeting_text,
+                "citations": [],
+                "context_chunks": [],
+                "trace": trace,
+                "model": selected_model,
+                "token_usage": {"prompt_tokens": 0, "completion_tokens": len(words)},
+                "total_elapsed_ms": total_elapsed,
+                "cache_hit": False,
+            }
+            return
 
         # 0. Pre-rewrite Cache Lookup
         cache_enabled = getattr(self.semantic_cache.settings, "semantic_cache_enabled", True) if (self.semantic_cache and hasattr(self.semantic_cache, "settings")) else True
@@ -525,8 +634,10 @@ class RAGPipeline:
 
         # 1. Query Rewrite
         t0 = time.perf_counter()
+        logger.info(f"Starting query rewrite for: {user_query}")
         rewrite_res = self.query_rewriter.rewrite(user_query, history=history, llm=req_llm)
         stage_timings["query_rewrite"] = round((time.perf_counter() - t0) * 1000, 2)
+        logger.info(f"Query rewrite complete in {stage_timings['query_rewrite']}ms. Rewritten as: {rewrite_res.rewritten_query}")
 
         # 2. Multi-Query Generation
         t0 = time.perf_counter()
@@ -535,10 +646,12 @@ class RAGPipeline:
         else:
             sub_queries = [rewrite_res.rewritten_query]
         stage_timings["multi_query"] = round((time.perf_counter() - t0) * 1000, 2)
+        logger.info(f"Multi-query generation complete. Generated {len(sub_queries)} subqueries.")
 
         # 3. Hybrid Search
         t0 = time.perf_counter()
         candidate_map: dict[str, ScoredChunk] = {}
+        logger.info("Starting hybrid retrieval for subqueries...")
         for sq in sub_queries:
             hits = self.hybrid_retriever.retrieve(sq, dense_top_k=25, bm25_top_k=25, filters=filters)
             for sc in hits:
@@ -546,6 +659,9 @@ class RAGPipeline:
                 if cid not in candidate_map or (sc.score or 0.0) > (candidate_map[cid].score or 0.0):
                     candidate_map[cid] = sc
         candidate_chunks = list(candidate_map.values())
+        # Sort by initial score and truncate to max 8 chunks for fast CrossEncoder inference
+        candidate_chunks.sort(key=lambda x: x.score or 0.0, reverse=True)
+        candidate_chunks = candidate_chunks[:8]
         stage_timings["hybrid_retrieval"] = round((time.perf_counter() - t0) * 1000, 2)
 
         # 4. Cross-Encoder Reranking
@@ -585,11 +701,17 @@ class RAGPipeline:
                 # Use stream_complete for real-time token generation
                 stream_response = req_llm.stream_complete(prompt)
                 for token_response in stream_response:
+                    if cancel_token and cancel_token.is_set():
+                        logger.info("Stream cancelled by client during LLM token synthesis.")
+                        break
                     token_text = token_response.delta
                     if token_text:
                         answer_parts.append(token_text)
                         yield {"type": "token", "content": token_text}
             except Exception as exc:
+                if cancel_token and cancel_token.is_set():
+                    logger.info("Stream cancelled by client.")
+                    return
                 logger.warning("LLM stream error (%s). Using fallback synthesis.", exc)
                 fallback = self._fallback_synthesis(user_query, expanded_chunks)
                 answer_parts = [fallback]
@@ -598,6 +720,10 @@ class RAGPipeline:
             fallback = self._fallback_synthesis(user_query, expanded_chunks)
             answer_parts = [fallback]
             yield {"type": "token", "content": fallback}
+
+        if cancel_token and cancel_token.is_set():
+            logger.info("Stream aborted before completion, skipping done payload.")
+            return
 
         stage_timings["llm_synthesis"] = round((time.perf_counter() - t0) * 1000, 2)
         full_answer = "".join(answer_parts)

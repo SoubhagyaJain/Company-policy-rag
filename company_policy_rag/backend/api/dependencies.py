@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import os
 import threading
-
+from pathlib import Path
 from dotenv import load_dotenv
+
+env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 try:
     from llama_index.llms.ollama import Ollama
@@ -19,9 +22,8 @@ from backend.services.chat_service import ChatService
 from backend.services.document_service import DocumentService
 from backend.services.telemetry_service import TelemetryService
 
-load_dotenv()
-
 _lock = threading.RLock()
+
 
 _telemetry_service: TelemetryService | None = None
 _document_service: DocumentService | None = None
@@ -96,7 +98,7 @@ def get_rag_pipeline() -> RAGPipeline:
                 
                 # Initialize LLM
                 ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-                ollama_model = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:14b-instruct")
+                ollama_model = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:7b")
                 temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
                 request_timeout = float(os.getenv("LLM_REQUEST_TIMEOUT", "300.0"))
                 

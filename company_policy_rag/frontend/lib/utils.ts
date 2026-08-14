@@ -30,9 +30,16 @@ export function formatDate(isoString: string): string {
   }
 }
 
-export function formatScore(score: number): string {
-  if (score === undefined || score === null) return 'N/A';
-  return `${(score * 100).toFixed(0)}%`;
+export function formatScore(score: number | undefined | null): string {
+  if (score === undefined || score === null || isNaN(score)) return 'N/A';
+  let val = score;
+  if (val > 1.0) {
+    val = 1.0 / (1.0 + Math.exp(-val));
+  } else if (val < 0.0) {
+    val = 1.0 / (1.0 + Math.exp(-val));
+  }
+  const pct = Math.round(Math.min(99, Math.max(10, val * 100)));
+  return `${pct}%`;
 }
 
 export function formatLatency(ms: number): string {

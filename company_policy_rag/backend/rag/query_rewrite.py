@@ -102,6 +102,11 @@ _COMPREHENSIVE_QUERY_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
+_CONVERSATIONAL_PATTERN: re.Pattern[str] = re.compile(
+    r"^(hi|hello|hey|heya|hiya|wssup|what'?s\s*up|whats\s*up|sup|yo|good\s*(morning|afternoon|evening|day)|greetings|howdy|how\s*are\s*you|who\s*are\s*you|what\s*can\s*you\s*do|help|thanks|thank\s*you|bye|goodbye)[!.? ]*$",
+    re.IGNORECASE,
+)
+
 _REFERENTIAL_PRONOUNS_PATTERN: re.Pattern[str] = re.compile(
     r"\b(it|its|this|that|these|those|they|them|their|his|her|he|she|same|else|another)\b",
     re.IGNORECASE,
@@ -131,6 +136,13 @@ class QueryRewriter:
     def __init__(self, enable_llm_rewrite: bool = True, llm: Any | None = None) -> None:
         self.enable_llm_rewrite = enable_llm_rewrite
         self.llm = llm
+
+    def is_conversational(self, query: str) -> bool:
+        """Detect pure greetings, smalltalk, and pleasantries that do not require document retrieval."""
+        cleaned = query.strip()
+        if len(cleaned.split()) <= 4 and _CONVERSATIONAL_PATTERN.match(cleaned):
+            return True
+        return False
 
     def _query_matches_triggers(self, query: str, expansions: list[tuple[tuple[str, ...], str]]) -> bool:
         q_lower = query.lower()
@@ -239,22 +251,15 @@ class QueryRewriter:
         rewritten = augmented
         effective_llm = llm or self.llm
 
-        if self.enable_llm_rewrite and effective_llm is not None:
+        if self.enable_llm_rewrite and effective_llm is not None and history and len(history) > 0:
             try:
-                if history and len(history) > 0:
-                    history_str = _format_history_for_rewrite(history)
-                    prompt = (
-                        "Given the following conversation history and follow-up question, rewrite the follow-up question into a standalone, clear keyword search query for document retrieval. Resolve all pronouns (such as 'it', 'that', 'they', 'what about...') into specific topic terms.\n\n"
-                        f"Conversation History:\n{history_str}\n\n"
-                        f"Follow-up Question: {original}\n"
-                        "Standalone Search Query:"
-                    )
-                else:
-                    prompt = (
-                        "You rewrite questions into concise keyword search queries for a document retrieval system.\n"
-                        f"Question: {original}\n"
-                        "Search query:"
-                    )
+                history_str = _format_history_for_rewrite(history)
+                prompt = (
+                    "Given the following conversation history and follow-up question, rewrite the follow-up question into a standalone, clear keyword search query for document retrieval. Resolve all pronouns (such as 'it', 'that', 'they', 'what about...') into specific topic terms.\n\n"
+                    f"Conversation History:\n{history_str}\n\n"
+                    f"Follow-up Question: {original}\n"
+                    "Standalone Search Query:"
+                )
                 response = str(effective_llm.complete(prompt)).strip()
                 first_line = response.splitlines()[0].strip().strip('"').strip("'")
                 if len(first_line) >= 3:
@@ -262,7 +267,7 @@ class QueryRewriter:
             except Exception as exc:
                 logger.warning("LLM query rewrite failed (%s). Using fallback query rewrite.", exc)
                 rewritten = self._fallback_rewrite(original, augmented, history)
-        elif history and len(history) > 0:
+        else:
             rewritten = self._fallback_rewrite(original, augmented, history)
 
         return QueryRewriteResult(

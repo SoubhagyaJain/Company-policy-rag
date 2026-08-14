@@ -92,7 +92,6 @@ class CrossEncoderReranker:
         self._model_loaded = True
         try:
             import os
-
             import torch  # type: ignore
             from sentence_transformers import CrossEncoder  # type: ignore
             dev = "cuda" if (self.device == "cuda" or (self.device == "auto" and torch.cuda.is_available())) else "cpu"
@@ -100,6 +99,8 @@ class CrossEncoderReranker:
             os.environ["HF_HUB_OFFLINE"] = "1"
             os.environ["TRANSFORMERS_OFFLINE"] = "1"
             try:
+                num_cpus = min(4, os.cpu_count() or 4)
+                torch.set_num_threads(num_cpus)
                 self._model = CrossEncoder(self.model_name, device=dev)
             except Exception as local_err:
                 logger.info("Local cached reranker model not found (%s). Fallback ranking enabled.", local_err)
@@ -118,15 +119,19 @@ class CrossEncoderReranker:
 
         self._init_model()
 
+        candidates_to_rerank = candidates[:8]
         if self._model is not None:
             try:
-                pairs = [[query, c.chunk.text] for c in candidates]
-                logits = self._model.predict(pairs)
+                # Truncate text to first 350 chars for high-speed cross-encoder scoring
+                pairs = [[query, (c.chunk.text or "")[:350]] for c in candidates_to_rerank]
+                logger.info("Starting CrossEncoder prediction for %d pairs...", len(pairs))
+                logits = self._model.predict(pairs, batch_size=8, show_progress_bar=False)
+                logger.info("CrossEncoder prediction complete.")
                 if hasattr(logits, "tolist"):
                     logits = logits.tolist()
 
                 reranked_candidates: list[ScoredChunk] = []
-                for sc, logit in zip(candidates, logits):
+                for sc, logit in zip(candidates_to_rerank, logits):
                     score_val = float(logit)
                     reranked_candidates.append(
                         ScoredChunk(
@@ -147,7 +152,7 @@ class CrossEncoderReranker:
                         rerank_score=sc.score,
                         sparse_score=sc.sparse_score,
                         dense_score=sc.dense_score,
-                    ) for sc in candidates
+                    ) for sc in candidates_to_rerank
                 ]
                 reranked_candidates.sort(key=lambda c: c.score, reverse=True)
         else:
@@ -159,7 +164,7 @@ class CrossEncoderReranker:
                     rerank_score=sc.score,
                     sparse_score=sc.sparse_score,
                     dense_score=sc.dense_score,
-                ) for sc in candidates
+                ) for sc in candidates_to_rerank
             ]
             reranked_candidates.sort(key=lambda c: c.score, reverse=True)
 

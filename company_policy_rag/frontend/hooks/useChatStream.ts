@@ -25,8 +25,11 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      setIsStreaming(false);
     }
+    setIsStreaming(false);
+    setMessages((prev) =>
+      prev.map((msg) => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
+    );
   }, []);
 
   const sendMessage = useCallback(
@@ -68,6 +71,15 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
       const RETRY_DELAY_MS = 800;
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        if (controller.signal.aborted) {
+          setIsStreaming(false);
+          abortControllerRef.current = null;
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === assistantMsgId ? { ...msg, isStreaming: false } : msg))
+          );
+          return;
+        }
+
         try {
           await apiClient.streamChat(
             content,
@@ -79,44 +91,61 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
                 // session/message id sync handled upstream
               },
               onChunk: (chunkText) => {
+                if (controller.signal.aborted) return;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMsgId
-                      ? { ...msg, content: msg.content + chunkText }
+                      ? { ...msg, content: msg.content + chunkText, isStreaming: true }
                       : msg
                   )
                 );
               },
               onCitation: (citation) => {
+                if (!citation || controller.signal.aborted) return;
                 setMessages((prev) =>
                   prev.map((msg) => {
                     if (msg.id !== assistantMsgId) return msg;
                     const existing = msg.citations || [];
-                    if (existing.some((c) => c.id === citation.id)) return msg;
+                    if (
+                      existing.some(
+                        (c) =>
+                          c.id === citation.id ||
+                          (c.source === citation.source && c.page === citation.page)
+                      )
+                    )
+                      return msg;
                     return { ...msg, citations: [...existing, citation] };
                   })
                 );
               },
               onTrace: (traceData) => {
+                if (controller.signal.aborted) return;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === assistantMsgId ? { ...msg, trace: traceData } : msg
                   )
                 );
               },
-              onDone: () => {
+              onDone: (doneData) => {
+                if (controller.signal.aborted) return;
                 setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId ? { ...msg, isStreaming: false } : msg
-                  )
+                  prev.map((msg) => {
+                    if (msg.id !== assistantMsgId) return msg;
+                    const finalContent = msg.content || doneData?.answer || '';
+                    return {
+                      ...msg,
+                      content: finalContent || 'I am unable to answer based on the provided documents.',
+                      isStreaming: false,
+                    };
+                  })
                 );
                 setIsStreaming(false);
                 abortControllerRef.current = null;
               },
               onError: (err) => {
-                // Only surface error after last attempt
+                if (controller.signal.aborted) return;
+                console.warn(`Stream attempt ${attempt} error:`, err);
                 if (attempt === MAX_RETRIES) {
-                  console.error('Stream error (all retries exhausted):', err);
                   const errMsg = err.message || 'Error generating response. Is the backend running?';
                   setError(errMsg);
                   setMessages((prev) =>
@@ -128,7 +157,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
                             error: errMsg,
                             content:
                               msg.content ||
-                              'Unable to connect to backend. Please ensure the FastAPI server is running on port 8000.',
+                              'Unable to connect to backend. Please ensure the FastAPI server and Ollama are running.',
                           }
                         : msg
                     )
@@ -143,19 +172,40 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
           // Success — exit retry loop
           break;
         } catch (err) {
-          if ((err as Error).name === 'AbortError') {
+          if ((err as Error).name === 'AbortError' || controller.signal.aborted) {
             setIsStreaming(false);
+            abortControllerRef.current = null;
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantMsgId ? { ...msg, isStreaming: false } : msg))
+            );
             return;
           }
-          if (attempt < MAX_RETRIES) {
+
+          if (attempt < MAX_RETRIES && !controller.signal.aborted) {
             // Wait before retrying
             await new Promise((res) => setTimeout(res, RETRY_DELAY_MS * attempt));
             continue;
           }
+
           // Final attempt failed
           const errMsg = (err as Error).message || 'Failed to communicate with RAG API';
           setError(errMsg);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    isStreaming: false,
+                    error: errMsg,
+                    content:
+                      msg.content ||
+                      'Unable to connect to backend. Please ensure the FastAPI server and Ollama are running.',
+                  }
+                : msg
+            )
+          );
           setIsStreaming(false);
+          abortControllerRef.current = null;
         }
       }
     },

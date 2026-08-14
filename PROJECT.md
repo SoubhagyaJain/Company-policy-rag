@@ -1,80 +1,84 @@
-# PROJECT: Enterprise-Grade RAG System (`company_policy_rag`)
+# Project: Celery & Redis Async RAG Offloading and SSE Streaming
 
 ## Architecture
-Clean modular layout separating backend, frontend, shared schemas, tests, and docker deployment:
+The system offloads heavy RAG processing (retrieval, cross-encoder reranking, LLM token generation) from the main FastAPI web server process to an asynchronous Celery worker process backed by Redis.
+
 ```
-c:\Users\jains\OneDrive\Desktop\Rag-chatbot\company_policy_rag\
-├── backend/
-│   ├── api/          # FastAPI routers (/api/chat, /api/chat/stream, /api/documents, /api/admin, /api/health)
-│   ├── services/     # Business logic & orchestrators (chat_service, document_service, eval_service)
-│   ├── rag/          # Core RAG pipeline, multi-query, query rewriting, context compression, citations, semantic_cache
-│   ├── retrieval/    # Hybrid retriever (BM25 + Dense vector, RRF), reranking (bge-reranker), metadata filters
-│   ├── embeddings/   # Dense vector embedding providers & local cache
-│   ├── ingestion/    # Multi-format loaders (PDF, DOCX, TXT, MD, HTML, CSV, JSON) & adaptive chunkers
-│   ├── models/       # Pydantic schemas, data models, API DTOs
-│   ├── evaluation/   # Faithfulness & Answer Relevancy LLM-as-judge evaluation engine
-│   └── utils/        # Telemetry, structured logging, Redis cache, helpers
-├── frontend/
-│   ├── app/          # Next.js 15 App Router (pages, layout, streaming API routes)
-│   ├── components/   # Anthropic cream UI, liquid glass components, Chat, Citations, DocumentManager
-│   ├── hooks/        # Custom React hooks (useChatStream, useDocuments, useSessions)
-│   ├── lib/          # API client, markdown components, tailwind config, utils
-│   └── styles/       # Cream palette, liquid glass backdrop blur styles, global CSS
-├── shared/           # Common type definitions and schema specs
-├── tests/            # Pytest test suite for backend unit & integration testing
-│   ├── unit/
-│   └── integration/
-├── docker/           # Production Dockerfiles and docker-compose.yml
-├── data/             # Document storage and evaluation golden datasets
-└── scripts/          # Evaluation scripts (evaluate.py) and CLI tools
+[ Frontend Chat UI ] ──(HTTP POST)──> [ FastAPI Server (/api/chat/stream) ]
+                                              │ (1. Enqueue Task)
+                                              ▼
+                                      [ Redis Broker ]
+                                              │ (2. Pick up Task)
+                                              ▼
+                                    [ Celery RAG Worker ]
+                                              │ (3. Execute RAG Pipeline)
+                                              │ (4. Publish SSE Chunks)
+                                              ▼
+                                    [ Redis Pub/Sub Channel ]
+                                              │ (5. Subscribe & Stream)
+                                              ▼
+[ Frontend Chat UI ] <──(SSE Stream)── [ FastAPI Server (/api/chat/stream) ]
 ```
+
+- **Broker & Cache**: Redis on `redis://localhost:6379/0` (or `rag-redis` in Docker).
+- **Worker**: Celery background worker running `backend/tasks/celery_app.py` executing `RAGPipeline.stream_query()`.
+- **Publisher**: Worker publishes JSON-encoded SSE event dicts to channel `rag:stream:{task_id}`.
+- **Subscriber**: FastAPI `/api/chat/stream` subscribes asynchronously to `rag:stream:{task_id}` via `redis.asyncio` client and yields SSE formatted text to the client.
+
+## Code Layout
+- `company_policy_rag/backend/tasks/celery_app.py` — Celery app initialization, Redis broker configuration.
+- `company_policy_rag/backend/tasks/rag_tasks.py` — Celery background tasks (`run_rag_task`, `stream_rag_task`).
+- `company_policy_rag/backend/utils/redis_client.py` — Shared async Redis connection pool and Pub/Sub helpers.
+- `company_policy_rag/backend/api/routes/chat.py` — Endpoint `/api/chat/stream` updated for async task dispatch & Redis Pub/Sub SSE streaming.
+- `company_policy_rag/backend/services/chat_service.py` — Service layer integration with Celery tasks.
+- `company_policy_rag/pyproject.toml` & `requirements.txt` — Dependency declarations (`celery`, `redis`).
+- `company_policy_rag/docker-compose.yml` & `.env.example` — Celery worker container service & Redis config.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Multi-format Document Ingestion | Load PDF, DOCX, TXT, MD, HTML, CSV, JSON preserving page numbers, hierarchy & tables | M1 | Survey (R1) |
-| 2 | Adaptive Multi-Strategy Chunking | Recursive, Semantic, Markdown, Heading-aware, Table-aware automatic chunk selection | M1 | Survey (R1) |
-| 3 | Hybrid Dense + Sparse Retrieval | BM25 + Vector Search with Reciprocal Rank Fusion (RRF) & metadata filtering | M2 | Survey (R3) |
-| 4 | Advanced RAG Query Engine | Multi-query decomposition, query rewriting, context compression, parent expansion | M2 | Survey (R3) |
-| 5 | Cross-Encoder Reranking & Citations | BAAI bge-reranker-large score filtering and structured verifiable citations | M2 | Survey (R1, R3) |
-| 6 | FastAPI Backend Routes & Streaming | Sub-1s TTFT SSE streaming chat, document upload/management, health & models endpoints | M3 | Survey (R1) |
-| 7 | Admin & Observability Telemetry | Endpoint reporting chunks, similarity scores, rerank scores, sources, tokens, latency | M3 | Survey (R1) |
-| 8 | Anthropic-inspired Next.js 15 UI | Cream palette (`#FAF9F5`), liquid glass UI, dark mode, Framer Motion animations | M4 | Survey (R2) |
-| 9 | Streaming Chat & Citation UX | SSE chat, markdown code highlighting, interactive citation drawer/cards | M4 | Survey (R2) |
-| 10| Document Manager & Multi-session UI| Upload up to 100MB files, manage 100+ documents, multi-session sidebar history | M4 | Survey (R2) |
-| 11| Redis Caching & System Performance | Response caching, embedding cache, session store, in-memory fallback | M5 | Survey (R4) |
-| 12| Production Docker & CI/CD Pipeline | Multi-stage Docker compose (FastAPI, Next.js, Redis), Pytest/Jest, Pyright/mypy, ESLint | M5 | Survey (R4) |
-| 13| Golden RAG Evaluation Gate | Automated evaluate.py on golden dataset verifying Faithfulness >= 0.90 & Relevancy >= 0.75 | M6 | Survey (Criteria) |
-| 14| Semantic Cache Storage & Metric Config | ChromaDB `semantic_cache` collection, Cosine similarity metric mapping ($1-d$), threshold config, embedding reuse | M_SC1 | User Request (R1, R3) |
-| 15| RAG Pipeline Cache Lookup Hit/Miss | Pre-rewrite lookup in `pipeline.py`, cached answers & citations, retrieval/LLM bypass, non-blocking cache write | M_SC2 | User Request (R2, R4, R5) |
-| 16| Invalidation, Streaming & Concurrency | Document versioning metadata invalidation, hit token streaming simulation, live miss streaming, thread-safe writes | M_SC3 | User Request (R6, R7, R8) |
-| 17| Comprehensive Cache Test Suite & Audit | 13-point automated test suite (hits, misses, threshold, streaming, invalidation, non-blocking, bypass) + Audit | M_SC4 | User Request (Testing) |
+| 1 | Celery & Redis Dependencies | Add `celery` and `redis` to `pyproject.toml`, `requirements.txt`, and `requirements-docker.txt` | M1 | R1 |
+| 2 | Celery App & Worker Setup | Implement `backend/tasks/celery_app.py` with Redis broker URL configuration and healthcheck | M1 | R1 |
+| 3 | Docker & Environment Configuration | Configure `celery_worker` service in `docker-compose.yml` and add `CELERY_BROKER_URL` in `.env.example` | M1 | R1 |
+| 4 | Asynchronous RAG Task Offloading | Wrap `RAGPipeline` / `ChatService` execution into Celery background tasks in `backend/tasks/rag_tasks.py` | M2 | R2 |
+| 5 | Non-Blocking FastAPI Enqueuing | Update `/api/chat` and `/api/chat/stream` to enqueue background Celery task without blocking the web request lifecycle | M2 | R2 |
+| 6 | Redis Pub/Sub Token Publishing | Celery task publishes token chunks and SSE events (`start`, `retrieval`, `chunk`, `citation`, `trace`, `done`) to channel `rag:stream:{task_id}` | M3 | R3 |
+| 7 | Redis Pub/Sub SSE Receiver | Update FastAPI `/api/chat/stream` to subscribe to `rag:stream:{task_id}` and stream Server-Sent Events to the client | M3 | R3 |
+| 8 | Frontend Compatibility & SSE Schema | Ensure exact preservation of SSE payload structure and event sequence required by existing frontend and test suite | M3 | R3 |
+| 9 | Task Error Handling & Fallbacks | Handle worker disconnects, Redis timeouts, task failure events, and return error SSE payload gracefully | M3 | R3 |
+| 10| Full E2E & Hardened Testing | Pass 100% of E2E test suite (Tiers 1-4) and complete Tier 5 white-box adversarial coverage hardening | M-Final | Final |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Backend Clean Layout & Ingestion Engine | Modular `backend/` structure, multi-format loaders, adaptive chunkers | None | DONE |
-| M2 | Advanced Retrieval & RAG Pipeline | Hybrid search, multi-query, query rewrite, reranker, context compression, citations | M1 | DONE |
-| M3 | FastAPI Web Application & Observability | API routes, SSE streaming server, admin observability & telemetry endpoints | M2 | DONE |
-| M4 | Next.js 15 Anthropic-inspired UI | Next.js 15 App Router, cream aesthetic, streaming UI, citation cards, document manager | M3 | DONE |
-| M5 | Production Infra, Redis & Testing | Docker compose, Redis cache, pytest/jest test suites, pyright/mypy/eslint config | M4 | DONE |
-| M6 | Golden Evaluation Gate & Victory Audit | Run evaluate.py (Faithfulness >= 0.90, Relevancy >= 0.75), type checks, test suite, docker build | M5 | DONE |
-| M_SC1 | Semantic Cache Storage & Metric Config | ChromaDB `semantic_cache` collection, Cosine similarity metric mapping, threshold config, $O(1)$ vector cache | None | DONE |
-| M_SC2 | Cache Lookup Integration & Hit/Miss Pipeline | Pre-rewrite lookup in `pipeline.py`, hit retrieval/LLM bypass, citation tracking, non-blocking cache write | M_SC1 | PLANNED |
-| M_SC3 | Cache Invalidation, Streaming & Concurrency | Document versioning invalidation, simulated SSE hit streaming, live miss streaming, thread-safe writes | M_SC2 | PLANNED |
-| M_SC4 | Comprehensive Test Suite & Victory Verification | 13-scenario automated test suite, hit/miss/threshold/streaming/bypass tests, Forensic Auditor check | M_SC3 | PLANNED |
+| M1 | Celery & Redis Setup | Features 1, 2, 3: Celery app init, Redis broker setup, dependency updates, Docker config | none | PLANNED |
+| M2 | Async Task Offloading | Features 4, 5: Celery background tasks for RAG processing, FastAPI async task dispatch | M1 | PLANNED |
+| M3 | Redis Pub/Sub SSE Streaming | Features 6, 7, 8, 9: Redis Pub/Sub publishing, FastAPI SSE stream subscription, error handling | M2 | PLANNED |
+| M-Final | E2E Testing & Hardening | Feature 10: Complete 100% E2E test suite pass (Tiers 1-4) + Tier 5 adversarial hardening | M3 | PLANNED |
 
 ## Interface Contracts
 
-### Backend API Endpoints (FastAPI)
-- `POST /api/chat` -> `{ message: string, session_id?: string, model?: string, filters?: dict }` -> `{ id: string, answer: string, citations: Citation[], latency_ms: number, metrics: dict }`
-- `POST /api/chat/stream` -> SSE stream: `event: start`, `event: chunk`, `event: citation`, `event: trace`, `event: done`
-- `POST /api/documents/upload` -> `multipart/form-data` -> `{ document_id: string, filename: string, chunks_indexed: number, status: string }`
-- `GET /api/documents` -> `{ documents: DocumentSummary[] }`
-- `GET /api/admin/observability` -> `{ total_queries: number, avg_latency_ms: number, token_usage: dict, recent_traces: Trace[] }`
-- `GET /api/health` -> `{ status: "ok", redis: boolean, vector_db: boolean, models_loaded: boolean }`
+### Celery Task Signature
+`stream_rag_task(task_id: str, query: str, session_id: str, model_name: str | None = None, kb_version: str | None = None)`
+- **Return**: `dict` containing final response summary (`task_id`, `status`, `citations`, `answer_length`).
+- **Side Effect**: Publishes JSON payloads to Redis Pub/Sub channel `rag:stream:{task_id}`.
 
-## Code Layout
-Target Directory: `c:\Users\jains\OneDrive\Desktop\Rag-chatbot\company_policy_rag\`
-- Code files belong exclusively in `backend/`, `frontend/`, `shared/`, `tests/`, `docker/`, `scripts/`, `data/`.
-- No source code or test files in `.agents/`.
+### Redis Pub/Sub Channel Schema
+Channel Name: `rag:stream:{task_id}`
+Message Format: JSON string representing SSE event object:
+```json
+{
+  "event": "chunk", // "start" | "retrieval" | "chunk" | "citation" | "trace" | "done" | "error"
+  "data": {
+    "text": "token text",
+    "finish_reason": null
+  }
+}
+```
+
+### FastAPI SSE Endpoint
+URL: `/api/chat/stream`
+HTTP Method: POST
+Request Body: `ChatRequest` (`query`, `session_id`, `model_name`, `kb_version`)
+Response: `StreamingResponse(sse_generator(), media_type="text/event-stream")`
+Headers: `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`

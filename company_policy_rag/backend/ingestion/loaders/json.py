@@ -43,12 +43,22 @@ class JSONLoader(BaseLoader):
         try:
             parsed = json.loads(content_str)
             if isinstance(parsed, list):
-                # If list of dicts, format each item cleanly or format whole list
-                formatted_text = json.dumps(parsed, indent=2, ensure_ascii=False)
+                # Format each record into readable markdown section with clear key-value structure
+                formatted_blocks: list[str] = []
+                for i, item in enumerate(parsed, start=1):
+                    if isinstance(item, dict):
+                        title = item.get("title") or item.get("name") or item.get("policy") or item.get("topic") or f"Record {i}"
+                        formatted_blocks.append(f"### {title}\n\n" + self._format_json_object(item))
+                    else:
+                        formatted_blocks.append(str(item))
+                formatted_text = "\n\n---\n\n".join(formatted_blocks)
                 final_meta = base_meta.model_copy(
                     update={"extra": {"record_count": len(parsed), **base_meta.extra}}
                 )
                 return [RawDocument(content=formatted_text, metadata=final_meta)]
+            elif isinstance(parsed, dict):
+                formatted_text = self._format_json_object(parsed)
+                return [RawDocument(content=formatted_text, metadata=base_meta)]
             else:
                 formatted_text = json.dumps(parsed, indent=2, ensure_ascii=False)
                 return [RawDocument(content=formatted_text, metadata=base_meta)]
@@ -59,9 +69,10 @@ class JSONLoader(BaseLoader):
         if isinstance(obj, dict):
             lines = []
             for k, v in obj.items():
+                k_clean = str(k).replace("_", " ").title()
                 if isinstance(v, (dict, list)):
-                    lines.append(f"**{k}**: {json.dumps(v, ensure_ascii=False)}")
+                    lines.append(f"- **{k_clean}**: {json.dumps(v, ensure_ascii=False)}")
                 else:
-                    lines.append(f"**{k}**: {v}")
+                    lines.append(f"- **{k_clean}**: {v}")
             return "\n".join(lines)
         return str(obj)

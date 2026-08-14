@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 
 from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole, ContentType
@@ -7,7 +8,7 @@ from backend.models.document import RawDocument
 
 
 class BaseChunker(ABC):
-    """Abstract Base Class for document chunkers."""
+    """Abstract Base Class for document chunkers with context-enrichment capabilities."""
 
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64) -> None:
         self.chunk_size = chunk_size
@@ -20,6 +21,13 @@ class BaseChunker(ABC):
     def _estimate_tokens(self, text: str) -> int:
         """Estimate token count (approx 4 chars per token)."""
         return max(1, len(text) // 4)
+
+    def _clean_text(self, text: str) -> str:
+        """Normalize whitespace and clean up raw extracted document text."""
+        # Replace multiple spaces with single space, preserve intentional paragraph breaks
+        cleaned = re.sub(r"[ \t]+", " ", text)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip()
 
     def _create_chunk(
         self,
@@ -38,6 +46,10 @@ class BaseChunker(ABC):
         is_atomic: bool = False,
     ) -> Chunk:
         doc_meta = document.metadata
+        final_sec_title = section_title or doc_meta.section_title
+        final_sec_num = section_number or doc_meta.section_number
+        final_sec_path = section_path or doc_meta.section_path
+
         chunk_meta = ChunkMetadata(
             document_id=document.id,
             source_file=doc_meta.source_file,
@@ -47,9 +59,9 @@ class BaseChunker(ABC):
             category=doc_meta.category,
             chunk_index=chunk_index,
             page_number=doc_meta.page_number,
-            section_title=section_title or doc_meta.section_title,
-            section_number=section_number or doc_meta.section_number,
-            section_path=section_path or doc_meta.section_path,
+            section_title=final_sec_title,
+            section_number=final_sec_num,
+            section_path=final_sec_path,
             section_level=section_level if section_level is not None else doc_meta.section_level,
             chunk_strategy=strategy_name,
             node_role=node_role,
@@ -60,8 +72,10 @@ class BaseChunker(ABC):
             extra=dict(doc_meta.extra),
         )
 
+        cleaned_text = self._clean_text(text)
+
         return Chunk(
-            text=text.strip(),
+            text=cleaned_text,
             metadata=chunk_meta,
-            token_count=self._estimate_tokens(text),
+            token_count=self._estimate_tokens(cleaned_text),
         )

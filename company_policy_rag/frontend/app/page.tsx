@@ -46,6 +46,7 @@ export default function HomePage() {
     sessions,
     activeSession,
     activeSessionId,
+    isLoaded,
     createNewSession,
     switchSession,
     deleteSession,
@@ -65,24 +66,28 @@ export default function HomePage() {
     openCitation,
     isDrawerOpen,
     closeCitationDrawer,
-  } = useChatStream(activeSession?.messages ?? []);
+  } = useChatStream([]);
 
   /* ─── Observability (health for header) ──────── */
   const { health } = useObservability();
 
-  /* Sync messages from active session into the chat hook when switching sessions */
+  /* Sync messages from active session on initial load and session switch */
+  const prevActiveSessionIdRef = React.useRef<string>('');
   useEffect(() => {
-    if (activeSession) {
-      setMessages(activeSession.messages);
+    if (isLoaded && activeSession) {
+      if (prevActiveSessionIdRef.current !== activeSession.id) {
+        prevActiveSessionIdRef.current = activeSession.id;
+        setMessages(activeSession.messages || []);
+      }
     }
-  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSession, isLoaded, setMessages]);
 
-  /* Persist chat messages back into the session whenever they change */
+  /* Persist chat messages back into the active session whenever messages change */
   useEffect(() => {
-    if (activeSessionId && messages.length > 0) {
+    if (isLoaded && activeSessionId && messages.length > 0) {
       updateSessionMessages(activeSessionId, messages);
     }
-  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [messages, activeSessionId, isLoaded, updateSessionMessages]);
 
   /* ─── Handlers ───────────────────────────────── */
   const handleSendMessage = useCallback(
@@ -93,16 +98,25 @@ export default function HomePage() {
   );
 
   const handleNewSession = useCallback(() => {
-    clearMessages();
-    createNewSession();
-  }, [clearMessages, createNewSession]);
+    cancelStream();
+    const newSession = createNewSession();
+    prevActiveSessionIdRef.current = newSession.id;
+    setMessages([]);
+  }, [cancelStream, createNewSession, setMessages]);
 
   const handleSwitchSession = useCallback(
     (id: string) => {
+      if (id === activeSessionId) return;
       cancelStream();
+      if (activeSessionId) {
+        updateSessionMessages(activeSessionId, messages);
+      }
       switchSession(id);
+      const targetSession = sessions.find((s) => s.id === id);
+      prevActiveSessionIdRef.current = id;
+      setMessages(targetSession?.messages || []);
     },
-    [cancelStream, switchSession],
+    [activeSessionId, cancelStream, messages, sessions, setMessages, switchSession, updateSessionMessages],
   );
 
   const handleClearChat = useCallback(() => {
@@ -135,7 +149,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF9F5] dark:bg-[#141413] transition-colors">
+    <div className="h-screen flex flex-col bg-[#FAF9F5] dark:bg-[#141413] transition-colors">
       {/* Header */}
       <Header
         activeTab={activeTab}
@@ -148,7 +162,7 @@ export default function HomePage() {
       />
 
       {/* Main body: sidebar + content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Session sidebar — only relevant on chat tab */}
         {activeTab === 'chat' && (
           <SessionSidebar
@@ -170,7 +184,7 @@ export default function HomePage() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -12 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="flex-1 flex flex-col min-w-0"
+            className="flex-1 min-h-0 min-w-0 overflow-hidden relative flex flex-col"
           >
             {renderContent()}
           </motion.main>

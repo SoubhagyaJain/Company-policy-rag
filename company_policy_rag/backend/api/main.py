@@ -1,4 +1,5 @@
-from __future__ import annotations
+import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,88 @@ ALLOWED_ORIGINS = [
 ]
 
 
+def warmup_rag_system() -> None:
+    """
+    Synchronously preloads and warms up all RAG models and components on server startup:
+    1. Dense embedding model (BAAI/bge-small-en-v1.5)
+    2. Cross-Encoder reranker (BAAI/bge-reranker-large)
+    3. Ollama LLM model weights pinned in VRAM (keep_alive=-1)
+    4. ChromaDB vector stores and BM25 index
+    Ensures zero cold-start delay when the user sends their first query.
+    """
+    logger.info("==========================================================")
+    logger.info("  STARTING RAG SYSTEM PRELOADING & MODEL WARM-UP          ")
+    logger.info("==========================================================")
+    t_start = time.perf_counter()
+
+    from backend.api.dependencies import (
+        get_chat_service,
+        get_document_service,
+        get_rag_pipeline,
+        get_semantic_cache_manager,
+    )
+    from src.ollama_client import preload_model
+
+    # 1. Initialize core services
+    doc_service = get_document_service()
+    pipeline = get_rag_pipeline()
+    get_chat_service()
+    get_semantic_cache_manager()
+
+    # 2. Embedding Model Preloading & Warm-up
+    t0 = time.perf_counter()
+    try:
+        if hasattr(doc_service.embedding_service, "_init_model"):
+            doc_service.embedding_service._init_model()
+        doc_service.embedding_service.embed_text("warmup initialization query")
+        logger.info("[1/4] Embedding model loaded & warmed up in %.2fs", time.perf_counter() - t0)
+    except Exception as exc:
+        logger.warning("[1/4] Embedding model warm-up notice: %s", exc)
+
+    # 3. Reranker Model Preloading & Warm-up
+    t0 = time.perf_counter()
+    try:
+        if hasattr(pipeline.reranker, "_init_model"):
+            pipeline.reranker._init_model()
+        if getattr(pipeline.reranker, "_model", None) is not None:
+            pipeline.reranker._model.predict([["warmup query", "warmup chunk context"]])
+        logger.info("[2/4] CrossEncoder reranker loaded & warmed up in %.2fs", time.perf_counter() - t0)
+    except Exception as exc:
+        logger.warning("[2/4] CrossEncoder reranker warm-up notice: %s", exc)
+
+    # 4. Ollama LLM Preloading & Warm-up (pin in VRAM)
+    t0 = time.perf_counter()
+    try:
+        active_model = pipeline.get_active_model()
+        preload_model(active_model)
+        if pipeline.llm is not None:
+            pipeline.llm.complete("warmup")
+        logger.info("[3/4] Ollama LLM '%s' preloaded & warmed up in %.2fs", active_model, time.perf_counter() - t0)
+    except Exception as exc:
+        logger.warning("[3/4] Ollama LLM warm-up notice: %s", exc)
+
+    # 5. ChromaDB & BM25 verification
+    t0 = time.perf_counter()
+    try:
+        chroma_count = doc_service.vector_store.count()
+        bm25_count = len(doc_service.bm25_index.entries)
+        logger.info("[4/4] Vector Store (%d chunks) & BM25 (%d chunks) ready in %.2fs", chroma_count, bm25_count, time.perf_counter() - t0)
+    except Exception as exc:
+        logger.warning("[4/4] Vector store / BM25 notice: %s", exc)
+
+    total_time = time.perf_counter() - t_start
+    logger.info("==========================================================")
+    logger.info("  ALL RAG MODELS READY IN %.2fs — ZERO COLD START READY!  ", total_time)
+    logger.info("==========================================================")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan context manager: preloads and warms up all models before accepting traffic."""
+    warmup_rag_system()
+    yield
+
+
 def create_app() -> FastAPI:
     """FastAPI application factory configuring CORS, routers, and global error handling."""
     app = FastAPI(
@@ -31,6 +114,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     # Configure CORS Middleware
@@ -79,3 +163,4 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+

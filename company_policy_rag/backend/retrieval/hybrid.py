@@ -86,8 +86,12 @@ class HybridRetriever:
         if not query.strip():
             return []
 
+        logger.info(f"Executing dense retrieval for query: {query}")
         dense_hits = self.dense_retriever.retrieve(query, top_k=dense_top_k, filters=filters)
+        
+        logger.info(f"Executing BM25 retrieval for query: {query}")
         bm25_hits = self.bm25_index.search(query, top_k=bm25_top_k, filters=filters)
+        logger.info("BM25 retrieval complete")
 
         if not bm25_hits:
             logger.debug("BM25 returned 0 hits; returning dense hits only.")

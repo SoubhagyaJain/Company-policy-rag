@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+import json
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import get_chat_service
 from backend.models.api_dto import ChatRequest, ChatResponse
 from backend.services.chat_service import ChatService
+from backend.utils.logging import logger
 
 router = APIRouter(tags=["Chat"])
 
@@ -44,36 +46,26 @@ async def post_chat_stream(
     chat_service: ChatService = Depends(get_chat_service),
 ) -> StreamingResponse:
     """
-    Sub-1s TTFT SSE streaming endpoint. Detects client disconnects and cancels generation.
+    Sub-1s TTFT SSE streaming endpoint. Detects client disconnects and cancels LLM generation.
     """
     if not body.message or not body.message.strip():
         raise HTTPException(status_code=400, detail="Chat message query cannot be empty.")
 
     async def sse_generator():
-        # Cancellation token to pass into the background generation
         cancel_token = asyncio.Event()
-        
-        async def check_disconnect():
-            """Continuously poll if the client dropped connection."""
-            while True:
+        try:
+            async for event_str in chat_service.stream_query(body, cancel_token):
                 if await request.is_disconnected():
+                    logger.info("Client disconnected during chat stream, setting cancel token.")
                     cancel_token.set()
                     break
-                await asyncio.sleep(0.2)
-                
-        # Launch disconnect monitor
-        disconnect_task = asyncio.create_task(check_disconnect())
-        
-        try:
-            # Yield events directly from the fully async ChatService
-            async for event_str in chat_service.stream_query(body, cancel_token):
                 yield event_str
-                # Stop yielding if client dropped
-                if cancel_token.is_set():
-                    break
-        finally:
-            # Cleanup background task
-            disconnect_task.cancel()
+        except (asyncio.CancelledError, GeneratorExit):
+            logger.info("SSE connection aborted by client.")
+            cancel_token.set()
+        except Exception as exc:
+            logger.warning("Error during SSE stream: %s", exc)
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc), 'status': 500})}\n\n"
 
     headers = {
         "Cache-Control": "no-cache, no-transform",
@@ -83,10 +75,11 @@ async def post_chat_stream(
     }
     return StreamingResponse(sse_generator(), media_type="text/event-stream", headers=headers)
 
+
 @router.delete("/api/chat/session/{session_id}")
 def delete_chat_session(
     session_id: str,
-    chat_service: ChatService = Depends(get_chat_service)
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Evict a session explicitly to prevent memory leaks."""
     chat_service.delete_session(session_id)

@@ -3,17 +3,17 @@ from __future__ import annotations
 import re
 
 from backend.ingestion.chunkers.base import BaseChunker
+from backend.ingestion.chunkers.recursive import RecursiveChunker
 from backend.models.chunk import Chunk, ContentType
 from backend.models.document import RawDocument
 
-_TABLE_BLOCK_REGEX = re.compile(r"((?:^\|[^\n]+\|\n)+)", re.MULTILINE)
-
 
 class TableAwareChunker(BaseChunker):
-    """Table-aware chunker preserving table structure and prepending header context."""
+    """Table-aware chunker preserving table structure and repeating header rows for long tables."""
 
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64) -> None:
         super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        self.recursive_helper = RecursiveChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
         chunks: list[Chunk] = []
@@ -29,21 +29,26 @@ class TableAwareChunker(BaseChunker):
             chunk_idx = 0
 
             for line in lines:
-                is_table_line = line.strip().startswith("|") and line.strip().endswith("|")
+                stripped = line.strip()
+                is_table_line = stripped.startswith("|") and stripped.endswith("|") and len(stripped) > 2
 
                 if is_table_line:
                     if prose_lines:
                         prose_text = "\n".join(prose_lines).strip()
-                        if prose_text:
-                            c = self._create_chunk(
-                                text=prose_text,
-                                document=doc,
-                                chunk_index=chunk_idx,
-                                strategy_name="table_aware",
-                                content_type=ContentType.PROSE,
-                            )
-                            chunks.append(c)
-                            chunk_idx += 1
+                        if prose_text and len(prose_text) >= 40:
+                            sub_prose = self.recursive_helper._split_text(prose_text, self.recursive_helper.separators)
+                            for s in sub_prose:
+                                s_clean = s.strip()
+                                if s_clean and len(s_clean) >= 40:
+                                    c = self._create_chunk(
+                                        text=s_clean,
+                                        document=doc,
+                                        chunk_index=chunk_idx,
+                                        strategy_name="table_aware",
+                                        content_type=ContentType.PROSE,
+                                    )
+                                    chunks.append(c)
+                                    chunk_idx += 1
                         prose_lines = []
 
                     in_table = True
@@ -65,15 +70,20 @@ class TableAwareChunker(BaseChunker):
 
             if prose_lines:
                 prose_text = "\n".join(prose_lines).strip()
-                if prose_text:
-                    c = self._create_chunk(
-                        text=prose_text,
-                        document=doc,
-                        chunk_index=chunk_idx,
-                        strategy_name="table_aware",
-                        content_type=ContentType.PROSE,
-                    )
-                    chunks.append(c)
+                if prose_text and len(prose_text) >= 40:
+                    sub_prose = self.recursive_helper._split_text(prose_text, self.recursive_helper.separators)
+                    for s in sub_prose:
+                        s_clean = s.strip()
+                        if s_clean and len(s_clean) >= 40:
+                            c = self._create_chunk(
+                                text=s_clean,
+                                document=doc,
+                                chunk_index=chunk_idx,
+                                strategy_name="table_aware",
+                                content_type=ContentType.PROSE,
+                            )
+                            chunks.append(c)
+                            chunk_idx += 1
 
         return chunks
 
@@ -93,7 +103,7 @@ class TableAwareChunker(BaseChunker):
             )
             return [c]
 
-        # Larger table: split rows while preserving header rows
+        # Larger table: repeat header rows across sliced row groups
         header_lines = lines[:2] if len(lines) >= 2 and "---" in lines[1] else lines[:1]
         data_lines = lines[len(header_lines) :]
 
