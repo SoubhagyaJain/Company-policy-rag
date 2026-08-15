@@ -37,7 +37,7 @@ _STOP_WORDS = {
 }
 
 _NUMERICAL_REGEX = re.compile(
-    r"(\$\s*[\d,]+(?:\.\d+)?|\b\d+(?:,\d+)*(?:\.\d+)?%?|\b\d+\s*(?:days|months|years|hours|weeks)\b)",
+    r"(\$\s*[\d,]+(?:\.\d+)?|\b\d+(?:\.\d+)?\s*%|\b\d+\s*(?:days?|months?|years?|hours?|weeks?|minutes?|dollars?)\b|\b\d{2,}(?:,\d{3})*(?:\.\d+)?\b)",
     re.IGNORECASE,
 )
 
@@ -90,8 +90,9 @@ class SelfReflectionVerifier:
             unsupported.append("Unsupported equipment category: 'furniture'.")
             return 0.35, unsupported
 
-        # Numerical claim precision check (exclude citation tags like [Source 1] from numerical checks)
-        clean_for_numbers = re.sub(r"\[(?:Source\s*)?\d+(?:,\s*\d+)*\]", "", answer, flags=re.IGNORECASE)
+        # Numerical claim precision check (exclude citations [Source 1] and list numbering 1., 2., (1), 1) from numerical checks)
+        clean_for_numbers = re.sub(r"\[(?:Source\s*)?\d+(?:,\s*\d+)*\]", " ", answer, flags=re.IGNORECASE)
+        clean_for_numbers = re.sub(r"(?:^|\n|\b)\(?\d+[\.\)]\s*", " ", clean_for_numbers)
         answer_numbers = _NUMERICAL_REGEX.findall(clean_for_numbers)
         for num in answer_numbers:
             clean_num = num.replace(" ", "").lower()
