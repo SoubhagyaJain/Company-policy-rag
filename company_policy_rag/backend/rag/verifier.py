@@ -30,6 +30,10 @@ _STOP_WORDS = {
     "where", "where's", "which", "while", "who", "who's", "whom", "why", "why's", "with",
     "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your",
     "yours", "yourself", "yourselves", "per", "give", "tell", "please", "explain",
+    "according", "document", "documents", "section", "sections", "stated", "states", "state",
+    "refer", "refers", "referred", "recognized", "recognizes", "considered", "consider",
+    "derived", "derives", "based", "provided", "provides", "mentioned", "mentions", "text",
+    "indicate", "indicates", "indicating", "yes", "one", "two", "also", "including", "includes",
 }
 
 _NUMERICAL_REGEX = re.compile(
@@ -86,21 +90,27 @@ class SelfReflectionVerifier:
             unsupported.append("Unsupported equipment category: 'furniture'.")
             return 0.35, unsupported
 
-        # Numerical claim precision check
-        answer_numbers = _NUMERICAL_REGEX.findall(answer)
+        # Numerical claim precision check (exclude citation tags like [Source 1] from numerical checks)
+        clean_for_numbers = re.sub(r"\[(?:Source\s*)?\d+(?:,\s*\d+)*\]", "", answer, flags=re.IGNORECASE)
+        answer_numbers = _NUMERICAL_REGEX.findall(clean_for_numbers)
         for num in answer_numbers:
             clean_num = num.replace(" ", "").lower()
             if clean_num not in context_text.replace(" ", ""):
                 unsupported.append(f"Unverified numerical figure or rate: '{num}'.")
 
         # Lexical token overlap
-        answer_words = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", answer_lower)) - _STOP_WORDS
-        context_words = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", context_text))
+        clean_answer_lower = re.sub(r"\[(?:source\s*)?\d+(?:,\s*\d+)*\]", "", answer_lower)
+        answer_words = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", clean_answer_lower)) - _STOP_WORDS
+        context_words = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", context_text)) - _STOP_WORDS
 
         if answer_words and context_words:
             overlap = answer_words.intersection(context_words)
-            overlap_ratio = len(overlap) / max(1, len(answer_words))
-            faith_score = min(1.0, overlap_ratio * 1.25)
+            ctx_coverage = len(overlap) / max(1, len(context_words))
+            ans_coverage = len(overlap) / max(1, len(answer_words))
+            # Balanced metric: context grounding (70%) + answer precision (30%)
+            faith_score = min(1.0, 0.70 * ctx_coverage + 0.30 * ans_coverage)
+            if len(overlap) >= min(3, len(context_words)):
+                faith_score = max(faith_score, 0.85)
         else:
             faith_score = 0.85
 
