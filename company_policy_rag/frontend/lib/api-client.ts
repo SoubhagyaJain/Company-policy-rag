@@ -1,6 +1,8 @@
 import {
   Citation,
   QueryTrace,
+  VerificationReport,
+  QueryCategory,
   DocumentItem,
   ObservabilityData,
   HealthStatus,
@@ -43,20 +45,141 @@ function mapCitation(c: any, index = 0): Citation {
   };
 }
 
-function mapTrace(t: any): QueryTrace {
+export function mapVerificationReport(raw: any): VerificationReport | null {
+  if (!raw || typeof raw !== 'object') return null;
   return {
-    trace_id: t.trace_id || `tr_${Date.now()}`,
+    faithfulness: typeof raw.faithfulness === 'number' ? raw.faithfulness : 1.0,
+    completeness: typeof raw.completeness === 'number' ? raw.completeness : 1.0,
+    citation_coverage: typeof raw.citation_coverage === 'number'
+      ? raw.citation_coverage
+      : (typeof raw.citationCoverage === 'number' ? raw.citationCoverage : 1.0),
+    coherence: typeof raw.coherence === 'number' ? raw.coherence : 1.0,
+    composite_score: typeof raw.composite_score === 'number'
+      ? raw.composite_score
+      : (typeof raw.compositeScore === 'number' ? raw.compositeScore : 1.0),
+    passed: typeof raw.passed === 'boolean' ? raw.passed : true,
+    critique: raw.critique ?? null,
+    missing_aspects: Array.isArray(raw.missing_aspects)
+      ? raw.missing_aspects
+      : (Array.isArray(raw.missingAspects) ? raw.missingAspects : []),
+    unsupported_claims: Array.isArray(raw.unsupported_claims)
+      ? raw.unsupported_claims
+      : (Array.isArray(raw.unsupportedClaims) ? raw.unsupportedClaims : []),
+    retry_count: typeof raw.retry_count === 'number'
+      ? raw.retry_count
+      : (typeof raw.retryCount === 'number' ? raw.retryCount : 0),
+  };
+}
+
+export function mapTrace(t: any): QueryTrace {
+  if (!t || typeof t !== 'object') {
+    return {
+      trace_id: `tr_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      original_query: '',
+      total_chunks_retrieved: 0,
+      top_rerank_score: 0.9,
+      rerank_latency_ms: 0,
+      total_latency_ms: 0,
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      model: 'FastAPI RAG',
+    };
+  }
+
+  const rawVer = t.verification || t.verification_report || t.verificationReport;
+  const verification = mapVerificationReport(rawVer);
+
+  const verificationScore = typeof t.verification_score === 'number'
+    ? t.verification_score
+    : (typeof t.verificationScore === 'number'
+      ? t.verificationScore
+      : (verification?.composite_score ?? undefined));
+
+  const faithfulnessPassed = typeof t.faithfulness_passed === 'boolean'
+    ? t.faithfulness_passed
+    : (typeof t.faithfulnessPassed === 'boolean'
+      ? t.faithfulnessPassed
+      : (verification ? verification.passed : undefined));
+
+  const routingConfidence = typeof t.routing_confidence === 'number'
+    ? t.routing_confidence
+    : (typeof t.routingConfidence === 'number' ? t.routingConfidence : undefined);
+
+  const retryCount = typeof t.retry_count === 'number'
+    ? t.retry_count
+    : (typeof t.retryCount === 'number' ? t.retryCount : (verification?.retry_count ?? 0));
+
+  const retryReasons = Array.isArray(t.retry_reasons)
+    ? t.retry_reasons
+    : (Array.isArray(t.retryReasons) ? t.retryReasons : []);
+
+  const cacheHit = typeof t.cache_hit === 'boolean'
+    ? t.cache_hit
+    : (typeof t.cacheHit === 'boolean'
+      ? t.cacheHit
+      : Boolean(t.retrieval_strategy === 'conversational_bypass' || t.retrieval_strategy === 'semantic_cache'));
+
+  const cacheSimilarity = typeof t.cache_similarity === 'number'
+    ? t.cache_similarity
+    : (typeof t.cacheSimilarity === 'number' ? t.cacheSimilarity : null);
+
+  const inferredFilters = (t.inferred_filters || t.inferredFilters) && typeof (t.inferred_filters || t.inferredFilters) === 'object'
+    ? (t.inferred_filters || t.inferredFilters)
+    : {};
+
+  const appliedFilters = (t.applied_filters || t.appliedFilters) && typeof (t.applied_filters || t.appliedFilters) === 'object'
+    ? (t.applied_filters || t.appliedFilters)
+    : {};
+
+  const filterRelaxed = typeof t.filter_relaxed === 'boolean'
+    ? t.filter_relaxed
+    : Boolean(t.filterRelaxed);
+
+  const queryType = t.query_type || t.queryType || undefined;
+  const retrievalStrategy = t.retrieval_strategy || t.retrievalStrategy || undefined;
+
+  const topScore = Array.isArray(t.rerank_scores) && t.rerank_scores.length > 0
+    ? t.rerank_scores[0]
+    : (typeof t.top_rerank_score === 'number'
+      ? t.top_rerank_score
+      : (typeof t.topRerankScore === 'number' ? t.topRerankScore : 0.9));
+
+  const pTokens = t.token_usage?.prompt_tokens ?? t.prompt_tokens ?? t.promptTokens ?? 0;
+  const cTokens = t.token_usage?.completion_tokens ?? t.completion_tokens ?? t.completionTokens ?? 0;
+
+  return {
+    trace_id: t.trace_id || t.id || `tr_${Date.now()}`,
     timestamp: t.timestamp || new Date().toISOString(),
-    original_query: t.query || t.original_query || '',
-    query_rewritten: t.rewritten_query || t.query_rewritten,
-    expanded_queries: t.sub_queries || t.expanded_queries || [],
-    total_chunks_retrieved: t.candidate_count ?? t.total_chunks_retrieved ?? 0,
-    top_rerank_score: t.rerank_scores?.[0] ?? t.top_rerank_score ?? 0.9,
-    rerank_latency_ms: t.stage_timings?.reranking ?? t.rerank_latency_ms ?? 0,
-    total_latency_ms: t.execution_time_ms ?? t.total_latency_ms ?? 0,
-    prompt_tokens: t.token_usage?.prompt_tokens ?? t.prompt_tokens ?? 0,
-    completion_tokens: t.token_usage?.completion_tokens ?? t.completion_tokens ?? 0,
+    original_query: t.query || t.original_query || t.originalQuery || '',
+    query_rewritten: t.rewritten_query || t.query_rewritten || t.queryRewritten,
+    expanded_queries: t.sub_queries || t.expanded_queries || t.expandedQueries || [],
+    total_chunks_retrieved: t.candidate_count ?? t.total_chunks_retrieved ?? t.totalChunksRetrieved ?? t.retrieved_candidate_count ?? 0,
+    top_rerank_score: topScore,
+    rerank_latency_ms: t.stage_timings?.reranking ?? t.stage_timings_ms?.reranking ?? t.rerank_latency_ms ?? t.rerankLatencyMs ?? 0,
+    total_latency_ms: t.execution_time_ms ?? t.total_latency_ms ?? t.totalLatencyMs ?? t.latency_ms ?? 0,
+    prompt_tokens: pTokens,
+    completion_tokens: cTokens,
     model: t.model || 'FastAPI RAG',
+
+    // Agentic Telemetry fields
+    query_type: queryType,
+    routing_confidence: routingConfidence,
+    retrieval_strategy: retrievalStrategy,
+    inferred_filters: inferredFilters,
+    applied_filters: appliedFilters,
+    filter_relaxed: filterRelaxed,
+    verification_score: verificationScore,
+    verification: verification,
+    faithfulness_passed: faithfulnessPassed,
+    retry_count: retryCount,
+    retry_reasons: retryReasons,
+    cache_hit: cacheHit,
+    cache_similarity: cacheSimilarity,
+    stage_timings: t.stage_timings || t.stage_timings_ms || undefined,
+    similarity_scores: Array.isArray(t.similarity_scores) ? t.similarity_scores : undefined,
+    rerank_scores: Array.isArray(t.rerank_scores) ? t.rerank_scores : undefined,
+    sources_used: Array.isArray(t.sources_used) ? t.sources_used : undefined,
   };
 }
 
@@ -214,7 +337,11 @@ export class ApiClient {
             });
           }
           if (doneData.retrieval_trace) {
-            callbacks.onTrace?.(mapTrace(doneData.retrieval_trace));
+            const rawTrace = {
+              ...doneData.retrieval_trace,
+              verification: doneData.retrieval_trace.verification || doneData.verification,
+            };
+            callbacks.onTrace?.(mapTrace(rawTrace));
           }
           callbacks.onDone?.(doneData);
         } else {
@@ -417,27 +544,14 @@ export class ApiClient {
 
     const rawTraces = Array.isArray(data.recent_traces) ? data.recent_traces : [];
     const mappedTraces: QueryTrace[] = rawTraces.map((t: any, idx: number) => {
-      const topScore = Array.isArray(t.rerank_scores) && t.rerank_scores.length > 0
-        ? t.rerank_scores[0]
-        : (typeof t.top_rerank_score === 'number' ? t.top_rerank_score : 0.88);
-
-      const pTokens = t.token_usage?.prompt_tokens ?? t.prompt_tokens ?? 0;
-      const cTokens = t.token_usage?.completion_tokens ?? t.completion_tokens ?? 0;
-
-      return {
-        trace_id: t.trace_id || `tr_${idx}_${Date.now()}`,
-        timestamp: t.timestamp || new Date().toISOString(),
-        original_query: t.query || t.original_query || 'Query',
-        query_rewritten: t.rewritten_query || t.query_rewritten,
-        expanded_queries: t.sub_queries || t.expanded_queries || [],
-        total_chunks_retrieved: t.candidate_count ?? t.total_chunks_retrieved ?? 0,
-        top_rerank_score: topScore,
-        rerank_latency_ms: t.stage_timings?.reranking ?? t.rerank_latency_ms ?? 0,
-        total_latency_ms: t.execution_time_ms ?? t.total_latency_ms ?? 0,
-        prompt_tokens: pTokens,
-        completion_tokens: cTokens,
-        model: t.model || 'FastAPI RAG (Qwen 2.5)',
-      };
+      const trace = mapTrace(t);
+      if (!trace.original_query) {
+        trace.original_query = 'Query';
+      }
+      if (!t.trace_id && !t.id) {
+        trace.trace_id = `tr_${idx}_${Date.now()}`;
+      }
+      return trace;
     });
 
     const promptTokens = data.token_usage?.prompt_tokens ?? data.prompt_tokens ?? 0;

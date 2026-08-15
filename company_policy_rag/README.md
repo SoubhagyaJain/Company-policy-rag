@@ -430,7 +430,7 @@ Additional quality signals:
 - [x] 🆕 Self-Reflection & Answer Verification (4D scoring + autonomous retry)
 - [x] 🆕 Dynamic Metadata Extraction & Filtering (ingestion tagging + query-time inference)
 - [x] 🆕 Filter Relaxation Fallback (zero-result recovery)
-- [ ] Frontend agentic visual indicators (routing badges, verification pills, filter tags)
+- [x] 🆕 Frontend Agentic Visual Indicators (routing badges, verification pills, 4D progress bars, filter tags, cache badges)
 - [ ] Graph RAG integration (Neo4j for entity relationships)
 - [ ] Multi-user authentication & role-based access
 - [ ] Kubernetes Helm charts for cloud deployment

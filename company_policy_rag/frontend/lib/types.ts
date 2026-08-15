@@ -11,6 +11,28 @@ export interface Citation {
   url?: string;
 }
 
+export type QueryCategory =
+  | 'factual'
+  | 'comparison'
+  | 'enumeration'
+  | 'procedural'
+  | 'conversational';
+
+export type QueryCategoryType = QueryCategory | string;
+
+export interface VerificationReport {
+  faithfulness: number;
+  completeness: number;
+  citation_coverage: number;
+  coherence: number;
+  composite_score: number;
+  passed: boolean;
+  critique?: string | null;
+  missing_aspects?: string[];
+  unsupported_claims?: string[];
+  retry_count?: number;
+}
+
 export interface QueryTrace {
   trace_id: string;
   timestamp: string;
@@ -24,7 +46,27 @@ export interface QueryTrace {
   prompt_tokens: number;
   completion_tokens: number;
   model: string;
+
+  // Agentic telemetry fields
+  query_type?: string;
+  routing_confidence?: number;
+  retrieval_strategy?: string;
+  inferred_filters?: Record<string, any>;
+  applied_filters?: Record<string, any>;
+  filter_relaxed?: boolean;
+  verification_score?: number;
+  verification?: VerificationReport | null;
+  faithfulness_passed?: boolean;
+  retry_count?: number;
+  retry_reasons?: string[];
+  cache_hit?: boolean;
+  cache_similarity?: number | null;
+  stage_timings?: Record<string, number>;
+  similarity_scores?: number[];
+  rerank_scores?: number[];
+  sources_used?: string[];
 }
+
 
 export interface ChatMessageData {
   id: string;
