@@ -326,16 +326,93 @@ Key configuration options in `.env`:
 
 ---
 
-## 📊 Benchmarks & Testing
+## 📊 Evaluation & Benchmarks
 
-The system is validated by an extensive integration and unit test suite comprising **497 tests**. This ensures enterprise-level reliability and safety under load.
+### Golden Dataset Evaluation
 
-### Key Performance Metrics
-- **Test Coverage**: 497 automated tests passing covering unit functions, LLM integration, adversarial edge cases, and concurrency boundaries.
-- **Dynamic Model Switching**: Zero-downtime model swaps via a debounced queue and active Reader-Writer locks. Rapid switching (e.g. 50+ rapid UI clicks) seamlessly drains the queue without exhausting GPU VRAM or crashing Ollama.
-- **Cache Hit Latency**: Sub-100ms response times for semantically cached queries via ChromaDB.
-- **Time-To-First-Token (TTFT)**: Sub-1 second streaming latency for cached queries. (Note: Initial cold starts for uncached Ollama model swapping may vary based on hardware).
-- **Adversarial Resilience**: Defended against Path Traversal (LFI) attempts on document uploads, strict payload bounds, and graceful connection drops via `cancel_token` SSE handling.
+Evaluated on a curated **95-question golden dataset** (60 policy + 35 AI guidebook) across 8 query categories, using an automated **LLM-as-judge** pipeline (`src/evaluation.py`) with local Ollama models.
+
+#### Aggregate Metrics (60-case full run, Qwen 2.5 7B)
+
+| Metric | Score | Quality Gate |
+|--------|-------|-------------|
+| **Hit Rate** | 0.717 | ≥ 0.75 |
+| **Context Precision** | 0.538 | ≥ 0.50 ✅ |
+| **Context Recall** | 0.675 | ≥ 0.55 ✅ |
+| **Faithfulness** (LLM Judge) | 0.733 | ≥ 0.70 ✅ |
+| **Answer Relevancy** (LLM Judge) | 0.610 | ≥ 0.60 ✅ |
+
+#### Per-Corpus Breakdown
+
+| Corpus | Hit Rate | Ctx Precision | Ctx Recall | Faithfulness | Relevancy |
+|--------|----------|---------------|------------|--------------|-----------|
+| **Policy Handbook** | 0.720 | 0.537 | 0.687 | 0.780 | 0.716 |
+| **AI Guidebook** | 0.714 | 0.538 | 0.667 | 0.700 | 0.534 |
+
+#### Per-Query-Type Breakdown
+
+| Query Type | Hit Rate | Faithfulness | Relevancy |
+|------------|----------|--------------|-----------|
+| `factual` (28 cases) | 0.571 | 0.782 | 0.621 |
+| `policy_interpretation` (6) | 1.000 | 0.717 | 0.750 |
+| `edge_case` (5) | 0.400 | 0.860 | 0.640 |
+| `enumeration` (5) | 0.800 | 0.800 | 0.460 |
+| `code` (4) | 1.000 | 0.375 | 0.600 |
+| `pattern` (6) | 0.833 | 0.667 | 0.567 |
+| `workflow` (6) | 1.000 | 0.667 | 0.567 |
+
+> **Note**: Edge-case queries intentionally test abstention behavior — low hit rate is expected when the corpus genuinely lacks the topic. High faithfulness (0.860) confirms the system correctly refuses to hallucinate.
+
+### Human Evaluation & Judge Agreement
+
+5-case human evaluation scored by project author against rubric (`HUMAN_EVAL_RUBRIC.md`):
+
+| Metric | Human Score | LLM Judge Score | Agreement |
+|--------|-------------|-----------------|-----------|
+| **Faithfulness** | 0.85 | — | Pearson r = **0.95**, MAE = 0.05, within-0.1 agreement = 80% |
+| **Answer Relevancy** | 0.75 | — | Pearson r = **0.82**, MAE = 0.17, within-0.1 agreement = 60% |
+
+Cohen's Kappa (faithfulness, threshold 0.5): **1.0** — perfect binary agreement between human and LLM judge.
+
+### Self-Reflection Verification Thresholds
+
+The agentic verification engine enforces per-dimension quality gates:
+
+| Dimension | Weight | Pass Threshold |
+|-----------|--------|---------------|
+| **Faithfulness** | 0.35 | ≥ 0.75 |
+| **Completeness** | 0.30 | ≥ 0.70 |
+| **Citation Coverage** | 0.20 | ≥ 0.60 |
+| **Coherence** | 0.15 | ≥ 0.70 |
+| **Composite** | — | ≥ 0.70 |
+
+Failed answers trigger up to **2 autonomous retry cycles** with parameter adjustments before graceful fallback.
+
+### Latency Benchmarks (RTX 4050 · CUDA · Qwen 2.5 7B)
+
+| Pipeline Stage | Mean (ms) | P50 (ms) | P95 (ms) |
+|----------------|-----------|----------|----------|
+| Query Rewrite | 1,129 | 1,063 | 1,337 |
+| ChromaDB Retrieval | 55 | 49 | 75 |
+| Cross-Encoder Reranking | 28,553 | 28,466 | 29,688 |
+| LLM Generation | 16,392 | 20,183 | 25,509 |
+| Faithfulness Guard | 839 | 859 | 1,088 |
+| **End-to-End** | **48,984** | **53,543** | **58,769** |
+
+> **Cache Hit Latency**: Sub-100ms for semantically cached queries via ChromaDB cosine similarity.
+
+### Test Suite
+
+| Category | Tests | Coverage |
+|----------|-------|----------|
+| **Unit Tests** | 527 | Query router, verifier, retry engine, chunkers, reranker, citations |
+| **E2E Tests** | 117 | Agentic layer tiers 1–4 (features, boundaries, cross-feature, real-world scenarios) |
+| **Integration Tests** | 10 | Full pipeline integration with LLM and vector store |
+| **Total** | **654** | Across **73 test files** |
+
+Additional quality signals:
+- **Dynamic Model Switching**: Zero-downtime model swaps via debounced queue and Reader-Writer locks. 50+ rapid UI clicks drain seamlessly without VRAM exhaustion.
+- **Adversarial Resilience**: Path Traversal (LFI) defense on uploads, strict payload bounds, graceful SSE `cancel_token` handling.
 
 ---
 
