@@ -160,7 +160,7 @@ pip install -r requirements.txt
 ### 3. Frontend Setup
 
 ```bash
-cd company_policy_rag/frontend
+cd frontend
 npm install
 ```
 
