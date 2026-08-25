@@ -1,3 +1,4 @@
+.venv/
 node_modules/
 .next/
 __pycache__/
@@ -7,3 +8,5 @@ logs/
 .agents/
 *.tsbuildinfo
 .env
+tmp_test_output/
+*.sqlite3*

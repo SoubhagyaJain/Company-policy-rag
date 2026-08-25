@@ -100,7 +100,7 @@ class CrossEncoderReranker:
             os.environ["HF_HUB_OFFLINE"] = "1"
             os.environ["TRANSFORMERS_OFFLINE"] = "1"
             try:
-                num_cpus = min(4, os.cpu_count() or 4)
+                num_cpus = os.cpu_count() or 8
                 torch.set_num_threads(num_cpus)
                 self._model = CrossEncoder(self.model_name, device=dev)
             except Exception as local_err:
@@ -129,14 +129,16 @@ class CrossEncoderReranker:
         effective_top_n = self.top_n if top_n is None else top_n
         effective_min_ratio = self.min_ratio if min_ratio is None else min_ratio
 
-        candidate_pool_limit = max(len(candidates), effective_top_n * 3, 30)
+        candidate_pool_limit = min(len(candidates), max(effective_top_n * 2, 8))
         candidates_to_rerank = candidates[:candidate_pool_limit]
         if self._model is not None:
             try:
+                import torch
                 # Truncate text to first 350 chars for high-speed cross-encoder scoring
                 pairs = [[query, (c.chunk.text or "")[:350]] for c in candidates_to_rerank]
                 logger.info("Starting CrossEncoder prediction for %d pairs...", len(pairs))
-                logits = self._model.predict(pairs, batch_size=8, show_progress_bar=False)
+                with torch.inference_mode():
+                    logits = self._model.predict(pairs, batch_size=len(pairs), show_progress_bar=False)
                 logger.info("CrossEncoder prediction complete.")
                 if hasattr(logits, "tolist"):
                     logits = logits.tolist()

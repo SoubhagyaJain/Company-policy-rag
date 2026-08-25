@@ -24,11 +24,15 @@ class Citation(BaseModel):
     document_id: str
     source_file: str
     page_number: int | None = None
+    internal_page_index: int | None = None
+    page_label: str | None = None
     section_title: str | None = None
     section_path: str | None = None
     snippet: str = Field(..., description="Relevant text snippet cited")
     relevance_score: float = Field(default=0.0)
     selection_reason: str = Field(default="cited_in_answer", description="cited_in_answer | score_threshold_fallback")
+    image_url: str | None = None
+    image_assets: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class QueryRewriteResult(BaseModel):
@@ -46,6 +50,10 @@ class QueryCategory(str, Enum):
     ENUMERATION = "enumeration"
     PROCEDURAL = "procedural"
     CONVERSATIONAL = "conversational"
+    IMPLEMENTATION = "implementation"
+    CODE = "code"
+    EXPLANATION = "explanation"
+    ARCHITECTURE = "architecture"
 
 
 class RetrievalStrategy(BaseModel):
@@ -87,6 +95,12 @@ class RAGTrace(BaseModel):
     query_type: str | None = None
     routing_confidence: float | None = None
     retrieval_strategy: str | None = None
+    query_scope: str | None = None
+    active_document_id: str | None = None
+    active_document_name: str | None = None
+    allowed_document_ids: list[str] = Field(default_factory=list)
+    cross_document_chunks_rejected: int = 0
+    final_context_documents: list[str] = Field(default_factory=list)
     inferred_filters: dict[str, Any] = Field(default_factory=dict)
     applied_filters: dict[str, Any] = Field(default_factory=dict)
     filter_relaxed: bool = False
@@ -104,6 +118,20 @@ class RAGTrace(BaseModel):
     retry_reasons: list[str] = Field(default_factory=list)
     cache_hit: bool = False
     cache_similarity: float | None = None
+    # High-Observability fields (Phase 14)
+    anchor_section: str | None = None
+    evidence_text_count: int = 0
+    evidence_code_count: int = 0
+    evidence_diagram_count: int = 0
+    evidence_table_count: int = 0
+    section_expansion: bool = False
+    adjacent_page_check: bool = False
+    vision_fallback: bool = False
+    vision_model: str | None = None
+    vision_cache_status: str | None = None
+    evidence_sufficiency_passed: bool = True
+    generation_model: str | None = None
+    grounding_validation_passed: bool = True
 
 
 class RAGResponse(BaseModel):

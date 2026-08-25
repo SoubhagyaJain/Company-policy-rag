@@ -396,6 +396,39 @@ BALANCED_REFINE_PROMPT_TMPL = (
     "Refined answer:"
 )
 
+# ── Qwen 2.5 7B Optimized Compact Prompts (v3) ──────────────────────────────
+
+QWEN_COMPACT_QA_PROMPT_TMPL = (
+    "You are a project-aware assistant.\n\n"
+    "Answer the user's question using only the retrieved context.\n\n"
+    "Rules:\n"
+    "1. Prefer direct evidence from the context.\n"
+    "2. Do not invent information.\n"
+    "3. If the answer is not present, say:\n"
+    f"   \"{INSUFFICIENT_INFO_MESSAGE}\"\n"
+    "4. If evidence conflicts, explain the conflict.\n"
+    "5. Be concise unless the user requests detail.\n"
+    "6. Cite document sources using [Source N] tags.\n\n"
+    "RETRIEVED CONTEXT:\n"
+    "{context_str}\n\n"
+    "USER QUESTION:\n"
+    "{query_str}\n\n"
+    "ANSWER:"
+)
+
+QWEN_COMPACT_REFINE_PROMPT_TMPL = (
+    "You are a project-aware assistant refining an answer with additional context.\n\n"
+    "USER QUESTION: {query_str}\n"
+    "CURRENT ANSWER: {existing_answer}\n\n"
+    "ADDITIONAL RETRIEVED CONTEXT:\n"
+    "{context_msg}\n\n"
+    "Rules:\n"
+    "1. Update the answer only if the new context provides relevant additional facts.\n"
+    "2. Maintain [Source N] citation tags.\n"
+    "3. If the new context is not useful, return the CURRENT ANSWER unchanged.\n\n"
+    "REFINED ANSWER:"
+)
+
 # ── Legacy standard (v1) ─────────────────────────────────────────────────────
 
 STANDARD_TEXT_QA_PROMPT_TMPL = (
@@ -611,7 +644,7 @@ def resolve_grounding_mode(
     ver = version or settings.response_prompt_version
     if ver == "v2_strict":
         return "strict"
-    if ver in ("v2_balanced", "balanced"):
+    if ver in ("v2_balanced", "balanced", "v3_qwen_compact"):
         return "balanced"
     if ver == "v1_standard":
         return "balanced"
@@ -628,6 +661,8 @@ def get_text_qa_template(
     if mode == "strict":
         return PromptTemplate(STRICT_TEXT_QA_PROMPT_TMPL)
     ver = version or settings.response_prompt_version
+    if ver == "v3_qwen_compact":
+        return PromptTemplate(QWEN_COMPACT_QA_PROMPT_TMPL)
     if ver == "v1_standard":
         return PromptTemplate(STANDARD_TEXT_QA_PROMPT_TMPL)
     return PromptTemplate(BALANCED_TEXT_QA_PROMPT_TMPL)
@@ -643,6 +678,8 @@ def get_refine_template(
     if mode == "strict":
         return PromptTemplate(STRICT_REFINE_PROMPT_TMPL)
     ver = version or settings.response_prompt_version
+    if ver == "v3_qwen_compact":
+        return PromptTemplate(QWEN_COMPACT_REFINE_PROMPT_TMPL)
     if ver == "v1_standard":
         return PromptTemplate(STANDARD_REFINE_PROMPT_TMPL)
     return PromptTemplate(BALANCED_REFINE_PROMPT_TMPL)

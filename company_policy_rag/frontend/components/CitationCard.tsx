@@ -72,8 +72,13 @@ export function CitationCard({
       <div className="flex items-center justify-between text-[10px] text-charcoal-muted dark:text-cream-500 border-t border-sand-border/40 dark:border-sand-darkBorder/40 pt-1.5">
         <div className="flex items-center gap-2">
           {citation.page !== undefined && (
-            <span className="flex items-center gap-0.5 font-mono">
-              <Hash className="w-2.5 h-2.5" /> Page {citation.page}
+            <span className="flex items-center gap-0.5 font-mono" title={citation.page_label && citation.page_label !== String(citation.page) ? `PDF physical stream page ${citation.page}` : undefined}>
+              <Hash className="w-2.5 h-2.5" /> {citation.page_label && citation.page_label !== String(citation.page) ? `Page ${citation.page_label} (PDF p. ${citation.page})` : `Page ${citation.page}`}
+            </span>
+          )}
+          {citation.image_url && (
+            <span className="px-1 py-0.2 rounded bg-terracotta-500/15 text-terracotta-600 dark:text-terracotta-400 font-mono text-[9px] font-semibold">
+              🖼️ Visual Asset
             </span>
           )}
           {citation.heading && (

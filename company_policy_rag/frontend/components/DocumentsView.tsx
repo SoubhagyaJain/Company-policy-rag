@@ -16,6 +16,9 @@ import {
   HardDrive,
   Layers,
   AlertTriangle,
+  RotateCcw,
+  Sparkles,
+  Eye,
 } from 'lucide-react';
 
 import { LiquidGlassCard } from '@/components/LiquidGlassCard';
@@ -40,27 +43,50 @@ function getFileIcon(fileType?: string) {
   }
 }
 
-function getStatusBadge(status: DocumentItem['status']) {
-  switch (status) {
-    case 'indexed':
-      return (
+function getStatusBadge(doc: DocumentItem) {
+  const statusLower = (doc.status || '').toLowerCase();
+
+  if (statusLower === 'ready' || statusLower === 'indexed' || statusLower === 'ready_with_vision') {
+    const assetsCount = doc.visual_assets_count ?? (doc.image_assets?.length ?? 0);
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-          <CheckCircle2 className="w-3 h-3" /> Indexed
+          <CheckCircle2 className="w-3 h-3" /> Text Ready
         </span>
-      );
-    case 'processing':
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 animate-pulse">
-          <Clock className="w-3 h-3" /> Processing
-        </span>
-      );
-    case 'failed':
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
-          <XCircle className="w-3 h-3" /> Failed
-        </span>
-      );
+        {assetsCount > 0 ? (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9.5px] font-mono bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20" title={`${assetsCount} standalone high-res images extracted and available`}>
+            <Eye className="w-2.5 h-2.5" /> {assetsCount} Visual {assetsCount === 1 ? 'Asset' : 'Assets'}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9.5px] font-mono bg-cream-200 text-charcoal-muted dark:bg-sand-dark dark:text-cream-400 border border-sand-border dark:border-sand-darkBorder" title="Document contains pure text content">
+            Text Only
+          </span>
+        )}
+      </div>
+    );
   }
+
+  if (statusLower === 'processing' || statusLower === 'text_indexing' || statusLower === 'vision_processing') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 animate-pulse">
+        <Clock className="w-3 h-3 animate-spin" /> {doc.current_stage || 'Indexing'} ({doc.progress ?? 50}%)
+      </span>
+    );
+  }
+
+  if (statusLower === 'partially_indexed') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
+        <CheckCircle2 className="w-3 h-3" /> Text Ready (Visual Partial)
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+      <XCircle className="w-3 h-3" /> Failed
+    </span>
+  );
 }
 
 /* ─── List item animation variants ─────────────── */
@@ -82,14 +108,18 @@ export function DocumentsView() {
     loading,
     uploading,
     uploadProgress,
+    currentStage,
+    stageMessage,
     error,
     refreshDocuments,
     uploadDocument,
+    retryDocument,
     deleteDocument,
   } = useDocuments();
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('General');
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const CATEGORIES = ['General', 'HR & Benefits', 'Operations', 'IT & Security', 'Finance', 'Compliance'];
@@ -128,6 +158,12 @@ export function DocumentsView() {
     [uploadDocument, selectedCategory],
   );
 
+  const handleRetry = async (docId: string) => {
+    setRetryingId(docId);
+    await retryDocument(docId);
+    setRetryingId(null);
+  };
+
   return (
     <div className="flex-1 h-[calc(100vh-57px)] overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-[#FAF9F5] dark:bg-[#141413]">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -157,10 +193,12 @@ export function DocumentsView() {
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-700 dark:text-rose-400 flex items-center gap-2"
+            className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-700 dark:text-rose-400 flex items-center justify-between gap-2"
           >
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            {error}
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
           </motion.div>
         )}
 
@@ -219,23 +257,32 @@ export function DocumentsView() {
               ))}
             </div>
 
-            {/* Upload progress bar */}
+            {/* Stage-by-Stage Real Progress Bar */}
             {uploading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="w-full max-w-xs space-y-1.5 mt-2"
+                className="w-full max-w-sm space-y-2 mt-3 p-3.5 rounded-xl bg-cream-100/90 dark:bg-[#1A1916] border border-sand-border dark:border-sand-darkBorder"
               >
+                <div className="flex items-center justify-between text-xs font-mono font-medium">
+                  <span className="text-terracotta-700 dark:text-terracotta-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                    {currentStage || 'INDEXING'}
+                  </span>
+                  <span className="font-bold text-charcoal dark:text-cream-100">{uploadProgress}%</span>
+                </div>
+
                 <div className="w-full h-2 rounded-full bg-cream-200 dark:bg-sand-dark overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-terracotta-500 to-amber-500"
+                    className="h-full rounded-full bg-gradient-to-r from-terracotta-500 via-amber-500 to-emerald-500"
                     initial={{ width: 0 }}
                     animate={{ width: `${uploadProgress}%` }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
                   />
                 </div>
-                <p className="text-center text-[11px] font-mono text-charcoal-muted dark:text-cream-400">
-                  Uploading & indexing… {uploadProgress}%
+
+                <p className="text-center text-[11px] font-sans text-charcoal-muted dark:text-cream-400 truncate">
+                  {stageMessage || 'Processing document ingestion...'}
                 </p>
               </motion.div>
             )}
@@ -261,8 +308,8 @@ export function DocumentsView() {
               icon: <HardDrive className="w-4 h-4 text-sky-500" />,
             },
             {
-              label: 'Indexed',
-              value: documents.filter((d) => d.status === 'indexed').length,
+              label: 'Ready & Indexed',
+              value: documents.filter((d) => d.status === 'indexed' || d.status === 'READY' || d.status === 'READY_WITH_VISION').length,
               icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
             },
           ].map((stat) => (
@@ -308,11 +355,11 @@ export function DocumentsView() {
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-charcoal dark:text-cream-100 truncate">
                           {doc.filename}
                         </p>
-                        {getStatusBadge(doc.status)}
+                        {getStatusBadge(doc)}
                       </div>
 
                       <div className="flex items-center gap-3 mt-1 text-[11px] text-charcoal-muted dark:text-cream-400 font-mono">
@@ -331,14 +378,28 @@ export function DocumentsView() {
                       {doc.category}
                     </span>
 
-                    {/* Delete button */}
-                    <button
-                      onClick={() => deleteDocument(doc.id)}
-                      className="p-2 rounded-lg hover:bg-rose-500/10 text-charcoal-muted dark:text-cream-400 hover:text-rose-600 transition-colors shrink-0"
-                      title="Delete document"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {doc.status?.toLowerCase() === 'failed' && (
+                        <button
+                          onClick={() => handleRetry(doc.id)}
+                          disabled={retryingId === doc.id}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-xs hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                          title="Retry indexing from stored file"
+                        >
+                          <RotateCcw className={`w-3 h-3 ${retryingId === doc.id ? 'animate-spin' : ''}`} />
+                          Retry
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => deleteDocument(doc.id)}
+                        className="p-2 rounded-lg hover:bg-rose-500/10 text-charcoal-muted dark:text-cream-400 hover:text-rose-600 transition-colors shrink-0"
+                        title="Delete document"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </LiquidGlassCard>
                 </motion.div>
               ))}

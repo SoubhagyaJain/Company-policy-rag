@@ -1,0 +1,1880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enterprise Policy RAG — Architectural Field Notes & System Anatomy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-canvas: #FAF7F2;
+      --bg-canvas-subtle: #F3EFE8;
+      --bg-card: #FFFFFF;
+      --bg-card-warm: #FCFAF6;
+      --bg-dark: #1A1917;
+      
+      --text-main: #201E1C;
+      --text-muted: #645F58;
+      --text-light: #8E887F;
+      --text-on-dark: #F7F5F0;
+      
+      --border-subtle: #E8E2D8;
+      --border-strong: #D3CBBE;
+      
+      --accent-terracotta: #C85A32;
+      --accent-terracotta-soft: rgba(200, 90, 50, 0.08);
+      --accent-sage: #3F7057;
+      --accent-sage-soft: rgba(63, 112, 87, 0.08);
+      --accent-amber: #B87326;
+      --accent-amber-soft: rgba(184, 115, 38, 0.08);
+      --accent-slate: #3B5A75;
+      --accent-slate-soft: rgba(59, 90, 117, 0.08);
+      
+      --font-display: 'Instrument Serif', Georgia, serif;
+      --font-editorial: 'Newsreader', Georgia, serif;
+      --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      
+      --space-unit: 8px;
+      --container-max: 1180px;
+      --content-max: 820px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.65;
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Subtle Paper Texture */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      opacity: 0.025;
+      background-image: radial-gradient(#000 1px, transparent 1px);
+      background-size: 16px 16px;
+      z-index: 9999;
+    }
+
+    /* Selection */
+    ::selection {
+      background-color: #E6D8C8;
+      color: var(--text-main);
+    }
+
+    /* Layout Containers */
+    .container {
+      width: 90%;
+      max-width: var(--container-max);
+      margin: 0 auto;
+    }
+
+    .container-prose {
+      width: 90%;
+      max-width: var(--content-max);
+      margin: 0 auto;
+    }
+
+    /* Header Nav */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      background: rgba(250, 247, 242, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border-subtle);
+      z-index: 100;
+      padding: 16px 0;
+    }
+
+    .nav-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-logo {
+      font-family: var(--font-editorial);
+      font-size: 19px;
+      font-style: italic;
+      font-weight: 500;
+      color: var(--text-main);
+      text-decoration: none;
+    }
+
+    .nav-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-light);
+      background: var(--bg-canvas-subtle);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 20px;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--accent-terracotta);
+    }
+
+    /* Section Styling */
+    section {
+      padding: 96px 0;
+      position: relative;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent-terracotta);
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-eyebrow::before {
+      content: "";
+      display: inline-block;
+      width: 14px;
+      height: 1px;
+      background-color: var(--accent-terracotta);
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(36px, 5vw, 56px);
+      line-height: 1.08;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+      margin-bottom: 24px;
+    }
+
+    .section-desc {
+      font-family: var(--font-editorial);
+      font-size: clamp(19px, 2.2vw, 24px);
+      line-height: 1.45;
+      color: var(--text-muted);
+      margin-bottom: 48px;
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 110px 0 80px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at 80% 20%, rgba(200, 90, 50, 0.03) 0%, transparent 60%);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      background: #FFFFFF;
+      border: 1px solid var(--border-strong);
+      padding: 6px 14px;
+      border-radius: 999px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background-color: var(--accent-sage);
+      border-radius: 50%;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(48px, 6.5vw, 76px);
+      line-height: 1.02;
+      color: var(--text-main);
+      font-weight: 400;
+      letter-spacing: -0.03em;
+      margin-bottom: 28px;
+    }
+
+    .hero-title em {
+      font-family: var(--font-display);
+      font-style: italic;
+      color: var(--accent-terracotta);
+    }
+
+    .hero-thesis {
+      font-family: var(--font-editorial);
+      font-size: 23px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      margin-bottom: 36px;
+      border-left: 2px solid var(--border-strong);
+      padding-left: 20px;
+    }
+
+    .hero-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .hero-meta-item strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* Hand-drawn SVG Illustration Containers */
+    .illustration-frame {
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .illustration-frame::after {
+      content: attr(data-caption);
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      color: var(--text-light);
+      font-style: italic;
+    }
+
+    svg.hand-drawn {
+      width: 100%;
+      height: auto;
+      max-height: 380px;
+    }
+
+    /* Section 2: Architecture Infographic */
+    .glance-container {
+      margin-top: 40px;
+    }
+
+    .pipeline-board {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      position: relative;
+      margin-top: 30px;
+    }
+
+    .pipeline-stage {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 24px 18px;
+      position: relative;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .pipeline-stage:hover {
+      border-color: var(--accent-terracotta);
+      transform: translateY(-2px);
+    }
+
+    .stage-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-light);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .stage-name {
+      font-family: var(--font-editorial);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 10px;
+      line-height: 1.25;
+    }
+
+    .stage-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .stage-tags {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .stage-pill {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      background: var(--bg-canvas-subtle);
+      border-radius: 3px;
+      color: var(--text-muted);
+    }
+
+    /* Section 3: Entry Point */
+    .entry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+
+    .warmup-sequence {
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 32px;
+    }
+
+    .warmup-step {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .warmup-step:last-child {
+      margin-bottom: 0;
+    }
+
+    .warmup-step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      left: 15px;
+      top: 32px;
+      bottom: -16px;
+      width: 1px;
+      background: var(--border-subtle);
+    }
+
+    .step-badge {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--bg-canvas-subtle);
+      border: 1px solid var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+      flex-shrink: 0;
+      z-index: 2;
+    }
+
+    .warmup-content h4 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .warmup-content p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .warmup-content code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--bg-canvas-subtle);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--accent-slate);
+    }
+
+    /* Section 4: Vertical Execution Timeline */
+    .timeline {
+      position: relative;
+      max-width: 920px;
+      margin: 40px auto 0 auto;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 40px;
+      width: 2px;
+      background: repeating-linear-gradient(to bottom, var(--border-strong) 0, var(--border-strong) 4px, transparent 4px, transparent 8px);
+    }
+
+    .timeline-node {
+      display: flex;
+      gap: 32px;
+      margin-bottom: 40px;
+      position: relative;
+    }
+
+    .timeline-marker {
+      width: 82px;
+      flex-shrink: 0;
+      text-align: right;
+    }
+
+    .timeline-step-index {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent-terracotta);
+      background: var(--bg-canvas);
+      padding: 4px 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .timeline-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 28px;
+      flex-grow: 1;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.015);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .timeline-card:hover {
+      border-color: var(--border-strong);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.03);
+    }
+
+    .timeline-card h3 {
+      font-family: var(--font-editorial);
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .timeline-file {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: normal;
+      color: var(--accent-slate);
+      background: var(--accent-slate-soft);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .timeline-card p {
+      font-size: 14.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+
+    .timeline-branch {
+      background: var(--bg-canvas-subtle);
+      border-left: 3px solid var(--accent-amber);
+      padding: 12px 16px;
+      border-radius: 0 4px 4px 0;
+      font-size: 13px;
+      color: var(--text-main);
+    }
+
+    /* Section 5: Data Journey */
+    .data-journey-tabs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 36px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+
+    .data-tab-btn {
+      background: transparent;
+      border: none;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .data-tab-btn.active {
+      background: var(--text-main);
+      color: var(--bg-canvas);
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1.3fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 22px;
+    }
+
+    .flow-box {
+      font-size: 13.5px;
+    }
+
+    .flow-box-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-light);
+      margin-bottom: 4px;
+    }
+
+    .flow-box-val {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-main);
+      background: var(--bg-canvas-subtle);
+      padding: 6px 10px;
+      border-radius: 4px;
+      display: block;
+      word-break: break-word;
+    }
+
+    .flow-op {
+      text-align: center;
+    }
+
+    .flow-op-title {
+      font-family: var(--font-editorial);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent-terracotta);
+      margin-bottom: 4px;
+    }
+
+    .flow-op-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .flow-arrow {
+      color: var(--text-light);
+      font-size: 18px;
+    }
+
+    /* Section 6: Organic Architecture Composition */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 20px;
+      margin-top: 40px;
+    }
+
+    .arch-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 28px;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .arch-card:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-2px);
+    }
+
+    .arch-hero {
+      grid-column: span 12;
+      background: #FFFFFF;
+      border: 2px solid var(--text-main);
+    }
+
+    .arch-major {
+      grid-column: span 6;
+    }
+
+    .arch-minor {
+      grid-column: span 4;
+      padding: 22px;
+    }
+
+    .arch-header {
+      margin-bottom: 16px;
+    }
+
+    .arch-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-terracotta);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .arch-name {
+      font-family: var(--font-editorial);
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+
+    .arch-body p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin-bottom: 18px;
+    }
+
+    .arch-spec-table {
+      width: 100%;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 14px;
+      font-size: 12px;
+    }
+
+    .arch-spec-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .arch-spec-key {
+      font-family: var(--font-mono);
+      color: var(--text-light);
+    }
+
+    .arch-spec-val {
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    /* Section 7: Tests Reveal */
+    .test-guarantee-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 40px;
+    }
+
+    .guarantee-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 28px;
+      position: relative;
+    }
+
+    .guarantee-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background-color: var(--accent-sage);
+      border-radius: 8px 0 0 8px;
+    }
+
+    .guarantee-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+
+    .guarantee-title {
+      font-family: var(--font-editorial);
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .guarantee-suite {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-light);
+    }
+
+    .guarantee-equation {
+      background: var(--bg-canvas-subtle);
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-main);
+      margin: 14px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .guarantee-note {
+      font-family: var(--font-editorial);
+      font-style: italic;
+      font-size: 14px;
+      color: var(--accent-terracotta);
+    }
+
+    /* Section 8: Failure Story */
+    .failure-story-box {
+      background: #FFFFFF;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 40px;
+      margin-top: 40px;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.02);
+    }
+
+    .failure-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      position: relative;
+      margin-top: 32px;
+    }
+
+    .failure-step-card {
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 20px;
+      background: var(--bg-card-warm);
+      position: relative;
+    }
+
+    .failure-step-card.alert {
+      border-color: var(--accent-amber);
+      background: var(--accent-amber-soft);
+    }
+
+    .failure-step-card.recovered {
+      border-color: var(--accent-sage);
+      background: var(--accent-sage-soft);
+    }
+
+    .failure-step-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-light);
+    }
+
+    .failure-step-title {
+      font-family: var(--font-editorial);
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .failure-step-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Section 9: File Map */
+    .file-map-group {
+      margin-bottom: 40px;
+    }
+
+    .file-group-heading {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-light);
+      margin-bottom: 16px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .file-row {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: #FFFFFF;
+      transition: background-color 0.15s ease;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+
+    .file-row:hover {
+      background-color: var(--bg-canvas-subtle);
+    }
+
+    .file-path {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-slate);
+      word-break: break-all;
+    }
+
+    .file-summary {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .file-summary strong {
+      color: var(--text-main);
+    }
+
+    /* Section 10: Mental Model */
+    .mental-model-hero {
+      background: var(--bg-dark);
+      color: var(--text-on-dark);
+      border-radius: 12px;
+      padding: 60px;
+      margin-top: 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mental-model-hero::before {
+      content: "";
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      background: radial-gradient(circle at 80% 30%, rgba(200, 90, 50, 0.15) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .mental-model-chain {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin: 36px 0;
+    }
+
+    .chain-node {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 10px 18px;
+      border-radius: 6px;
+      color: #FFFFFF;
+    }
+
+    .chain-arrow {
+      color: var(--accent-terracotta);
+      font-size: 18px;
+    }
+
+    .three-pillars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      margin-top: 48px;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding-top: 36px;
+    }
+
+    .pillar-num {
+      font-family: var(--font-display);
+      font-size: 38px;
+      color: var(--accent-terracotta);
+      margin-bottom: 8px;
+      line-height: 1;
+    }
+
+    .pillar-title {
+      font-family: var(--font-editorial);
+      font-size: 20px;
+      font-weight: 600;
+      color: #FFFFFF;
+      margin-bottom: 8px;
+    }
+
+    .pillar-desc {
+      font-size: 13.5px;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.55;
+    }
+
+    /* Footer */
+    footer {
+      padding: 60px 0;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+      .hero-grid {
+        grid-template-columns: 1fr;
+      }
+      .pipeline-board {
+        grid-template-columns: 1fr;
+      }
+      .entry-grid {
+        grid-template-columns: 1fr;
+      }
+      .arch-major, .arch-minor {
+        grid-column: span 12;
+      }
+      .failure-steps {
+        grid-template-columns: 1fr;
+      }
+      .three-pillars {
+        grid-template-columns: 1fr;
+      }
+      .flow-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .flow-arrow {
+        transform: rotate(90deg);
+        margin: 4px auto;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .file-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .test-guarantee-grid {
+        grid-template-columns: 1fr;
+      }
+      .timeline::before {
+        left: 20px;
+      }
+      .timeline-node {
+        gap: 16px;
+      }
+      .timeline-marker {
+        width: 40px;
+      }
+      .mental-model-hero {
+        padding: 30px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="top-nav">
+    <div class="container nav-inner">
+      <a href="#" class="nav-logo">Enterprise Policy RAG · Field Notes</a>
+      <div class="nav-links">
+        <a href="#glance">Overview</a>
+        <a href="#entry">Entry Point</a>
+        <a href="#execution">Execution</a>
+        <a href="#data">Data Flow</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#tests">Guarantees</a>
+        <a href="#failure">Failure Path</a>
+        <a href="#files">File Map</a>
+      </div>
+      <span class="nav-tag">FastAPI + Next.js + Chroma</span>
+    </div>
+  </nav>
+
+  <!-- SECTION 1 — HERO -->
+  <header class="hero">
+    <div class="container hero-grid">
+      <div>
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          Codebase Field Notes & Systems Anatomy
+        </div>
+        <h1 class="hero-title">
+          Eliminating Hallucinations in <em>High-Stakes RAG</em>
+        </h1>
+        <p class="hero-thesis">
+          A production-grade Retrieval-Augmented Generation system designed for zero cold-start latency, multi-stage hybrid retrieval with Reciprocal Rank Fusion, Cross-Encoder GPU reranking, and an autonomous 4-dimensional self-reflection verification engine.
+        </p>
+        <div class="hero-meta-row">
+          <div class="hero-meta-item"><strong>Entry:</strong> backend/api/main.py</div>
+          <div class="hero-meta-item"><strong>Core:</strong> backend/rag/pipeline.py</div>
+          <div class="hero-meta-item"><strong>Vector Store:</strong> ChromaDB (HNSW Cosine)</div>
+          <div class="hero-meta-item"><strong>LLM Engine:</strong> Local Ollama (Qwen2.5)</div>
+        </div>
+      </div>
+
+      <!-- Hand-Drawn Illustration: Engineer & Knowledge Constellation -->
+      <div class="illustration-frame" data-caption="Fig 1.1 — The Grounded RAG Topology">
+        <svg class="hand-drawn" viewBox="0 0 450 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Human figure at desk -->
+          <circle cx="225" cy="110" r="18" stroke="#201E1C" stroke-width="2" stroke-linecap="round" fill="#FAF7F2"/>
+          <path d="M225 128 C215 145 200 170 190 220 M225 128 C235 145 250 170 260 220" stroke="#201E1C" stroke-width="2" stroke-linecap="round"/>
+          <path d="M205 160 C220 175 230 175 245 160" stroke="#201E1C" stroke-width="2" stroke-linecap="round"/>
+          <!-- Desk line -->
+          <path d="M110 220 Q225 218 340 220" stroke="#645F58" stroke-width="2" stroke-linecap="round"/>
+          <path d="M130 220 L130 280 M320 220 L320 280" stroke="#8E887F" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <!-- Terminal / Screen on desk -->
+          <rect x="200" y="170" width="50" height="40" rx="3" stroke="#201E1C" stroke-width="1.8" fill="#FFFFFF"/>
+          <line x1="210" y1="182" x2="235" y2="182" stroke="#C85A32" stroke-width="1.5"/>
+          <line x1="210" y1="190" x2="240" y2="190" stroke="#645F58" stroke-width="1.5"/>
+          <line x1="210" y1="198" x2="225" y2="198" stroke="#645F58" stroke-width="1.5"/>
+          <!-- Floating Knowledge Fragments (Constellation) -->
+          <!-- Node: Query -->
+          <g>
+            <rect x="50" y="50" width="85" height="36" rx="4" stroke="#3B5A75" stroke-width="1.5" fill="#FFFFFF"/>
+            <text x="60" y="72" font-family="'JetBrains Mono', monospace" font-size="10" fill="#3B5A75">0a. Query</text>
+            <path d="M135 68 C165 70 190 90 205 100" stroke="#3B5A75" stroke-width="1.2" stroke-dasharray="3 3"/>
+          </g>
+          <!-- Node: Hybrid RRF -->
+          <g>
+            <rect x="310" y="45" width="95" height="42" rx="4" stroke="#B87326" stroke-width="1.5" fill="#FFFFFF"/>
+            <text x="320" y="68" font-family="'JetBrains Mono', monospace" font-size="10" fill="#B87326">03. Hybrid RRF</text>
+            <text x="320" y="80" font-family="'Plus Jakarta Sans', sans-serif" font-size="8" fill="#8E887F">Dense + BM25</text>
+            <path d="M310 70 C280 85 260 95 245 105" stroke="#B87326" stroke-width="1.2" stroke-dasharray="3 3"/>
+          </g>
+          <!-- Node: Cross-Encoder -->
+          <g>
+            <rect x="40" y="145" width="95" height="40" rx="4" stroke="#C85A32" stroke-width="1.5" fill="#FFFFFF"/>
+            <text x="50" y="168" font-family="'JetBrains Mono', monospace" font-size="10" fill="#C85A32">04. Reranker</text>
+            <text x="50" y="179" font-family="'Plus Jakarta Sans', sans-serif" font-size="8" fill="#8E887F">CUDA Logits</text>
+            <path d="M135 165 C160 170 180 185 195 190" stroke="#C85A32" stroke-width="1.2"/>
+          </g>
+          <!-- Node: Verifier / Reflection -->
+          <g>
+            <rect x="320" y="140" width="105" height="46" rx="4" stroke="#3F7057" stroke-width="1.5" fill="#FFFFFF"/>
+            <text x="330" y="162" font-family="'JetBrains Mono', monospace" font-size="10" fill="#3F7057">08. Verifier</text>
+            <text x="330" y="176" font-family="'Plus Jakarta Sans', sans-serif" font-size="8" fill="#3F7057">4-Dim Check (0.70)</text>
+            <path d="M320 160 C290 170 270 180 255 190" stroke="#3F7057" stroke-width="1.2"/>
+          </g>
+          <!-- Subtle Orbit Lines -->
+          <ellipse cx="225" cy="150" rx="170" ry="110" stroke="#E8E2D8" stroke-width="1" stroke-dasharray="6 6"/>
+        </svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- SECTION 2 — THE PROJECT IN ONE GLANCE -->
+  <section id="glance">
+    <div class="container">
+      <div class="section-eyebrow">High-Level Topology</div>
+      <h2 class="section-title">Here is the entire system in one view.</h2>
+      <p class="section-desc">
+        A seamless five-stage pipeline converting raw multi-format company policies into verified, streaming SSE answers with strict provenance.
+      </p>
+
+      <div class="pipeline-board">
+        <div class="pipeline-stage">
+          <span class="stage-num">01 / INGESTION</span>
+          <h3 class="stage-name">Multi-Format Parser & Chunker</h3>
+          <p class="stage-desc">Extracts raw text from PDF, DOCX, TXT, MD, HTML, CSV, and JSON (up to 100MB). Heuristically extracts department, dates, and policy IDs, slicing into 512-token hierarchical parent/child nodes.</p>
+          <div class="stage-tags">
+            <span class="stage-pill">AdaptiveChunker</span>
+            <span class="stage-pill">MetadataExtractor</span>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <span class="stage-num">02 / AGENTIC ROUTING</span>
+          <h3 class="stage-name">Query Router & Filter Inferer</h3>
+          <p class="stage-desc">Classifies intent into 5 types (factual, comparison, enumeration, procedural, conversational). Disambiguates terms (e.g. pronoun "it" vs IT Dept) and tunes retrieval parameters dynamically.</p>
+          <div class="stage-tags">
+            <span class="stage-pill">QueryRouter</span>
+            <span class="stage-pill">MetadataInferer</span>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <span class="stage-num">03 / DUAL RETRIEVAL</span>
+          <h3 class="stage-name">Hybrid RRF & Neural Rerank</h3>
+          <p class="stage-desc">Runs parallel ChromaDB dense search and BM25 sparse search merged via Reciprocal Rank Fusion (RRF). BGE Cross-Encoder reranks candidates on CUDA GPU with relative score threshold cutoffs.</p>
+          <div class="stage-tags">
+            <span class="stage-pill">ReciprocalRankFusion</span>
+            <span class="stage-pill">CrossEncoder</span>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <span class="stage-num">04 / GENERATION</span>
+          <h3 class="stage-name">Grounded LLM Synthesis</h3>
+          <p class="stage-desc">Injects expanded parent context and conversation history into Ollama LLM. Forces explicit <code>[Source N]</code> claim binding and mandatory abstention when evidence is insufficient.</p>
+          <div class="stage-tags">
+            <span class="stage-pill">Ollama LLM</span>
+            <span class="stage-pill">CitationEngine</span>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <span class="stage-num">05 / VERIFICATION</span>
+          <h3 class="stage-name">Self-Reflection & Retry Loop</h3>
+          <p class="stage-desc">Grades answer on Faithfulness (0.35), Completeness (0.30), Citation Coverage (0.20), and Coherence (0.15). If ungrounded claims appear, triggers an autonomous retry loop with adjusted retrieval dials.</p>
+          <div class="stage-tags">
+            <span class="stage-pill">SelfReflectionVerifier</span>
+            <span class="stage-pill">RetryEngine</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3 — START HERE: THE ENTRY POINT -->
+  <section id="entry">
+    <div class="container">
+      <div class="section-eyebrow">01 / System Bootstrap</div>
+      <h2 class="section-title">Where Everything Begins</h2>
+      <p class="section-desc">
+        Execution does not wait for the first user query to hit cold models. The application warms and pins all neural weights in VRAM on startup.
+      </p>
+
+      <div class="entry-grid">
+        <div class="warmup-sequence">
+          <div class="warmup-step">
+            <div class="step-badge">1</div>
+            <div class="warmup-content">
+              <h4>FastAPI Lifespan Trigger</h4>
+              <p><code>backend/api/main.py</code> initiates <code>warmup_rag_system()</code> on startup, initializing singleton dependency containers.</p>
+            </div>
+          </div>
+
+          <div class="warmup-step">
+            <div class="step-badge">2</div>
+            <div class="warmup-content">
+              <h4>Dense Embedding Model Warmup</h4>
+              <p>Loads <code>BAAI/bge-small-en-v1.5</code> and runs a synthetic query embedding to warm GPU matrix caches.</p>
+            </div>
+          </div>
+
+          <div class="warmup-step">
+            <div class="step-badge">3</div>
+            <div class="warmup-content">
+              <h4>Cross-Encoder Neural Reranker</h4>
+              <p>Loads <code>BAAI/bge-reranker-large</code> onto CUDA GPU and executes a warmup inference pass on a test query-context pair.</p>
+            </div>
+          </div>
+
+          <div class="warmup-step">
+            <div class="step-badge">4</div>
+            <div class="warmup-content">
+              <h4>Ollama LLM VRAM Pinning</h4>
+              <p>Calls <code>preload_model()</code> with <code>keep_alive=-1</code> to pin Qwen2.5 weights permanently in memory, ensuring sub-1s TTFT.</p>
+            </div>
+          </div>
+
+          <div class="warmup-step">
+            <div class="step-badge">5</div>
+            <div class="warmup-content">
+              <h4>Vector Store & BM25 Verification</h4>
+              <p>Verifies chunk counts across ChromaDB HNSW collection and in-memory BM25 index before accepting traffic.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hand-Drawn Illustration: Entering through the Portal -->
+        <div class="illustration-frame" data-caption="Fig 3.1 — Zero Cold-Start Neural Initialization">
+          <svg class="hand-drawn" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Architectural doorway / portal -->
+            <path d="M120 260 L120 80 Q200 40 280 80 L280 260" stroke="#201E1C" stroke-width="2.5" fill="#FFFFFF"/>
+            <path d="M135 260 L135 90 Q200 55 265 90 L265 260" stroke="#8E887F" stroke-width="1.2" stroke-dasharray="4 4"/>
+            <!-- Light rays pouring from portal -->
+            <path d="M140 100 L60 260 M170 80 L120 260 M200 70 L200 260 M230 80 L280 260 M260 100 L340 260" stroke="#C85A32" stroke-width="1" opacity="0.4"/>
+            <!-- Human walking into portal -->
+            <circle cx="200" cy="180" r="10" stroke="#201E1C" stroke-width="2" fill="#FAF7F2"/>
+            <path d="M200 190 L200 225 M190 205 L210 205 M200 225 L190 255 M200 225 L210 255" stroke="#201E1C" stroke-width="2" stroke-linecap="round"/>
+            <!-- Code indicator labels -->
+            <rect x="20" y="30" width="130" height="26" rx="4" stroke="#E8E2D8" fill="#FFFFFF"/>
+            <text x="30" y="47" font-family="'JetBrains Mono', monospace" font-size="10" fill="#645F58">POST /api/chat/stream</text>
+            <!-- VRAM Pin label -->
+            <rect x="250" y="30" width="130" height="26" rx="4" stroke="#3F7057" fill="#FFFFFF"/>
+            <text x="260" y="47" font-family="'JetBrains Mono', monospace" font-size="10" fill="#3F7057">keep_alive = -1 (VRAM)</text>
+            <!-- Ground line -->
+            <path d="M40 260 L360 260" stroke="#201E1C" stroke-width="2"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4 — THE EXECUTION STORY -->
+  <section id="execution">
+    <div class="container">
+      <div class="section-eyebrow">02 / Execution Anatomy</div>
+      <h2 class="section-title">The Complete Execution Path</h2>
+      <p class="section-desc">
+        Follow a single query from the moment it hits the SSE connection to the verified stream delivery.
+      </p>
+
+      <div class="timeline">
+        <!-- Node 1 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">01</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              HTTP Request & Session Lookup
+              <span class="timeline-file">chat.py & chat_service.py</span>
+            </h3>
+            <p>
+              Client connects to <code>POST /api/chat/stream</code>. <code>ChatService</code> checks a thread-safe <code>TTLCache</code> (24-hour expiration) to pull previous multi-turn conversation history. Emits <code>event: start</code> with a unique <code>response_id</code>.
+            </p>
+          </div>
+        </div>
+
+        <!-- Node 2 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">02</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              Query Classification & Strategy Routing
+              <span class="timeline-file">query_router.py</span>
+            </h3>
+            <p>
+              <code>QueryRouter</code> classifies the query into one of 5 categories in under 1 millisecond using optimized regex heuristics:
+            </p>
+            <div class="timeline-branch">
+              <strong>Conversational Bypass:</strong> If classified as a greeting, the system completely bypasses vector retrieval and instantly yields a warm greeting response without wasted GPU cycles.
+            </div>
+          </div>
+        </div>
+
+        <!-- Node 3 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">03</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              Semantic Cache Verification
+              <span class="timeline-file">semantic_cache.py</span>
+            </h3>
+            <p>
+              Queries the <code>semantic_cache</code> ChromaDB collection. If cosine similarity &ge; 0.92 and KB version tags match, the cached answer and citations are streamed back smoothly via simulated SSE in sub-100ms.
+            </p>
+          </div>
+        </div>
+
+        <!-- Node 4 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">04</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              Context-Aware Rewriting & Filter Inference
+              <span class="timeline-file">query_rewrite.py & filter_extractor.py</span>
+            </h3>
+            <p>
+              Pronouns in follow-up queries (e.g. <em>"What about it for managers?"</em>) are resolved into full standalone queries. <code>QueryMetadataInferer</code> extracts department filters while intelligently distinguishing the English pronoun "it" from "IT Department".
+            </p>
+          </div>
+        </div>
+
+        <!-- Node 5 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">05</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              Hybrid Search (Dense + BM25) & RRF Fusion
+              <span class="timeline-file">hybrid.py & vector_store.py</span>
+            </h3>
+            <p>
+              Executes parallel ChromaDB cosine retrieval and BM25 tokenized lexical retrieval. Ranked lists are combined using Reciprocal Rank Fusion: <code>RRF = sum(1.0 / (60 + rank))</code>.
+            </p>
+            <div class="timeline-branch">
+              <strong>Filter Relaxation Fallback:</strong> If an overly narrow department filter yields 0 candidate chunks, the system automatically drops the filter and re-executes search unfiltered to guarantee recall.
+            </div>
+          </div>
+        </div>
+
+        <!-- Node 6 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">06</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              Neural Reranking & Context Expansion
+              <span class="timeline-file">reranker.py & context_compression.py</span>
+            </h3>
+            <p>
+              <code>BAAI/bge-reranker-large</code> computes joint attention logits for (query, chunk) pairs. Chunks below <code>top_score * min_ratio</code> are pruned. Surrounding parent sections are retrieved from the docstore to preserve complete paragraph context. Emits <code>event: retrieval</code>.
+            </p>
+          </div>
+        </div>
+
+        <!-- Node 7 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">07</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              Grounded Generation & Self-Reflection Verification
+              <span class="timeline-file">pipeline.py & verifier.py & retry_engine.py</span>
+            </h3>
+            <p>
+              Ollama LLM generates an answer bound to bracketed <code>[Source N]</code> references. <code>SelfReflectionVerifier</code> evaluates the answer across 4 dimensions. If unverified claims exist, <code>RetryEngine</code> tightens retrieval dials and retries (up to 2 times).
+            </p>
+          </div>
+        </div>
+
+        <!-- Node 8 -->
+        <div class="timeline-node">
+          <div class="timeline-marker">
+            <span class="timeline-step-index">08</span>
+          </div>
+          <div class="timeline-card">
+            <h3>
+              SSE Streaming, Citation Mapping & Trace Telemetry
+              <span class="timeline-file">chat_service.py & telemetry_service.py</span>
+            </h3>
+            <p>
+              Tokens are streamed live to the Next.js frontend via <code>event: chunk</code>. Verified citations emit via <code>event: citation</code>, and the complete audit trace emits via <code>event: trace</code>, completing the lifecycle with <code>event: done</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5 — FOLLOW THE DATA -->
+  <section id="data">
+    <div class="container">
+      <div class="section-eyebrow">03 / Information Transformation</div>
+      <h2 class="section-title">Follow the Data, Not Just the Functions</h2>
+      <p class="section-desc">
+        Trace how unstructured files and natural language queries evolve into high-density vectors, rank matrices, and verified citation tokens.
+      </p>
+
+      <div class="data-journey-tabs">
+        <button class="data-tab-btn active">Document Ingestion Pipeline</button>
+      </div>
+
+      <!-- Ingestion Flow -->
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-label">Source Input</div>
+          <span class="flow-box-val">handbook.pdf (12MB, PDF)</span>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-op">
+          <div class="flow-op-title">Structure Extraction & Chunking</div>
+          <div class="flow-op-desc">PDF parser preserves headers; AdaptiveChunker creates 512-token chunks with protected code blocks & tables.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box">
+          <div class="flow-box-label">Structured Nodes</div>
+          <span class="flow-box-val">Chunk(id="chk_1a", dept="HR", policy="POL-04")</span>
+        </div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-label">Chunk Text</div>
+          <span class="flow-box-val">"Full-time employees accrue 15 days PTO..."</span>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-op">
+          <div class="flow-op-title">Dense Vector Embedding</div>
+          <div class="flow-op-desc">BAAI/bge-small-en-v1.5 maps text to 384-dimensional dense float vector embeddings.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box">
+          <div class="flow-box-label">Dual Storage</div>
+          <span class="flow-box-val">ChromaDB (HNSW Cosine) + In-Memory BM25</span>
+        </div>
+      </div>
+
+      <!-- Query Flow -->
+      <div class="data-journey-tabs" style="margin-top: 48px;">
+        <button class="data-tab-btn active">Query & Inference Pipeline</button>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-label">User Query</div>
+          <span class="flow-box-val">"What is the PTO policy for part-time?"</span>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-op">
+          <div class="flow-op-title">Hybrid Search & Rank Fusion</div>
+          <div class="flow-op-desc">Parallel Dense (top-25) and Sparse BM25 (top-25) fused via RRF score accumulation.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box">
+          <div class="flow-box-label">Candidate Pool</div>
+          <span class="flow-box-val">30 fused ScoredChunks (RRF score: 0.032 - 0.015)</span>
+        </div>
+      </div>
+
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-label">30 Fused Candidates</div>
+          <span class="flow-box-val">ScoredChunk[0..29]</span>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-op">
+          <div class="flow-op-title">Cross-Encoder Neural Reranking</div>
+          <div class="flow-op-desc">BAAI/bge-reranker-large scores (Q, Chunk) on CUDA; relative threshold filters out low logits.</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box">
+          <div class="flow-box-label">Verified Context</div>
+          <span class="flow-box-val">Top 4 Chunks formatted with [Source 1..4]</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6 — CORE ARCHITECTURE -->
+  <section id="architecture">
+    <div class="container">
+      <div class="section-eyebrow">04 / Component Anatomy</div>
+      <h2 class="section-title">Core Architectural Components</h2>
+      <p class="section-desc">
+        A decoupled microservice architecture where each component possesses a single authoritative responsibility.
+      </p>
+
+      <div class="arch-grid">
+        <!-- Master Orchestrator (Hero Card) -->
+        <div class="arch-card arch-hero">
+          <div class="arch-header">
+            <span class="arch-tag">Central Nervous System</span>
+            <h3 class="arch-name">RAGPipeline (backend/rag/pipeline.py)</h3>
+          </div>
+          <div class="arch-body">
+            <p>
+              Coordinates the entire multi-stage retrieval, rewriting, reranking, generation, verification, and retry lifecycle. Manages thread-safe model switches across Ollama instances and coordinates async non-blocking semantic cache writes.
+            </p>
+          </div>
+          <div class="arch-spec-table">
+            <div class="arch-spec-row"><span class="arch-spec-key">Inputs:</span><span class="arch-spec-val">user_query (str), filters (dict), history (list), model (str)</span></div>
+            <div class="arch-spec-row"><span class="arch-spec-key">Outputs:</span><span class="arch-spec-val">RAGResponse (sync) / SSE Event Generator (stream)</span></div>
+            <div class="arch-spec-row"><span class="arch-spec-key">Coordinates:</span><span class="arch-spec-val">HybridRetriever, CrossEncoder, Verifier, RetryEngine, SemanticCache</span></div>
+          </div>
+        </div>
+
+        <!-- Major: Query Router -->
+        <div class="arch-card arch-major">
+          <div class="arch-header">
+            <span class="arch-tag">Agentic Layer</span>
+            <h3 class="arch-name">QueryRouter (backend/rag/query_router.py)</h3>
+          </div>
+          <div class="arch-body">
+            <p>
+              Classifies queries into 5 intent categories (factual, comparison, enumeration, procedural, conversational). Selects tuned retrieval hyperparameters (top_k, rerank_top_n, parent_expansion, temperature).
+            </p>
+          </div>
+          <div class="arch-spec-table">
+            <div class="arch-spec-row"><span class="arch-spec-key">Latency:</span><span class="arch-spec-val">&lt; 1.0 ms (Regex Heuristic)</span></div>
+            <div class="arch-spec-row"><span class="arch-spec-key">Output:</span><span class="arch-spec-val">QueryClassification + RetrievalStrategy</span></div>
+          </div>
+        </div>
+
+        <!-- Major: Self-Reflection Verifier -->
+        <div class="arch-card arch-major">
+          <div class="arch-header">
+            <span class="arch-tag">Hallucination Guard</span>
+            <h3 class="arch-name">SelfReflectionVerifier (backend/rag/verifier.py)</h3>
+          </div>
+          <div class="arch-body">
+            <p>
+              Post-generation evaluator assessing answer quality across 4 weighted dimensions: <code>0.35 &times; Faithfulness + 0.30 &times; Completeness + 0.20 &times; Citation + 0.15 &times; Coherence</code>. Detects ungrounded numerical claims and equipment categories.
+            </p>
+          </div>
+          <div class="arch-spec-table">
+            <div class="arch-spec-row"><span class="arch-spec-key">Pass Gate:</span><span class="arch-spec-val">Composite &ge; 0.70 &amp; Faith &ge; 0.65</span></div>
+            <div class="arch-spec-row"><span class="arch-spec-key">Output:</span><span class="arch-spec-val">VerificationReport with critiques</span></div>
+          </div>
+        </div>
+
+        <!-- Minor: Hybrid Retriever -->
+        <div class="arch-card arch-minor">
+          <div class="arch-header">
+            <span class="arch-tag">Dual Retrieval</span>
+            <h3 class="arch-name">HybridRetriever (backend/retrieval/hybrid.py)</h3>
+          </div>
+          <div class="arch-body">
+            <p>Fuses parallel ChromaDB dense vector queries and BM25 tokenized inverted index queries using Reciprocal Rank Fusion (RRF).</p>
+          </div>
+          <div class="arch-spec-table">
+            <div class="arch-spec-row"><span class="arch-spec-key">Formula:</span><span class="arch-spec-val">RRF(d) = &sum; 1/(60 + r)</span></div>
+          </div>
+        </div>
+
+        <!-- Minor: Cross-Encoder Reranker -->
+        <div class="arch-card arch-minor">
+          <div class="arch-header">
+            <span class="arch-tag">Neural Precision</span>
+            <h3 class="arch-name">CrossEncoderReranker (backend/retrieval/reranker.py)</h3>
+          </div>
+          <div class="arch-body">
+            <p>Joint cross-attention scoring using <code>BAAI/bge-reranker-large</code> on CUDA. Implements adaptive relative score cutoffs.</p>
+          </div>
+          <div class="arch-spec-table">
+            <div class="arch-spec-row"><span class="arch-spec-key">Device:</span><span class="arch-spec-val">Auto CUDA / RTX 4050</span></div>
+          </div>
+        </div>
+
+        <!-- Minor: Autonomous Retry Engine -->
+        <div class="arch-card arch-minor">
+          <div class="arch-header">
+            <span class="arch-tag">Autonomous Self-Healing</span>
+            <h3 class="arch-name">RetryEngine (backend/rag/retry_engine.py)</h3>
+          </div>
+          <div class="arch-body">
+            <p>Dynamically broadens search parameters and tightens LLM prompt instructions when verification fails. Strictly capped at 2 retries.</p>
+          </div>
+          <div class="arch-spec-table">
+            <div class="arch-spec-row"><span class="arch-spec-key">Hard Cap:</span><span class="arch-spec-val">Max 2 Retries (3 Total Passes)</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 7 — WHAT THE TESTS REVEAL -->
+  <section id="tests">
+    <div class="container">
+      <div class="section-eyebrow">05 / The Specification Contract</div>
+      <h2 class="section-title">The Tests Tell Us What the System Promises</h2>
+      <p class="section-desc">
+        Tests are not just quality checks; they are the executable behavioral contract of the entire architecture.
+      </p>
+
+      <div class="test-guarantee-grid">
+        <!-- Guarantee 1 -->
+        <div class="guarantee-card">
+          <div class="guarantee-header">
+            <h3 class="guarantee-title">Strict Abstention When Info is Absent</h3>
+            <span class="guarantee-suite">test_generation.py</span>
+          </div>
+          <p style="font-size: 13.5px; color: var(--text-muted);">When retrieved document chunks are empty or irrelevant, the LLM is strictly prohibited from guessing or extrapolating facts.</p>
+          <div class="guarantee-equation">
+            <span>Empty / Irrelevant Context</span>
+            <span>&rarr;</span>
+            <span style="color: var(--accent-sage); font-weight: 600;">"I am unable to answer based on the provided documents."</span>
+          </div>
+          <div class="guarantee-note">"Zero hallucination tolerance in legal/HR compliance domains."</div>
+        </div>
+
+        <!-- Guarantee 2 -->
+        <div class="guarantee-card">
+          <div class="guarantee-header">
+            <h3 class="guarantee-title">Deterministic Citation Binding</h3>
+            <span class="guarantee-suite">test_citations.py</span>
+          </div>
+          <p style="font-size: 13.5px; color: var(--text-muted);">Citations returned in the API payload must strictly match chunks that were explicitly cited in the answer text using <code>[Source N]</code> brackets.</p>
+          <div class="guarantee-equation">
+            <span>Answer with [Source 1]</span>
+            <span>&rarr;</span>
+            <span style="color: var(--accent-sage); font-weight: 600;">Returns Source 1 only (Uncited Source 2 &amp; 3 pruned)</span>
+          </div>
+          <div class="guarantee-note">"Prevents ghost citations and unverified source attachments."</div>
+        </div>
+
+        <!-- Guarantee 3 -->
+        <div class="guarantee-card">
+          <div class="guarantee-header">
+            <h3 class="guarantee-title">Atomic Code &amp; Table Block Protection</h3>
+            <span class="guarantee-suite">test_chunking.py</span>
+          </div>
+          <p style="font-size: 13.5px; color: var(--text-muted);">Hierarchical chunking preserves fenced markdown code blocks and ASCII/HTML tables as atomic units, preventing split syntax errors.</p>
+          <div class="guarantee-equation">
+            <span>```python code (80 lines)```</span>
+            <span>&rarr;</span>
+            <span style="color: var(--accent-sage); font-weight: 600;">is_atomic=True, content_type="code"</span>
+          </div>
+          <div class="guarantee-note">"Preserves structural integrity for technical and policy tables."</div>
+        </div>
+
+        <!-- Guarantee 4 -->
+        <div class="guarantee-card">
+          <div class="guarantee-header">
+            <h3 class="guarantee-title">Filter Relaxation Fallback</h3>
+            <span class="guarantee-suite">test_e2e_agentic_layer.py</span>
+          </div>
+          <p style="font-size: 13.5px; color: var(--text-muted);">If inferred metadata filters (e.g. <code>dept="Finance"</code>) yield zero candidates, the system must automatically drop filters and retry unfiltered.</p>
+          <div class="guarantee-equation">
+            <span>Filtered Hits == 0</span>
+            <span>&rarr;</span>
+            <span style="color: var(--accent-sage); font-weight: 600;">filter_relaxed=True &rarr; Re-run Unfiltered Search</span>
+          </div>
+          <div class="guarantee-note">"Eliminates false negative empty answers due to strict metadata tags."</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 8 — ONE FAILURE STORY -->
+  <section id="failure">
+    <div class="container">
+      <div class="section-eyebrow">06 / Reliability Under Stress</div>
+      <h2 class="section-title">One Failure Story: The Verification &amp; Healing Loop</h2>
+      <p class="section-desc">
+        How the system actively detects an ungrounded hallucination, intervenes before streaming to the user, and self-heals.
+      </p>
+
+      <div class="failure-story-box">
+        <div style="max-width: 700px; margin-bottom: 24px;">
+          <h3 style="font-family: var(--font-editorial); font-size: 24px; color: var(--text-main); margin-bottom: 8px;">Scenario: Hallucinated Home Office Allowance</h3>
+          <p style="font-size: 14.5px; color: var(--text-muted); line-height: 1.6;">
+            A user asks: <em>"Can I get reimbursed $5,000 for home office furniture?"</em> The LLM initially answers affirmatively, hallucinating a $5,000 furniture allowance not grounded in the employee handbook.
+          </p>
+        </div>
+
+        <!-- Hand-Drawn Illustration: The Broken Bridge & Recovery Detour -->
+        <div class="illustration-frame" data-caption="Fig 8.1 — Autonomous Detection & Corrective Detour">
+          <svg class="hand-drawn" viewBox="0 0 500 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Normal Path -->
+            <path d="M40 90 L180 90" stroke="#201E1C" stroke-width="2"/>
+            <circle cx="180" cy="90" r="6" fill="#C85A32"/>
+            <!-- Failure Gap -->
+            <path d="M190 85 L205 95 M205 85 L190 95" stroke="#C85A32" stroke-width="2"/>
+            <text x="140" y="68" font-family="'JetBrains Mono', monospace" font-size="10" fill="#C85A32">Faithfulness &lt; 0.65</text>
+            <!-- Detour / Recovery Loop -->
+            <path d="M160 90 C160 145 320 145 320 90" stroke="#3F7057" stroke-width="2" stroke-dasharray="4 4"/>
+            <polygon points="318,85 325,95 312,95" fill="#3F7057"/>
+            <text x="210" y="160" font-family="'JetBrains Mono', monospace" font-size="10" fill="#3F7057">Autonomous Retry + Lower Temp</text>
+            <!-- Destination -->
+            <path d="M320 90 L460 90" stroke="#201E1C" stroke-width="2"/>
+            <circle cx="460" cy="90" r="6" fill="#3F7057"/>
+            <text x="390" y="75" font-family="'JetBrains Mono', monospace" font-size="10" fill="#3F7057">Verified Answer</text>
+          </svg>
+        </div>
+
+        <div class="failure-steps">
+          <div class="failure-step-card alert">
+            <div class="failure-step-num">STEP 1 / DETECTION</div>
+            <h4 class="failure-step-title">Faithfulness Gate Tripped</h4>
+            <p class="failure-step-desc"><code>_evaluate_faithfulness()</code> scans the answer for numerical figures ($5,000) and detects absence in retrieved context. Faith score drops to 0.35 (Pass threshold is 0.65).</p>
+          </div>
+
+          <div class="failure-step-card">
+            <div class="failure-step-num">STEP 2 / CRITIQUE</div>
+            <h4 class="failure-step-title">Autonomous Diagnosis</h4>
+            <p class="failure-step-desc"><code>VerificationReport</code> flags <code>passed=False</code> with critique: <em>"Unsupported reimbursement amount or unverified equipment category: '$5,000'."</em></p>
+          </div>
+
+          <div class="failure-step-card">
+            <div class="failure-step-num">STEP 3 / ADAPTATION</div>
+            <h4 class="failure-step-title">Parameter Tuning</h4>
+            <p class="failure-step-desc"><code>RetryEngine</code> tightens reranker cutoff (<code>min_score_ratio + 0.10</code>), lowers temperature (<code>0.10 &rarr; 0.05</code>), and injects explicit correction instructions.</p>
+          </div>
+
+          <div class="failure-step-card recovered">
+            <div class="failure-step-num">STEP 4 / RECOVERY</div>
+            <h4 class="failure-step-title">Verified Synthesis</h4>
+            <p class="failure-step-desc">LLM re-generates correctly: <em>"The provided policy documents outline standard computer equipment, but do not specify a furniture allowance [Source 1]."</em> (Score: 0.93 - PASSED).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 9 — THE FILE MAP -->
+  <section id="files">
+    <div class="container">
+      <div class="section-eyebrow">07 / Architectural Field Guide</div>
+      <h2 class="section-title">The Compressed File Map</h2>
+      <p class="section-desc">
+        Every essential file in the repository described in one high-signal sentence.
+      </p>
+
+      <!-- Group: API & Services -->
+      <div class="file-map-group">
+        <div class="file-group-heading">API &amp; Service Layer</div>
+        <div class="file-row">
+          <div class="file-path">backend/api/main.py</div>
+          <div class="file-summary"><strong>Application entry point</strong> &rarr; warms embeddings, reranker, and Ollama VRAM weights &rarr; exposes REST and SSE endpoints.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/api/routes/chat.py</div>
+          <div class="file-summary"><strong>Chat router controller</strong> &rarr; parses ChatRequest payloads &rarr; streams real-time SSE events with disconnect detection.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/services/chat_service.py</div>
+          <div class="file-summary"><strong>Session &amp; streaming manager</strong> &rarr; resolves multi-turn conversation memory &rarr; coordinates token streaming and telemetry records.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/services/document_service.py</div>
+          <div class="file-summary"><strong>Document ingestion orchestrator</strong> &rarr; processes 100MB multi-format uploads &rarr; extracts metadata, chunks, embeds, and indexes into ChromaDB/BM25.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/services/telemetry_service.py</div>
+          <div class="file-summary"><strong>Observability ring buffer</strong> &rarr; records execution latencies, TTFT, and token usage &rarr; serves admin dashboard telemetry.</div>
+        </div>
+      </div>
+
+      <!-- Group: Core RAG & Agentic -->
+      <div class="file-map-group">
+        <div class="file-group-heading">RAG &amp; Agentic Intelligence Layer</div>
+        <div class="file-row">
+          <div class="file-path">backend/rag/pipeline.py</div>
+          <div class="file-summary"><strong>Master RAG orchestrator</strong> &rarr; coordinates routing, hybrid retrieval, reranking, synthesis, and verification &rarr; returns verified response and audit trace.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/rag/query_router.py</div>
+          <div class="file-summary"><strong>5-way intent classifier</strong> &rarr; raw query string &rarr; categorized intent and dynamically tuned retrieval hyperparameters.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/rag/verifier.py</div>
+          <div class="file-summary"><strong>Self-reflection evaluation engine</strong> &rarr; generated text and source chunks &rarr; 4-dimensional quality report and grounding pass/fail verdict.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/rag/retry_engine.py</div>
+          <div class="file-summary"><strong>Autonomous recovery coordinator</strong> &rarr; failed verification report &rarr; tuned retrieval parameters and prompt correction directives (max 2 retries).</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/rag/semantic_cache.py</div>
+          <div class="file-summary"><strong>Embedding query cache</strong> &rarr; incoming query vector &rarr; instant sub-100ms cached answer and citation payload.</div>
+        </div>
+      </div>
+
+      <!-- Group: Retrieval & Ingestion -->
+      <div class="file-map-group">
+        <div class="file-group-heading">Retrieval, Storage &amp; Ingestion</div>
+        <div class="file-row">
+          <div class="file-path">backend/retrieval/hybrid.py</div>
+          <div class="file-summary"><strong>Hybrid fusion searcher</strong> &rarr; query and top-k limits &rarr; Reciprocal Rank Fused (RRF) candidate chunks from ChromaDB and BM25.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/retrieval/reranker.py</div>
+          <div class="file-summary"><strong>Cross-Encoder neural scorer</strong> &rarr; (query, chunk) pairs &rarr; CUDA GPU-scored candidates with adaptive relative ratio cutoff.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/ingestion/chunkers/adaptive_chunker.py</div>
+          <div class="file-summary"><strong>Structure-aware chunker</strong> &rarr; raw document text &rarr; 512-token hierarchical chunks with atomic code block and table protection.</div>
+        </div>
+        <div class="file-row">
+          <div class="file-path">backend/embeddings/vector_store.py</div>
+          <div class="file-summary"><strong>ChromaDB client wrapper</strong> &rarr; embedded chunks &rarr; persistent HNSW cosine vector index with metadata filtering.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 10 — THE MENTAL MODEL -->
+  <section id="mental-model" style="border-bottom: none;">
+    <div class="container">
+      <div class="section-eyebrow" style="color: var(--accent-terracotta);">08 / Synthesis</div>
+      <h2 class="section-title">Remember the System Like This</h2>
+
+      <div class="mental-model-hero">
+        <p style="font-family: var(--font-editorial); font-size: 22px; color: rgba(255,255,255,0.9); line-height: 1.4;">
+          The entire architecture is an uncompromising, self-verifying assembly line:
+        </p>
+
+        <div class="mental-model-chain">
+          <span class="chain-node">USER QUERY</span>
+          <span class="chain-arrow">&rarr;</span>
+          <span class="chain-node">INTENT ROUTER</span>
+          <span class="chain-arrow">&rarr;</span>
+          <span class="chain-node">HYBRID RRF</span>
+          <span class="chain-arrow">&rarr;</span>
+          <span class="chain-node">CROSS-ENCODER</span>
+          <span class="chain-arrow">&rarr;</span>
+          <span class="chain-node">GROUNDED LLM</span>
+          <span class="chain-arrow">&rarr;</span>
+          <span class="chain-node">4-DIM VERIFIER</span>
+          <span class="chain-arrow">&rarr;</span>
+          <span class="chain-node">SSE STREAM</span>
+        </div>
+
+        <div class="three-pillars">
+          <div>
+            <div class="pillar-num">01</div>
+            <h4 class="pillar-title">Zero Cold Start</h4>
+            <p class="pillar-desc">All dense embedders, cross-encoder neural models, and Ollama LLM weights are loaded and pinned in VRAM at startup.</p>
+          </div>
+
+          <div>
+            <div class="pillar-num">02</div>
+            <h4 class="pillar-title">Dual Fusion &amp; GPU Reranking</h4>
+            <p class="pillar-desc">Dense vector concepts and sparse BM25 exact keywords are merged via RRF, then re-scored by cross-attention on CUDA.</p>
+          </div>
+
+          <div>
+            <div class="pillar-num">03</div>
+            <h4 class="pillar-title">Autonomous Verification</h4>
+            <p class="pillar-desc">Answers are graded before streaming; ungrounded numbers or claims trigger an automatic retry with tightened retrieval dials.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Enterprise Policy RAG AI Assistant · Reverse-Engineered Architecture Field Notes</p>
+    </div>
+  </footer>
+
+</body>
+</html>

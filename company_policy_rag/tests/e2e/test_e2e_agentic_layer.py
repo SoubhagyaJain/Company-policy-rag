@@ -123,7 +123,7 @@ class QueryRouter:
         re.IGNORECASE,
     )
     _CONVERSATIONAL_PATTERNS = re.compile(
-        r"^(hi|hello|hey|greetings|good morning|good afternoon|good evening|howdy|thanks|thank you|who are you|what can you do|help)(\s+(there|everyone|all|assistant|bot))?[!.? ]*$",
+        r"^(?:hi|hello|hey|heya|hiya|greetings|howdy|good\s+(?:morning|afternoon|evening|day)|thanks|thank\s+you|who\s+are\s+you|what\s+can\s+you\s+do|how\s+are\s+you|how\s+can\s+you\s+help|help)\b",
         re.IGNORECASE,
     )
 
@@ -187,7 +187,7 @@ class QueryRouter:
 
     def classify(self, query: str, history: Optional[List[Dict[str, Any]]] = None) -> QueryClassification:
         clean_q = query.strip()
-        if len(clean_q.split()) <= 5 and self._CONVERSATIONAL_PATTERNS.match(clean_q):
+        if len(clean_q.split()) <= 8 and self._CONVERSATIONAL_PATTERNS.match(clean_q):
             cat = QueryCategory.CONVERSATIONAL
             conf = 0.95
             reason = "Conversational greeting or pleasantry pattern detected."
@@ -423,7 +423,7 @@ class DocumentMetadataExtractor:
                 entities.append(role)
 
         topics = []
-        for topic in ["security", "access control", "password", "benefits", "pto", "leave", "travel", "expenses"]:
+        for topic in ["security", "access control", "password", "benefits", "pto", "leave", "travel", "expenses", "vpn"]:
             if topic in text.lower():
                 topics.append(topic)
 
@@ -471,8 +471,8 @@ class QueryMetadataInferer:
 
 class MockFastLLM:
     """Mock LLM delivering immediate deterministic answers and token streams."""
-    def __init__(self, answer_text: str = "According to company policy, full-time employees receive 15 days of PTO annually. [Source 1]"):
-        self.answer_text = answer_text
+    def __init__(self, answer_text: Optional[str] = None):
+        self._answer_text = answer_text
         self.model = "qwen2.5:7b"
         self.temperature = 0.1
         self.request_timeout = 10.0
@@ -483,13 +483,26 @@ class MockFastLLM:
                 self.text = text
             def __str__(self):
                 return self.text
-        return MockResult(self.answer_text)
+        if self._answer_text is not None:
+            return MockResult(self._answer_text)
+        p_lower = prompt.lower()
+        if "vpn" in p_lower or "globalprotect" in p_lower:
+            ans = "Remote connections require GlobalProtect VPN with MFA. [Source 1]"
+        elif "per diem" in p_lower or "$75" in p_lower or "travel" in p_lower:
+            ans = "Meals during business travel are reimbursed up to $75 per day with itemized receipts. [Source 1]"
+        elif "parental leave" in p_lower:
+            ans = "According to the policy, parental leave benefits provide full-time employees with 15 days of paid time off. [Source 1]"
+        else:
+            ans = "According to company policy, full-time employees receive 15 days of PTO annually. [Source 1]"
+        return MockResult(ans)
 
     def stream_complete(self, prompt: str, **kwargs: Any) -> Any:
         class MockStreamDelta:
             def __init__(self, delta: str):
                 self.delta = delta
-        words = self.answer_text.split(" ")
+        res = self.complete(prompt)
+        ans = str(res)
+        words = ans.split(" ")
         for i, word in enumerate(words):
             token = word + (" " if i < len(words) - 1 else "")
             yield MockStreamDelta(token)
@@ -585,12 +598,13 @@ def build_test_rag_pipeline(
     mock_retriever.retrieve.side_effect = _mock_retrieve
 
     mock_reranker = MagicMock()
-    mock_reranker.rerank.side_effect = lambda query, c_list: c_list
+    mock_reranker.rerank.side_effect = lambda query, c_list, **kwargs: c_list
 
     pipeline = RAGPipeline(
         hybrid_retriever=mock_retriever,
         reranker=mock_reranker,
         llm=llm,
+        semantic_cache=get_semantic_cache_manager(),
     )
     pipeline.query_rewriter.llm = llm
     return pipeline
@@ -614,7 +628,10 @@ def clean_system_state():
 @pytest_asyncio.fixture
 async def master_async_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Provides an ASGI AsyncClient configured with isolated ChatService and warm-up bypass."""
+    import backend.api.dependencies as deps
     test_chat_service = build_test_chat_service()
+    deps._chat_service = test_chat_service
+    deps._telemetry_service = test_chat_service.telemetry_service
 
     with patch("backend.api.main.warmup_rag_system"):
         app = create_app()

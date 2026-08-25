@@ -89,9 +89,20 @@ def warmup_rag_system() -> None:
     try:
         chroma_count = doc_service.vector_store.count()
         bm25_count = len(doc_service.bm25_index.entries)
-        logger.info("[4/4] Vector Store (%d chunks) & BM25 (%d chunks) ready in %.2fs", chroma_count, bm25_count, time.perf_counter() - t0)
+        logger.info("[4/5] Vector Store (%d chunks) & BM25 (%d chunks) ready in %.2fs", chroma_count, bm25_count, time.perf_counter() - t0)
     except Exception as exc:
-        logger.warning("[4/4] Vector store / BM25 notice: %s", exc)
+        logger.warning("[4/5] Vector store / BM25 notice: %s", exc)
+
+    # 6. Vision Model Probe & Health Check
+    t0 = time.perf_counter()
+    try:
+        from src.ollama_client import probe_vision_model_status
+        vision_model_name = getattr(pipeline.vision_service, "vision_model", "qwen2.5vl:7b")
+        is_ready, msg = probe_vision_model_status(vision_model_name)
+        status_label = "READY" if is_ready else "UNAVAILABLE (Text RAG fallback active)"
+        logger.info("[5/5] Vision Model '%s': %s (%s) in %.2fs", vision_model_name, status_label, msg, time.perf_counter() - t0)
+    except Exception as exc:
+        logger.warning("[5/5] Vision model probe notice: %s", exc)
 
     total_time = time.perf_counter() - t_start
     logger.info("==========================================================")
@@ -103,9 +114,7 @@ def warmup_rag_system() -> None:
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager: preloads and warms up all models before accepting traffic."""
     warmup_rag_system()
-    yield
-
-
+    yield      
 def create_app() -> FastAPI:
     """FastAPI application factory configuring CORS, routers, and global error handling."""
     app = FastAPI(
@@ -121,6 +130,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
@@ -132,6 +142,23 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(health_router)
     app.include_router(models_router)
+
+    # Clean Request Logging Middleware (Filters out spammy polling endpoints)
+    @app.middleware("http")
+    async def filter_polling_logs_middleware(request: Request, call_next):
+        path = request.url.path
+        is_polling = path in ("/api/health", "/api/admin/observability") or (path.startswith("/api/documents/") and path.endswith("/status"))
+        
+        t0 = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+
+        if not is_polling:
+            logger.info("[HTTP] %s %s -> %d (%.2fms)", request.method, path, response.status_code, elapsed_ms)
+        else:
+            logger.debug("[HTTP POLL] %s %s -> %d (%.2fms)", request.method, path, response.status_code, elapsed_ms)
+
+        return response
 
     # Global Exception Handlers
     @app.exception_handler(ValueError)

@@ -1,0 +1,57 @@
+# ==============================================================================
+# Qwen 2.5 Coder 7B LoRA / QLoRA Production Training Configuration
+# Enterprise Company Policy & Code-Reasoning Fine-Tuning
+# ==============================================================================
+
+# Model & Tokenizer
+model_name_or_path: "Qwen/Qwen2.5-Coder-7B-Instruct"
+max_seq_length: 2048
+trust_remote_code: true
+
+# Dataset & Validation
+dataset_path: "company_policy_rag/data/sample_finetune/alpaca_sample.jsonl"
+val_dataset_path: null
+dataset_format: "auto"       # auto | alpaca | sharegpt | prompt_response
+val_split: 0.1
+seed: 42
+skip_malformed: true
+max_samples: null
+
+# PEFT / LoRA Architecture
+quantization: "4bit"         # 4bit (QLoRA NF4) | 8bit | none (16-bit LoRA)
+lora_r: 16                   # Rank dimension (optimal tradeoff for code & syntax)
+lora_alpha: 32               # Alpha scaling factor (typically 2 * lora_r)
+lora_dropout: 0.05           # Regularization dropout
+lora_bias: "none"
+target_modules:
+  - "q_proj"
+  - "k_proj"
+  - "v_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+# Training & Optimization
+output_dir: "./outputs/qwen2.5-coder-7b-policy-lora"
+num_train_epochs: 3.0
+max_steps: -1                # -1 uses num_train_epochs
+per_device_train_batch_size: 2
+per_device_eval_batch_size: 2
+gradient_accumulation_steps: 8  # Effective batch size = 2 * 8 = 16
+learning_rate: 0.0002        # 2e-4
+lr_scheduler_type: "cosine"
+warmup_ratio: 0.03
+weight_decay: 0.01
+gradient_checkpointing: true
+optim: "paged_adamw_8bit"
+bf16: true
+fp16: false
+
+# Logging & Checkpoint Management
+logging_steps: 10
+eval_steps: 50
+save_steps: 50
+save_total_limit: 2
+smoke_test: false
+use_cpu: false

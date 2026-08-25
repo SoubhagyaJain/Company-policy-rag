@@ -149,6 +149,11 @@ class SemanticCacheManager:
                             raw_distance,
                             latency_ms,
                         )
+                        try:
+                            from backend.api.dependencies import get_telemetry_service
+                            get_telemetry_service().record_cache_event("Semantic Cache", "MISS", latency_ms, model_name=model_name)
+                        except Exception:
+                            pass
                         return None
 
                     cached_kb = metadata.get("kb_version") if "kb_version" in metadata else None
@@ -158,11 +163,21 @@ class SemanticCacheManager:
                             cached_kb,
                             kb_version,
                         )
+                        try:
+                            from backend.api.dependencies import get_telemetry_service
+                            get_telemetry_service().record_cache_event("Semantic Cache", "MISS", latency_ms, model_name=model_name)
+                        except Exception:
+                            pass
                         return None
 
                     cached_model = metadata.get("model") if "model" in metadata else None
                     if model_name is not None and cached_model != model_name:
                         logger.debug("Semantic cache MISS (model mismatch): cached='%s', requested='%s'", cached_model, model_name)
+                        try:
+                            from backend.api.dependencies import get_telemetry_service
+                            get_telemetry_service().record_cache_event("Semantic Cache", "MISS", latency_ms, model_name=model_name)
+                        except Exception:
+                            pass
                         return None
 
                     answer = metadata.get("answer", "")
@@ -182,6 +197,11 @@ class SemanticCacheManager:
                         effective_threshold,
                         latency_ms,
                     )
+                    try:
+                        from backend.api.dependencies import get_telemetry_service
+                        get_telemetry_service().record_cache_event("Semantic Cache", "HIT", latency_ms, model_name=model_name)
+                    except Exception:
+                        pass
                     return CachedResponse(
                         answer=answer,
                         citations=citations,

@@ -90,6 +90,12 @@ class SelfReflectionVerifier:
             unsupported.append("Unsupported equipment category: 'furniture'.")
             return 0.35, unsupported
 
+        # Code claim precision check: detect fabricated code or placeholder pass
+        if "```" in answer or "def " in answer or "class " in answer or "Agent(" in answer:
+            if "```" not in context_text and "def " not in context_text and "class " not in context_text and "agent(" not in context_text:
+                unsupported.append("Fabricated code block generated without supporting code in retrieved context.")
+                return 0.30, unsupported
+
         # Numerical claim precision check (exclude citations [Source 1] and list numbering 1., 2., (1), 1) from numerical checks)
         clean_for_numbers = re.sub(r"\[(?:Source\s*)?\d+(?:,\s*\d+)*\]", " ", answer, flags=re.IGNORECASE)
         clean_for_numbers = re.sub(r"(?:^|\n|\b)\(?\d+[\.\)]\s*", " ", clean_for_numbers)

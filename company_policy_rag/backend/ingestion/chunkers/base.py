@@ -50,6 +50,15 @@ class BaseChunker(ABC):
         final_sec_num = section_number or doc_meta.section_number
         final_sec_path = section_path or doc_meta.section_path
 
+        # Determine content type based on document metadata hints if default PROSE was passed
+        final_content_type = content_type
+        if final_content_type == ContentType.PROSE:
+            raw_ct = doc_meta.extra.get("content_type")
+            if raw_ct == "code" or doc_meta.has_code:
+                final_content_type = ContentType.CODE
+            elif raw_ct == "table" or doc_meta.has_tables:
+                final_content_type = ContentType.TABLE
+
         chunk_meta = ChunkMetadata(
             document_id=document.id,
             source_file=doc_meta.source_file,
@@ -72,7 +81,7 @@ class BaseChunker(ABC):
             node_role=node_role,
             parent_id=parent_id,
             child_ids=child_ids or [],
-            content_type=content_type,
+            content_type=final_content_type,
             is_atomic=is_atomic,
             extra=dict(doc_meta.extra),
         )

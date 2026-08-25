@@ -5,9 +5,10 @@
 ![Frontend: Next.js](https://img.shields.io/badge/Frontend-Next.js_16_|_React_19-000000?logo=next.js)
 ![VectorDB: Chroma](https://img.shields.io/badge/VectorDB-ChromaDB-FF4F00)
 ![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)
+![Vision: Qwen VL](https://img.shields.io/badge/Vision-Qwen_2.5_VL_7B-00B4D8?logo=ollama)
 ![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)
 
-A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, an **Agentic Intelligence Layer** (query routing, self-reflection & verification, dynamic metadata filtering), and a real-time streaming UI with **live model switching**.
+A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, an **Agentic Intelligence Layer** (query routing, self-reflection & verification, dynamic metadata filtering), **document-aware retrieval** with cross-document isolation, a **dual-model vision pipeline** (code screenshot extraction, diagram understanding, table OCR via Qwen 2.5 VL), and a real-time streaming UI with **live model switching**.
 
 ---
 
@@ -71,6 +72,21 @@ A production-grade **Retrieval-Augmented Generation (RAG)** AI assistant designe
 - **Filter relaxation fallback** — if filtered retrieval returns zero candidates, filters are automatically dropped and search retries unfiltered to prevent empty responses.
 - **Configurable** — all metadata features are togglable via environment variables (`ENABLE_METADATA_EXTRACTION`, `ENABLE_QUERY_METADATA_FILTERING`, `ENABLE_FILTER_FALLBACK_RELAXATION`).
 
+### 📌 Document-Aware Retrieval
+- **Cross-document isolation** — when a user asks about *"this document"*, *"the uploaded file"*, or *"this PDF"*, retrieval is scoped strictly to that document. No cross-document bleed.
+- **Automatic scope detection** — regex-based heuristics detect document-scoped references (`this document`, `the doc`, `the uploaded file`, `page 5`, etc.) and apply `document_id` filters to both ChromaDB and BM25 queries.
+- **Active document tracking** — the frontend passes `active_document_id` and `active_document_name` to every query, enabling precise document targeting.
+- **Graceful fallback** — if document-scoped retrieval returns zero results, the system falls back to global search rather than returning an empty answer.
+
+### 👁️ Vision Model & Document Understanding
+- **Dual-model architecture** — `qwen2.5:7b` handles text generation while `qwen2.5vl:7b` handles visual document understanding (code screenshots, diagrams, tables). Vision processing runs **only during ingestion**, keeping the query path at zero extra latency.
+- **Visual page detection heuristics** — automatically classifies PDF pages as `CODE_SCREENSHOT`, `DIAGRAM_ARCHITECTURE`, `TABLE_DATA`, or `NONE` (pure text, skipped). Small icons (<120×80px) are filtered out.
+- **Specialized OCR prompts** — code extraction preserves indentation, function names, classes, imports, and parameters verbatim. Diagram extraction captures component relationships and data flows.
+- **SHA256 content-addressed cache** — visual extractions are cached to `storage/vision_cache/` keyed by `(document_id, page_number, SHA256(image_bytes), vision_model)`. Re-ingesting unchanged documents reuses cached results in <1ms.
+- **Complementary chunk packing** — for procedural queries (*"How can I make X Analyst Agent?"*), the context compressor ensures a balanced mix of description, implementation code, task code, and diagrams — preventing redundant prose from crowding out code.
+- **Query-time lazy visual fallback** — if a document was previously ingested without vision and retrieved text contains cues (*"Here's how it's done"*, *"See code below"*), only that specific page is lazily extracted, cached, and injected into context.
+- **Model management** — configurable via environment variables (`VISION_MODEL`, `VISION_ENABLED`). If the vision model is missing locally, the system reports `ollama pull qwen2.5vl:7b` without auto-downloading. VRAM is reused via `keep_alive: 15m` during batch ingestion.
+
 ---
 
 ## 📐 System Architecture
@@ -88,21 +104,33 @@ graph TD
     subgraph Agentic [Agentic Intelligence Layer]
         Orchestrator --> |Step 0a| Router[Query Router · 5-Type Classifier]
         Router --> |Strategy Selection| Strategy[Dynamic Retrieval Config]
+        Orchestrator --> |Step 0b| DocScope[Document Scope Resolver]
         Orchestrator --> |Step 1b| FilterInfer[Metadata Filter Inferer]
     end
 
     subgraph RAG [Advanced RAG Pipeline]
         Strategy --> |Context-Aware Rewrite| LLM_Q[Query Rewriter]
-        FilterInfer --> |Pre-Filter| VectorDB[(ChromaDB)]
+        DocScope --> |Document ID Filter| VectorDB[(ChromaDB)]
+        FilterInfer --> |Pre-Filter| VectorDB
         LLM_Q --> |Hybrid Search| VectorDB
         VectorDB --> |BM25 + Dense Vectors| RRF[Reciprocal Rank Fusion]
         RRF --> |Top K Candidates| Reranker[BGE Cross-Encoder · CUDA]
-        Reranker --> |Context Expansion| Context[Filtered Context]
-        Context --> |Grounded Generation| LLM[Ollama LLM · GPU]
+        Reranker --> |Complementary Packing| Context[Filtered Context]
+        Context --> |Grounded Generation| LLM[Ollama LLM · Qwen 2.5 7B · GPU]
+    end
+
+    subgraph Vision [Vision Ingestion Pipeline]
+        PDF[PDF Upload] --> Heuristic[Visual Page Detection]
+        Heuristic --> |Code / Diagram / Table| VisionLLM[Qwen 2.5 VL · Ollama]
+        Heuristic --> |Pure Text| TextChunker[Standard Chunking]
+        VisionLLM --> Cache[SHA256 Disk Cache]
+        Cache --> VectorDB
+        TextChunker --> VectorDB
     end
 
     subgraph Verification [Self-Reflection Engine]
-        LLM --> Verifier[4D Verifier · Faithfulness · Completeness · Citations · Coherence]
+        LLM --> LazyFallback[Lazy Vision Fallback]
+        LazyFallback --> Verifier[4D Verifier · Faithfulness · Completeness · Citations · Coherence]
         Verifier --> |Failed| RetryEngine[Retry Engine · Max 2 Cycles]
         RetryEngine --> |Adjusted Params| Strategy
         Verifier --> |Passed| Output[Verified Answer]
@@ -124,6 +152,7 @@ graph TD
 | **Embeddings** | `BAAI/bge-small-en-v1.5` | Dense vector embeddings |
 | **Reranker** | `BAAI/bge-reranker-large` | Cross-encoder reranking on CUDA GPU |
 | **LLM** | Ollama (local) — `qwen2.5:7b` default | Privacy-first, configurable, multi-model |
+| **Vision LLM** | Ollama (local) — `qwen2.5vl:7b` | Code screenshot OCR, diagram & table extraction |
 | **GPU** | NVIDIA RTX 4050 (CUDA) | Accelerated reranking and embeddings |
 
 ---
@@ -142,6 +171,9 @@ graph TD
 ```bash
 ollama pull qwen2.5:7b
 ollama pull nomic-embed-text
+
+# Vision model — for code screenshot, diagram & table extraction from PDFs
+ollama pull qwen2.5vl:7b
 
 # Optional — for model switching
 ollama pull llama3.1:8b
@@ -181,7 +213,9 @@ Edit the `.env` file in the project root to match your setup:
 ```env
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_LLM_MODEL=qwen2.5:7b
-RERANKER_DEVICE=cuda    # Use 'cpu' if no NVIDIA GPU
+VISION_MODEL=qwen2.5vl:7b       # Vision model for document understanding
+VISION_ENABLED=true              # Set to false to disable vision processing
+RERANKER_DEVICE=cuda             # Use 'cpu' if no NVIDIA GPU
 ```
 
 ### 5. Run the Application
@@ -232,28 +266,32 @@ company_policy_rag/
 │   ├── embeddings/              # Embedding service & vector store
 │   ├── ingestion/
 │   │   ├── chunkers/            # Adaptive chunking strategies
-│   │   ├── loaders/             # Multi-format document loaders
-│   │   └── metadata_extractor.py # 🆕 Ingestion metadata extraction
+│   │   ├── loaders/             # Multi-format document loaders (PDF with vision integration)
+│   │   └── metadata_extractor.py # Ingestion metadata extraction
 │   ├── models/                  # Pydantic data models (QueryClassification, VerificationReport, RAGTrace)
 │   ├── rag/
-│   │   ├── pipeline.py          # Master RAG pipeline orchestrator
-│   │   ├── query_router.py      # 🆕 5-type query classifier & strategy selector
-│   │   ├── filter_extractor.py  # 🆕 Query-time metadata filter inferer
-│   │   ├── verifier.py          # 🆕 4-dimensional self-reflection verifier
-│   │   ├── retry_engine.py      # 🆕 Autonomous retry & parameter adjustment engine
+│   │   ├── pipeline.py          # Master RAG pipeline orchestrator (with document-aware scope & lazy vision fallback)
+│   │   ├── query_router.py      # 5-type query classifier & strategy selector
+│   │   ├── filter_extractor.py  # Query-time metadata filter inferer
+│   │   ├── verifier.py          # 4-dimensional self-reflection verifier
+│   │   ├── retry_engine.py      # Autonomous retry & parameter adjustment engine
 │   │   ├── query_rewrite.py     # Context-aware query rewriter
 │   │   ├── citations.py         # Citation extraction engine
 │   │   ├── semantic_cache.py    # Semantic caching manager
-│   │   └── context_compression.py
+│   │   └── context_compression.py # 🆕 Complementary chunk packing (code + prose + table balancing)
 │   ├── retrieval/
 │   │   ├── hybrid.py            # Hybrid dense + BM25 retriever
 │   │   ├── reranker.py          # Cross-encoder reranker (CUDA)
 │   │   ├── vector.py            # Dense vector retriever
 │   │   └── bm25.py              # BM25 sparse retriever
-│   └── services/
-│       ├── chat_service.py      # Chat orchestration + session memory
-│       ├── document_service.py  # Document ingestion & management
-│       └── telemetry_service.py # Observability & trace recording
+│   ├── services/
+│   │   ├── chat_service.py      # Chat orchestration + session memory
+│   │   ├── document_service.py  # Document ingestion & management
+│   │   └── telemetry_service.py # Observability & trace recording
+│   └── vision/                  # 🆕 Vision Model Subsystem
+│       ├── __init__.py          # Package exports
+│       ├── vision_service.py    # Visual page detection, OCR prompts, Ollama VLM integration
+│       └── vision_cache.py      # SHA256 content-addressed disk cache
 ├── frontend/
 │   ├── app/                     # Next.js App Router pages
 │   ├── components/
@@ -265,9 +303,14 @@ company_policy_rag/
 │   │   └── CitationDrawer.tsx   # Source citation viewer
 │   ├── hooks/                   # Custom React hooks
 │   └── lib/                     # API client, types, utilities
+├── storage/
+│   ├── chroma/                  # ChromaDB vector store persistence
+│   └── vision_cache/            # 🆕 Cached vision extractions (JSON per page)
 ├── tests/
+│   ├── test_vision_model_support.py      # 🆕 Vision subsystem tests (10 tests)
+│   ├── test_document_aware_retrieval.py  # 🆕 Document-aware retrieval tests (11 tests)
 │   ├── unit/                    # Unit tests (chunkers, verifier, retry engine, etc.)
-│   └── e2e/                     # 🆕 End-to-end agentic layer tests (Tiers 1-4)
+│   └── e2e/                     # End-to-end agentic layer tests (Tiers 1-4)
 ├── .env                         # Environment configuration
 └── requirements.txt             # Python dependencies
 ```
@@ -294,7 +337,18 @@ Click the **model dropdown** (CPU icon) in the chat top bar to switch between:
 - Gemma 2 9B (Google compact)
 
 ### Upload Documents
-Navigate to the **Documents** tab and drag & drop PDF, DOCX, TXT, MD, CSV, JSON, or HTML files. They are automatically chunked, embedded, and indexed.
+Navigate to the **Documents** tab and drag & drop PDF, DOCX, TXT, MD, CSV, JSON, or HTML files. They are automatically chunked, embedded, and indexed. PDFs with code screenshots, architecture diagrams, or data tables are processed by the vision model during ingestion.
+
+### Document-Scoped Queries
+When viewing a specific document, ask questions scoped to it:
+> *"What are the top projects in this document?"*
+> *"Summarize page 3 of this PDF."*
+> → Retrieval is automatically scoped to that document only. No cross-document bleed.
+
+### Vision-Enhanced Code Extraction
+Upload a PDF that contains code screenshots or architecture diagrams:
+> *"How can I make X Analyst Agent?"*
+> → The system retrieves both the text description **and** the implementation code extracted from the screenshot image, combining them into a complete answer.
 
 ---
 
@@ -323,6 +377,11 @@ Key configuration options in `.env`:
 | `ENABLE_METADATA_EXTRACTION` | `true` | 🆕 Extract metadata during document ingestion |
 | `ENABLE_QUERY_METADATA_FILTERING` | `true` | 🆕 Infer metadata filters from queries |
 | `ENABLE_FILTER_FALLBACK_RELAXATION` | `true` | 🆕 Drop filters and retry if zero results |
+| `VISION_MODEL` | `qwen2.5vl:7b` | 🆕 Ollama vision model for document understanding |
+| `VISION_ENABLED` | `true` | 🆕 Enable/disable vision processing during ingestion |
+| `VISION_DPI` | `150` | 🆕 DPI for rendering PDF pages to images |
+| `VISION_REQUEST_TIMEOUT` | `90.0` | 🆕 Timeout (seconds) for vision model API calls |
+| `ENABLE_LAZY_VISION_FALLBACK` | `true` | 🆕 Enable query-time lazy visual extraction |
 
 ---
 
@@ -431,6 +490,11 @@ Additional quality signals:
 - [x] 🆕 Dynamic Metadata Extraction & Filtering (ingestion tagging + query-time inference)
 - [x] 🆕 Filter Relaxation Fallback (zero-result recovery)
 - [x] 🆕 Frontend Agentic Visual Indicators (routing badges, verification pills, 4D progress bars, filter tags, cache badges)
+- [x] 🆕 Document-Aware Retrieval (cross-document isolation, active document scoping, graceful fallback)
+- [x] 🆕 Dual-Model Vision Pipeline (Qwen 2.5 VL — code screenshot OCR, diagram understanding, table extraction)
+- [x] 🆕 Vision Ingestion Cache (SHA256 content-addressed disk cache, zero reprocessing on re-ingestion)
+- [x] 🆕 Complementary Chunk Packing (balanced code + prose + table context for procedural queries)
+- [x] 🆕 Query-Time Lazy Vision Fallback (on-demand page extraction when visual cues detected)
 - [ ] Graph RAG integration (Neo4j for entity relationships)
 - [ ] Multi-user authentication & role-based access
 - [ ] Kubernetes Helm charts for cloud deployment

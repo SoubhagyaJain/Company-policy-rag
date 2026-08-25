@@ -1,137 +1,130 @@
-# Project: Company Policy RAG with Agentic Intelligence Layer
+# Project: Qwen 2.5 Coder 7B Fine-Tuning, GGUF Export, Ollama Registration & System-Wide Integration
 
 ## Architecture
+The system integrates an end-to-end parameter-efficient fine-tuning (PEFT/LoRA/QLoRA) and deployment pipeline into the existing FastAPI + ChromaDB + Ollama + Next.js RAG platform:
 
-The system is a production-grade RAG chatbot for company policy Q&A with an Agentic Intelligence Layer built with FastAPI, LlamaIndex, ChromaDB, BM25 (RRF), Cross-Encoder reranking (`BAAI/bge-reranker-large`), Ollama LLMs, and a Next.js 16 / React 19 frontend.
+1. **Fine-Tuning Engine (`company_policy_rag/src/finetuning/`)**:
+   - `dataset_loader.py`: Multi-format dataset ingestion (Alpaca, ShareGPT, JSONL prompt-response pairs), normalization to ChatML schema, and deterministic validation splitting.
+   - `trainer.py`: LoRA/QLoRA training orchestrator using Hugging Face `transformers`, `peft` (`LoraConfig`), and `trl` (`SFTTrainer`) with 4-bit NF4 quantization, completion-only loss masking, and step-level loss/perplexity metrics logging.
+   - `merger.py`: High-performance LoRA adapter weight merger (`peft` `merge_and_unload`) exporting 16-bit standalone weights and tokenizer configurations.
+   - `gguf_exporter.py`: GGUF conversion and quantization engine supporting `Q4_K_M`, `Q8_0`, and `FP16` with multi-tier fallback for local/Windows environments.
+   - `modelfile_generator.py`: Automated Ollama `Modelfile` generator configured with ChatML template, stop tokens (`<|im_end|>`, `<|endoftext|>`), parameters (`num_ctx 8192`, `temperature 0.1`), and enterprise policy system prompt.
+   - `ollama_registrar.py`: Direct local Ollama storage registration via CLI (`ollama create`) and REST API (`POST /api/create`).
 
-```
-[User / Next.js 16 UI]
-       │
-       │ POST /api/chat/stream or POST /api/chat
-       ▼
-[FastAPI Router: backend/api/routes/chat.py]
-       │
-       ▼
-[ChatService: backend/services/chat_service.py]
-       │ (Session TTL Cache / History resolution / SSE Stream Event Generator)
-       ▼
-[RAGPipeline: backend/rag/pipeline.py]
-       │
-       ├─► [R1: QueryRouter] ── classify (FACTUAL, COMPARISON, ENUMERATION, PROCEDURAL, CONVERSATIONAL)
-       │                        └── If CONVERSATIONAL: instant greeting bypass (no DB/retrieval)
-       │                        └── Select dynamic RetrievalStrategy (top_k, rerank_top_n, multi_query, etc.)
-       │
-       ├─► [R3: QueryMetadataInferer] ── infer department, policy_id, topic_tags, category
-       │                                 └── Pre-filter hybrid retrieval (with Fallback Relaxation)
-       │
-       ├─► [Step 0: SemanticCacheManager] ── Cosine similarity >= 0.95 ──► Return cached answer
-       │
-       ├─► [Step 1-2: QueryRewriter & MultiQueryGenerator]
-       │
-       ├─► [Step 3: HybridRetriever] ── Dense Vector (ChromaDB) + Sparse Lexical (BM25) with RRF (k=60)
-       │
-       ├─► [Step 4: CrossEncoderReranker] ── BAAI/bge-reranker-large + Relative Score Thresholding
-       │
-       ├─► [Step 5: ContextCompressor] ── Parent Context Expansion & Formatting
-       │
-       ├─► [Step 6: LLM Grounded Synthesis] ── Ollama / LlamaIndex / Fallback Grounded Synthesis
-       │
-       ├─► [Step 7: CitationEngine] ── Verifiable bracketed [Source N] extraction
-       │
-       └─► [R2: SelfReflectionVerifier & RetryEngine]
-             ├─ Evaluate Faithfulness, Completeness, Citation Coverage, Coherence
-             ├─ If score < threshold & attempt < 2 ──► Adjust retrieval parameters & retry loop
-             └─ Hard cap at 2 retries ──► Graceful fallback with low_confidence=True
-       │
-       ▼
-[TelemetryService: backend/services/telemetry_service.py]
-       │ (Records full RAGTrace with routing, verification & filter telemetry)
-       ▼
-[SSE Events / Stream Delivery: start -> retrieval -> chunk -> citation -> trace -> done]
-```
+2. **CLI & Workflow Entrypoints (`company_policy_rag/scripts/`)**:
+   - `finetune_qwen_coder.py`: CLI for dataset validation, fine-tuning configuration, metrics logging, and adapter export.
+   - `export_and_register_ollama.py`: CLI for merging LoRA weights, GGUF export, Modelfile generation, and registering the model into Ollama.
+   - `run_finetune_pipeline.py`: Unified end-to-end pipeline runner executing training -> merge -> GGUF -> Modelfile -> Ollama registration in a single command.
+
+3. **System-Wide Default Configuration (`company_policy_rag/`)**:
+   - `src/config.py`: Centralized Pydantic settings with `llm_model: str = "qwen2.5-coder-7b-policy"` (alias `OLLAMA_LLM_MODEL`), `metadata_extractor_model`, and `eval_llm_model`.
+   - `backend/api/routes/models.py`, `backend/models/api_dto.py`, `backend/dependencies.py`: API default active model and dynamic Ollama model routing.
+   - `.env`, `.env.example`, `docker-compose.yml`: Environment variables configuring default model `qwen2.5-coder-7b-policy`.
+   - `frontend/components/ChatWindow.tsx`, `frontend/lib/api-client.ts`: UI model selection defaults.
+
+4. **Automated Verification Suite (`company_policy_rag/tests/`)**:
+   - `tests/unit/test_finetuning_dataset.py`: Unit tests for multi-format dataset loading, normalization, and validation splitting.
+   - `tests/unit/test_finetuning_trainer.py`: Unit tests for LoRA trainer, loss masking, metrics logging, and smoke-run execution.
+   - `tests/unit/test_export_merge_modelfile.py`: Unit tests for adapter merge, Modelfile generation, stop tokens, and GGUF exporter.
+   - `tests/unit/test_ollama_registration.py`: Unit tests for Ollama registration utility.
+   - `tests/e2e/test_finetuned_rag_e2e.py`: End-to-end integration test verifying live RAG chat generation, routing, self-reflection, and non-regression with the fine-tuned model.
 
 ---
 
 ## Feature Inventory
-
-Every requirement from `ORIGINAL_REQUEST.md` and codebase survey is inventoried below with its assigned milestone:
-
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Query Classification | Classify incoming queries into at least 4 types (FACTUAL, COMPARISON, ENUMERATION, PROCEDURAL, CONVERSATIONAL) with measurable accuracy | M1 | ORIGINAL_REQUEST §R1 |
-| 2 | Strategy Selector | Dynamic retrieval strategy selection (top_k, rerank_top_n, multi_query, parent_expansion, temp) based on query type | M1 | ORIGINAL_REQUEST §R1 |
-| 3 | Conversational Bypass | Greeting and conversational queries bypass vector retrieval cleanly | M1 | ORIGINAL_REQUEST §R1 |
-| 4 | Routing Observability | Decision, confidence, and strategy surfaced in SSE trace events (`event: trace`) and response metadata | M1 | ORIGINAL_REQUEST §R1 |
-| 5 | Post-Generation Verification | Self-reflection verifier evaluating faithfulness, completeness, citation coverage, and coherence | M2 | ORIGINAL_REQUEST §R2 |
-| 6 | Autonomous Retry Loop | Autonomous retrieval adjustment & re-synthesis when verification score is below threshold | M2 | ORIGINAL_REQUEST §R2 |
-| 7 | Retry Hard Cap & Fallback | Hard cap at 2 retries with graceful fallback to prevent infinite loops | M2 | ORIGINAL_REQUEST §R2 |
-| 8 | Verification Observability | Verification scores and retry attempts logged in observability traces and SSE events | M2 | ORIGINAL_REQUEST §R2 |
-| 9 | Ingestion Metadata Extraction | Automatically extract category, department, effective dates, policy IDs, key entities, and topic tags during ingestion | M3 | ORIGINAL_REQUEST §R3 |
-| 10 | ChromaDB Metadata Storage | Flatten and store structured metadata in ChromaDB alongside chunk metadata | M3 | ORIGINAL_REQUEST §R3 |
-| 11 | Query Metadata Inference | Infer relevant metadata filters from query text and apply pre-filtering before hybrid search | M3 | ORIGINAL_REQUEST §R3 |
-| 12 | Filter Fallback Relaxation | Automatically relax filters and retry retrieval if filtered search returns 0 candidates | M3 | ORIGINAL_REQUEST §R3 |
-| 13 | Frontend Agentic UI | Display query classification badges, verification status indicators, 4D score progress bars, and metadata filter tags in Next.js UI | M4 | ORIGINAL_REQUEST §R4 |
-| 14 | Configurable Feature Toggles | Environment variables and config flags to enable/disable agentic features | M4 | ORIGINAL_REQUEST §R4 |
-| 15 | Non-Regression & Pipeline Continuity | All existing unit and integration tests pass; streaming, caching, and memory continue to work | M4 | ORIGINAL_REQUEST §R4 |
-| 16 | E2E 4-Tier Test Suite | Comprehensive opaque-box test suite verifying all 4 tiers (Feature, Boundary, Combinations, Real-World Scenarios) | E2E | ORIGINAL_REQUEST Acceptance Criteria |
-| 17 | Adversarial Hardening (Tier 5) | Adversarial test coverage and edge case verification | E2E | Project Quality Standards |
+| 1 | F1.1 Multi-format Dataset Loader | Support Alpaca, ShareGPT, and JSONL prompt-response pairs with auto-detection | M1 | ORIGINAL_REQUEST §R1 |
+| 2 | F1.2 Validation Split & Hygiene | Deterministic train/validation splitting with seed control, format validation, length checks | M1 | ORIGINAL_REQUEST §R1 |
+| 3 | F1.3 LoRA/QLoRA PEFT Architecture | 4-bit NF4 QLoRA, 8-bit LoRA, FP16 LoRA targeting all 7 linear projections (`q/k/v/o/gate/up/down_proj`) | M1 | ORIGINAL_REQUEST §R1 |
+| 4 | F1.4 Training Execution & Metrics | Completion-only loss masking, step logging, eval loss, stable perplexity calculation, artifacts export | M1 | ORIGINAL_REQUEST §R1 |
+| 5 | F2.1 LoRA Adapter Weight Merging | Merge LoRA adapter weights with base Qwen 2.5 Coder 7B into standalone FP16 weights | M2 | ORIGINAL_REQUEST §R2 |
+| 6 | F2.2 GGUF Conversion & Quantization | Export model to GGUF format supporting Q4_K_M, Q8_0, and FP16 with local fallback ladder | M2 | ORIGINAL_REQUEST §R2 |
+| 7 | F2.3 Ollama Modelfile Generation | Generate optimized Modelfile with ChatML template, stop tokens, system prompt, and parameters | M2 | ORIGINAL_REQUEST §R2 |
+| 8 | F2.4 Ollama Registration Utility | Register fine-tuned GGUF directly into local Ollama storage via CLI/API | M2 | ORIGINAL_REQUEST §R2 |
+| 9 | F3.1 Environment & Config Defaults | Update `.env`, `.env.example`, `docker-compose.yml`, `config.py` default to `qwen2.5-coder-7b-policy` | M3 | ORIGINAL_REQUEST §R3 |
+| 10 | F3.2 Backend Dynamic Model Integration | Update `backend/api/routes/models.py`, `api_dto.py`, `dependencies.py` for fine-tuned default model | M3 | ORIGINAL_REQUEST §R3 |
+| 11 | F3.3 Frontend Model Defaults | Update `ChatWindow.tsx`, `api-client.ts` to default model selection to fine-tuned Qwen 2.5 Coder | M3 | ORIGINAL_REQUEST §R3 |
+| 12 | F4.1 Dataset Validation Test Suite | Unit tests for Alpaca, ShareGPT, JSONL loader, splitting, schema validation | M4 / E2E | ORIGINAL_REQUEST §R4 |
+| 13 | F4.2 Smoke-Test Training Execution | Automated test verifying training execution, metrics computation, and adapter output | M4 / E2E | ORIGINAL_REQUEST §R4 |
+| 14 | F4.3 Merge, GGUF & Modelfile Tests | Automated tests verifying weight merger, GGUF export validation, Modelfile syntax & stop tokens | M4 / E2E | ORIGINAL_REQUEST §R4 |
+| 15 | F4.4 Ollama Registration Verification | Automated test verifying Ollama model creation and local tag registration | M4 / E2E | ORIGINAL_REQUEST §R4 |
+| 16 | F4.5 End-to-End RAG API Validation | E2E test verifying RAG query execution, streaming, routing, verification with fine-tuned model | M4 / E2E | ORIGINAL_REQUEST §R4 |
 
 ---
 
 ## Milestones
-
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| E2E | E2E Test Suite Track | Build/verify 4-tier opaque-box E2E test suite (`TEST_INFRA.md`, `TEST_READY.md`) | none | DONE |
-| M1 | Query Router & Strategy Selector | Query classifier, strategy mapping, conversational bypass, SSE trace integration | none | DONE |
-| M2 | Self-Reflection & Verification | 4D verification evaluator, retry engine, 2-retry hard cap, telemetry trace | M1 | DONE |
-| M3 | Dynamic Metadata Extraction & Filtering | Ingestion metadata extraction, ChromaDB storage, query filter inference, fallback relaxation | none | IN_PROGRESS |
-| M4 | Integration, Frontend UI & Non-Regression | UI badges/indicators/tags, config toggles, enum import fix, full test suite green | M1, M2, M3 | PLANNED |
-| Final | Final E2E Pass & Hardening | 100% pass on Tiers 1-4, Tier 5 adversarial hardening, Forensic Audit | E2E, M4 | PLANNED |
+| E2E | E2E Testing Track | Requirement-driven opaque-box test suite (Tiers 1-4) & `TEST_READY.md` | none | IN_PROGRESS |
+| 1 | M1: Fine-Tuning Pipeline | Dataset loader, LoRA/QLoRA trainer, metrics logger, CLI `finetune_qwen_coder.py` | none | IN_PROGRESS |
+| 2 | M2: Model Merging, GGUF Export & Ollama Registration | Weight merger, GGUF quantization exporter, Modelfile generator, Ollama registrar, CLI `export_and_register_ollama.py` | M1 | PLANNED |
+| 3 | M3: System Integration & Defaults | Configuration files (.env, config.py, docker-compose.yml), backend routes, frontend defaults | M2 | PLANNED |
+| 4 | M4: Automated Verification & Final E2E Validation | Pass 100% E2E test suite (Tiers 1-4), smoke-test validation, and adversarial coverage hardening (Tier 5) | M3, E2E | PLANNED |
 
 ---
 
 ## Interface Contracts
 
-### Query Router (`backend/rag/query_router.py`)
-- `QueryCategory(str, Enum)`: `FACTUAL`, `COMPARISON`, `ENUMERATION`, `PROCEDURAL`, `CONVERSATIONAL`
-- `RetrievalStrategy(BaseModel)`: `dense_top_k: int`, `bm25_top_k: int`, `rrf_k: int`, `rerank_top_n: int`, `min_score_ratio: float`, `enable_multi_query: bool`, `enable_parent_expansion: bool`, `temperature: float`
-- `QueryClassification(BaseModel)`: `category: QueryCategory`, `confidence: float`, `strategy: RetrievalStrategy`, `reasoning: str`
-- `QueryRouter.classify(query: str, history: list[dict] | None = None) -> QueryClassification`
+### 1. `DatasetLoader` (`company_policy_rag/src/finetuning/dataset_loader.py`)
+- `load_dataset_from_file(file_path: str, val_split: float = 0.1, seed: int = 42) -> Tuple[Dataset, Dataset]`
+- `normalize_record(record: dict) -> List[Dict[str, str]]`: Returns `[{"role": "system"|"user"|"assistant", "content": "..."}]`.
+- Supported formats: Alpaca (`instruction`, `input`, `output`), ShareGPT (`conversations`/`messages`), JSONL (`prompt`/`response` or `messages`).
 
-### Self-Reflection Verifier (`backend/rag/verifier.py` & `backend/rag/retry_engine.py`)
-- `VerificationReport(BaseModel)`: `faithfulness: float`, `completeness: float`, `citation_coverage: float`, `coherence: float`, `composite_score: float`, `passed: bool`, `critique: str`, `missing_aspects: list[str]`, `unsupported_claims: list[str]`
-- `SelfReflectionVerifier.verify(query: str, answer: str, context_chunks: list[ScoredChunk], citations: list[Citation]) -> VerificationReport`
-- `RetryEngine.prepare_retry(attempt: int, report: VerificationReport, current_strategy: RetrievalStrategy, query: str) -> tuple[RetrievalStrategy, str | None]` (hard capped at attempt < 2)
+### 2. `QwenLoRATrainer` (`company_policy_rag/src/finetuning/trainer.py`)
+- `train_lora(config: FineTuneConfig) -> TrainingOutput`
+- `FineTuneConfig`: `model_name_or_path: str`, `dataset_path: str`, `output_dir: str`, `lora_r: int = 16`, `lora_alpha: int = 32`, `lora_dropout: float = 0.05`, `use_qlora: bool = True`, `batch_size: int = 2`, `gradient_accumulation_steps: int = 4`, `learning_rate: float = 2e-4`, `num_train_epochs: int = 3`, `max_seq_length: int = 2048`, `val_split: float = 0.1`, `smoke_test: bool = False`.
+- Output: Adapter directory containing `adapter_model.safetensors`, `adapter_config.json`, `training_history.json`, `metrics_summary.json`.
 
-### Dynamic Metadata Extractor & Inferer (`backend/ingestion/metadata_extractor.py` & `backend/rag/filter_extractor.py`)
-- `DocumentMetadataExtractor.extract(text: str, filename: str = "") -> ExtractedDocumentMetadata`
-- `QueryMetadataInferer.infer_filters(query: str) -> dict[str, Any]` (e.g. `{"department": "IT"}`, `{"topic_tags": ["it_security"]}`)
+### 3. `ModelMerger` (`company_policy_rag/src/finetuning/merger.py`)
+- `merge_lora_weights(base_model_path: str, adapter_path: str, output_dir: str, device: str = "cpu") -> str`
+- Output: Standalone merged HuggingFace model directory with full model weights and tokenizer files.
 
-### SSE Stream Trace Contract (`backend/services/chat_service.py` & `frontend/lib/types.ts`)
-- `event: trace`: payload includes `query_type`, `routing_confidence`, `retrieval_strategy`, `inferred_filters`, `applied_filters`, `filter_relaxed`, `verification_report`, `verification_score`, `retry_count`, `retry_reasons`
-- `event: done`: payload includes complete `trace`, `answer`, `citations`, `timing`, `low_confidence`
+### 4. `GGUFExporter` & `ModelfileGenerator` (`company_policy_rag/src/finetuning/`)
+- `convert_to_gguf(model_dir: str, output_file: str, quantization: str = "Q4_K_M") -> str`
+- `generate_modelfile(gguf_path: str, output_path: str, system_prompt: Optional[str] = None, num_ctx: int = 8192, temperature: float = 0.1) -> str`
+- Stop tokens: `<|im_end|>`, `<|endoftext|>`.
+
+### 5. `OllamaRegistrar` (`company_policy_rag/src/finetuning/ollama_registrar.py`)
+- `register_model_in_ollama(model_name: str, modelfile_path: str, ollama_url: str = "http://localhost:11434") -> bool`
 
 ---
 
 ## Code Layout
-
-- Backend Root: `company_policy_rag/backend/`
-  - API Routes: `backend/api/routes/` (`chat.py`, `documents.py`, `admin.py`, `health.py`, `models.py`)
-  - API Main & Dependencies: `backend/api/main.py`, `backend/api/dependencies.py`
-  - Services: `backend/services/` (`chat_service.py`, `document_service.py`, `telemetry_service.py`)
-  - RAG Core: `backend/rag/` (`pipeline.py`, `query_router.py`, `verifier.py`, `retry_engine.py`, `filter_extractor.py`, `semantic_cache.py`, `query_rewrite.py`, `context_compression.py`)
-  - Retrieval & Search: `backend/retrieval/` (`hybrid.py`, `vector.py`, `bm25.py`, `reranker.py`)
-  - Ingestion & Loaders: `backend/ingestion/` (`metadata_extractor.py`, `loaders/`, `chunkers/`)
-  - Embeddings & Storage: `backend/embeddings/` (`embeddings.py`, `vector_store.py`)
-  - Models & Schemas: `backend/models/` (`rag.py`, `api_dto.py`, `chunk.py`, `document.py`)
-- Config & Core: `company_policy_rag/src/config.py`, `company_policy_rag/src/ollama_client.py`
-- Frontend Root: `company_policy_rag/frontend/`
-  - App Pages: `frontend/app/` (`page.tsx`, `admin/page.tsx`, `layout.tsx`)
-  - Components: `frontend/components/` (`ChatMessage.tsx`, `ChatWindow.tsx`, `AdminView.tsx`, `CitationDrawer.tsx`, `CitationCard.tsx`, `Header.tsx`)
-  - Hooks: `frontend/hooks/` (`useChatStream.ts`, `useObservability.ts`, `useSessions.ts`, `useDocuments.ts`)
-  - Library & Types: `frontend/lib/` (`types.ts`, `api-client.ts`)
-- Tests: `company_policy_rag/tests/`
-  - Unit: `tests/unit/`
-  - Integration: `tests/integration/`
-  - E2E: `tests/e2e/` (`test_e2e_agentic_layer.py`, `test_e2e_tier1_features.py`, `test_e2e_tier2_boundaries.py`, `test_e2e_tier3_combinations.py`, `test_e2e_tier4_scenarios.py`)
+```
+company_policy_rag/
+├── src/
+│   ├── config.py                               # System settings (default LLM model: qwen2.5-coder-7b-policy)
+│   ├── ollama_client.py                        # Ollama client & model probe/preload utilities
+│   ├── generation.py                           # LLM generation with ChatML formatting & verification
+│   └── finetuning/                             # [NEW] Fine-tuning & deployment package
+│       ├── __init__.py
+│       ├── dataset_loader.py                   # Multi-format dataset ingestion & validation splitting
+│       ├── trainer.py                          # LoRA/QLoRA trainer & perplexity metrics logger
+│       ├── merger.py                           # LoRA adapter weight merger
+│       ├── gguf_exporter.py                    # GGUF converter & quantization utility
+│       ├── modelfile_generator.py              # Ollama Modelfile generator
+│       └── ollama_registrar.py                 # Ollama model registration utility
+├── scripts/
+│   ├── finetune_qwen_coder.py                  # CLI entrypoint for fine-tuning
+│   ├── export_and_register_ollama.py           # CLI entrypoint for merge, GGUF export, & Ollama register
+│   └── run_finetune_pipeline.py                # Unified end-to-end pipeline runner
+├── backend/
+│   ├── api/routes/models.py                    # Dynamic model selection endpoints
+│   ├── models/api_dto.py                       # API data transfer objects & model defaults
+│   └── dependencies.py                         # FastAPI dependency injection
+├── frontend/
+│   ├── components/ChatWindow.tsx               # UI default model selector
+│   └── lib/api-client.ts                       # Frontend API client
+├── tests/
+│   ├── unit/
+│   │   ├── test_finetuning_dataset.py          # Unit tests for dataset loader & splitting
+│   │   ├── test_finetuning_trainer.py          # Unit tests for trainer & metrics logging
+│   │   ├── test_export_merge_modelfile.py      # Unit tests for merger, GGUF exporter, Modelfile
+│   │   └── test_ollama_registration.py         # Unit tests for Ollama registrar
+│   └── e2e/
+│       └── test_finetuned_rag_e2e.py           # End-to-end integration test
+├── .env.example
+├── docker-compose.yml
+└── pyproject.toml
+```

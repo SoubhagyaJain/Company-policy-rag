@@ -44,14 +44,10 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const MODEL_OPTIONS = [
-  { id: 'qwen2.5:7b', label: 'Qwen 2.5 7B', desc: 'Fast & balanced' },
-  { id: 'gemma4:12b', label: 'Gemma 4 12B', desc: '7.6 GB model' },
-  { id: 'gemma4:latest', label: 'Gemma 4 Latest', desc: '9.6 GB model' },
-  { id: 'llama3.2:3b', label: 'Llama 3.2 3B', desc: '2.0 GB model' },
-  { id: 'gemma2:2b', label: 'Gemma 2 2B', desc: '1.6 GB compact' },
-  { id: 'minimax-m2:cloud', label: 'Minimax M2', desc: 'Cloud model' },
-  { id: 'glm-4.6:cloud', label: 'GLM 4.6', desc: 'Cloud model' },
-  { id: 'deepseek-r1:8b', label: 'Deepseek R1 8B', desc: '5.2 GB model' },
+  { id: 'qwen2.5:7b', label: 'Qwen 2.5 7B', desc: 'Fast & balanced (Recommended)' },
+  { id: 'llama3.2:3b', label: 'Llama 3.2 3B', desc: 'Ultra-fast compact model' },
+  { id: 'gemma4-policy-fast:latest', label: 'Gemma 4 Policy Fast', desc: 'Policy specialized model' },
+  { id: 'gemma4:12b', label: 'Gemma 4 12B', desc: 'High capability model' },
 ];
 
 const SUGGESTED_PROMPTS = [
@@ -114,16 +110,21 @@ export function ChatWindow({
           .map((m) => ({
             id: m.id,
             label: m.name || m.id,
-            desc: m.id.includes('3b') ? 'Compact & Fast (2.0 GB)' : m.id.includes('7b') ? 'Balanced (4.7 GB)' : m.id.includes('8b') ? 'Reasoning (5.2 GB)' : 'Installed model',
+            desc: m.id.includes('coder') || m.id.includes('policy') ? 'Policy Model (7.0 GB)' : m.id.includes('3b') ? 'Compact & Fast (2.0 GB)' : m.id.includes('7b') ? 'Balanced (4.7 GB)' : m.id.includes('8b') ? 'Reasoning (5.2 GB)' : 'Installed model',
           }));
         if (chatModels.length > 0) {
           setModelsList(chatModels);
+          if (res.active_model && chatModels.some((m) => m.id === res.active_model)) {
+            setSelectedModel(res.active_model);
+          } else if (!chatModels.some((m) => m.id === selectedModel)) {
+            setSelectedModel(chatModels[0].id);
+          }
         }
       }
     } catch {
       // fallback to MODEL_OPTIONS
     }
-  }, []);
+  }, [selectedModel]);
 
   useEffect(() => {
     loadModels();

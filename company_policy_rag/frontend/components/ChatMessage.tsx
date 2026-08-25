@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { ChatMessageData, Citation, QueryTrace } from '../lib/types';
 import { CitationCard } from './CitationCard';
+import { CodeBlock } from './CodeBlock';
 import { formatLatency, cn } from '../lib/utils';
 
 interface ChatMessageProps {
@@ -496,8 +497,62 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
                 <span>{message.error}</span>
               </div>
             ) : message.content ? (
-              <div className="markdown-content space-y-3 prose dark:prose-invert prose-headings:font-serif prose-headings:font-semibold prose-headings:tracking-tight prose-p:leading-relaxed prose-pre:bg-[#201F1C] prose-pre:border prose-pre:border-[#2F2D29] prose-pre:text-cream-100 prose-code:font-mono prose-code:text-terracotta-700 dark:prose-code:text-terracotta-400 max-w-none">
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+              <div className="markdown-content space-y-3 prose dark:prose-invert prose-headings:font-serif prose-headings:font-semibold prose-headings:tracking-tight prose-p:leading-relaxed prose-code:font-mono max-w-none">
+                <ReactMarkdown
+                  components={{
+                    code({ className, children, ...props }) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      const codeContent = String(children || '').replace(/\n$/, '');
+                      const isMultiLine = codeContent.includes('\n');
+                      const isBlock = Boolean(match) || isMultiLine;
+
+                      if (isBlock) {
+                        return (
+                          <CodeBlock language={match ? match[1] : undefined}>
+                            {codeContent}
+                          </CodeBlock>
+                        );
+                      }
+
+                      return (
+                        <code
+                          className="px-1.5 py-0.5 mx-0.5 rounded-md bg-[#EFECE2] dark:bg-[#282622] text-[#B85028] dark:text-[#E07A5F] font-mono text-[12.5px] font-medium border border-[#E2DDD3] dark:border-[#38342F]"
+                          {...props}
+                        >
+                          {children}
+                        </code>
+                      );
+                    },
+                    pre({ children }) {
+                      return <>{children}</>;
+                    },
+                    table({ children }) {
+                      return (
+                        <div className="overflow-x-auto my-3 rounded-lg border border-[#E0D8CB] dark:border-[#33302A]">
+                          <table className="min-w-full divide-y divide-[#E0D8CB] dark:divide-[#33302A] text-xs">
+                            {children}
+                          </table>
+                        </div>
+                      );
+                    },
+                    th({ children }) {
+                      return (
+                        <th className="px-3 py-2 text-left font-semibold text-[#1E1C1A] dark:text-[#FAF8F5] bg-[#EAE4D6]/70 dark:bg-[#201F1C]">
+                          {children}
+                        </th>
+                      );
+                    },
+                    td({ children }) {
+                      return (
+                        <td className="px-3 py-2 border-t border-[#EAE4D6]/60 dark:border-[#282622] text-[#403C35] dark:text-[#D5CEC2]">
+                          {children}
+                        </td>
+                      );
+                    },
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
                 {message.isStreaming && (
                   <span className="inline-block w-1.5 h-4 bg-terracotta-600 dark:text-terracotta-400 animate-pulse ml-1 align-middle rounded-xs" />
                 )}

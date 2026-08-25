@@ -172,8 +172,34 @@ class Settings(BaseSettings):
 
     # ── Ollama / Models ────────────────────────────────────────────────────
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
+    text_model: str = Field(default="qwen2.5:7b", alias="TEXT_MODEL")
     llm_model: str = Field(default="qwen2.5:7b", alias="OLLAMA_LLM_MODEL")
     embed_model: str = Field(default="nomic-embed-text", alias="OLLAMA_EMBED_MODEL")
+
+    # ── Vision Model & Document Understanding ──────────────────────────────
+    vision_model: str = Field(default="qwen2.5vl:7b", alias="VISION_MODEL")
+    vision_enabled: bool = Field(default=True, alias="VISION_ENABLED")
+    vision_cache_dir: Path = Field(default=PROJECT_ROOT / "storage" / "vision_cache")
+    images_storage_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
+    vision_dpi: int = Field(default=150, alias="VISION_DPI")
+    vision_inference_max_dimension: int = Field(default=1024, alias="VISION_INFERENCE_MAX_DIMENSION")
+    vision_max_ingestion_retries: int = Field(default=0, alias="VISION_MAX_INGESTION_RETRIES")
+    vision_max_lazy_retries: int = Field(default=1, alias="VISION_MAX_LAZY_RETRIES")
+    vision_timeout_seconds: float = Field(default=40.0, alias="VISION_TIMEOUT_SECONDS")
+    enable_lazy_vision_fallback: bool = Field(default=True, alias="ENABLE_LAZY_VISION_FALLBACK")
+    vision_request_timeout: float = Field(default=40.0, alias="VISION_REQUEST_TIMEOUT")
+
+    @property
+    def VISION_MODEL(self) -> str:
+        return self.vision_model
+
+    @property
+    def VISION_ENABLED(self) -> bool:
+        return self.vision_enabled
+
+    @property
+    def TEXT_MODEL(self) -> str:
+        return self.text_model or self.llm_model
 
     llm_temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")
     llm_request_timeout: float = Field(default=120.0, alias="LLM_REQUEST_TIMEOUT")
@@ -213,14 +239,13 @@ class Settings(BaseSettings):
     section_page_scan_lines: int = Field(default=25)
 
     # ── Retrieval ──────────────────────────────────────────────────────────
-    similarity_top_k: int = Field(default=8, alias="SIMILARITY_TOP_K")
-    # Over-retrieve for reranker pool. 25–30 is the sweet spot for policy docs:
-    # enough recall for reranker without drowning it in noise.
-    retrieval_candidate_k: int = Field(default=30, alias="RETRIEVAL_CANDIDATE_K")
+    similarity_top_k: int = Field(default=5, alias="SIMILARITY_TOP_K")
+    # Over-retrieve for reranker pool. 15 is optimal for Qwen 2.5 7B (high recall without excess overhead).
+    retrieval_candidate_k: int = Field(default=15, alias="RETRIEVAL_CANDIDATE_K")
 
     # ── Hybrid BM25 + dense (Phase 2) ──────────────────────────────────────
     enable_hybrid_bm25: bool = Field(default=True, alias="ENABLE_HYBRID_BM25")
-    bm25_top_k: int = Field(default=30, alias="BM25_TOP_K")
+    bm25_top_k: int = Field(default=15, alias="BM25_TOP_K")
     hybrid_rrf_k: int = Field(default=60, alias="HYBRID_RRF_K")
     bm25_storage_dir: Path = Field(default=PROJECT_ROOT / "storage" / "bm25")
 
@@ -236,26 +261,37 @@ class Settings(BaseSettings):
     reranker_model: str = Field(
         default="BAAI/bge-reranker-large", alias="RERANKER_MODEL"
     )
-    # Final context passed to generation (6 balances recall for multi-part policy Q&A)
-    reranker_top_n: int = Field(default=6, alias="RERANKER_TOP_N")
+    # Final context passed to generation (4 balances recall for Qwen 2.5 7B without context bloat)
+    reranker_top_n: int = Field(default=4, alias="RERANKER_TOP_N")
     reranker_batch_size: int = Field(default=32, alias="RERANKER_BATCH_SIZE")
     reranker_device: str = Field(default="cpu", alias="RERANKER_DEVICE")
     # Drop chunks scoring below this fraction of the top reranker score
     enable_rerank_score_filter: bool = Field(default=True, alias="ENABLE_RERANK_SCORE_FILTER")
-    rerank_min_score_ratio: float = Field(default=0.40, alias="RERANK_MIN_SCORE_RATIO")
+    rerank_min_score_ratio: float = Field(default=0.50, alias="RERANK_MIN_SCORE_RATIO")
     rerank_min_keep: int = Field(default=3, alias="RERANK_MIN_KEEP")
 
+    # ── Conditional Reranking & Retrieval Caching (Qwen 2.5 7B) ──────────
+    enable_conditional_reranking: bool = Field(default=True, alias="ENABLE_CONDITIONAL_RERANKING")
+    conditional_reranker_threshold: float = Field(default=0.85, alias="CONDITIONAL_RERANKER_THRESHOLD")
+    retrieval_cache_enabled: bool = Field(default=True, alias="RETRIEVAL_CACHE_ENABLED")
+    retrieval_cache_ttl_seconds: int = Field(default=3600, alias="RETRIEVAL_CACHE_TTL_SECONDS")
+
     # ── Query rewrite (pre-retrieval) ──────────────────────────────────────
-    # Lightweight LLM rewrite improves keyword alignment for policy queries
-    enable_query_rewrite: bool = Field(default=True, alias="ENABLE_QUERY_REWRITE")
+    # Disabled by default for fast single-turn; conditional for multi-turn follow-ups
+    enable_query_rewrite: bool = Field(default=False, alias="ENABLE_QUERY_REWRITE")
+
+    # ── Dynamic Output Limits (Qwen 2.5 7B) ────────────────────────────────
+    max_new_tokens_factual: int = Field(default=256, alias="MAX_NEW_TOKENS_FACTUAL")
+    max_new_tokens_technical: int = Field(default=512, alias="MAX_NEW_TOKENS_TECHNICAL")
+    max_new_tokens_complex: int = Field(default=1024, alias="MAX_NEW_TOKENS_COMPLEX")
 
     # ── Generation / faithfulness grounding ──────────────────────────────────
     # balanced (default): helpful synthesis + partial answers; strict: max faithfulness
     grounding_strictness: Literal["strict", "balanced"] = Field(
         default="balanced", alias="GROUNDING_STRICTNESS"
     )
-    response_prompt_version: Literal["v1_standard", "v2_strict", "v2_balanced"] = Field(
-        default="v2_balanced", alias="RESPONSE_PROMPT_VERSION"
+    response_prompt_version: Literal["v1_standard", "v2_strict", "v2_balanced", "v3_qwen_compact"] = Field(
+        default="v3_qwen_compact", alias="RESPONSE_PROMPT_VERSION"
     )
     # Legacy override — true forces strict mode regardless of GROUNDING_STRICTNESS
     strict_grounding: bool = Field(default=False, alias="STRICT_GROUNDING")

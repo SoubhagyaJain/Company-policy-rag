@@ -15,28 +15,45 @@ def normalize_vector(vector: list[float]) -> list[float]:
     return [x / norm for x in vector]
 
 
-class EmbeddingCache:
-    """In-memory + hash-based embedding cache to avoid recomputing vector embeddings."""
+import threading
+from collections import OrderedDict
 
-    def __init__(self) -> None:
-        self._cache: dict[str, list[float]] = {}
+
+class EmbeddingCache:
+    """In-memory + hash-based thread-safe LRU embedding cache."""
+
+    def __init__(self, max_size: int = 10000) -> None:
+        self._cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._max_size = max_size
+        self._lock = threading.Lock()
 
     def _hash_text(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def get(self, text: str) -> list[float] | None:
         key = self._hash_text(text)
-        return self._cache.get(key)
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+        return None
 
     def set(self, text: str, embedding: list[float]) -> None:
         key = self._hash_text(text)
-        self._cache[key] = embedding
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+            self._cache[key] = embedding
+            if len(self._cache) > self._max_size:
+                self._cache.popitem(last=False)
 
     def clear(self) -> None:
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
     def __len__(self) -> int:
-        return len(self._cache)
+        with self._lock:
+            return len(self._cache)
 
 
 _shared_embedding_model: Any | None = None

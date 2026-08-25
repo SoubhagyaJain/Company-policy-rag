@@ -1,7 +1,3 @@
-"""
-Intelligent Query Router and Retrieval Strategy Selector.
-Classifies incoming queries into 5 intent categories and maps them to dynamic retrieval configurations.
-"""
 from __future__ import annotations
 
 import re
@@ -15,9 +11,25 @@ from src.config import settings
 class QueryRouter:
     """
     Intelligent Query Router classifying incoming user queries and selecting
-    the optimal retrieval strategy according to PROJECT.md § Interface Contracts.
+    the optimal retrieval strategy according to query intent.
     """
 
+    _CODE_PATTERNS = re.compile(
+        r"\b(show\s+(?:me\s+)?(?:the\s+)?code|give\s+(?:me\s+)?(?:the\s+)?code|exact\s+code|code\s+for|code\s+snippet|write\s+the\s+code|python\s+code)\b",
+        re.IGNORECASE,
+    )
+    _IMPLEMENTATION_PATTERNS = re.compile(
+        r"\b(how\s+can\s+i\s+(?:make|build|create|implement|setup|develop|define)|how\s+to\s+(?:make|build|create|implement|setup|develop|define)|how\s+do\s+i\s+(?:make|build|create|implement)|how\s+is\s+(?:the\s+)?\w+\s+(?:defined|implemented|configured|created))\b",
+        re.IGNORECASE,
+    )
+    _ARCHITECTURE_PATTERNS = re.compile(
+        r"\b(how\s+does\s+(?:the\s+)?\w+\s+(?:crew|agent|system|pipeline|workflow)\s+work|architecture|diagram|workflow|flowchart|data\s+flow|system\s+design|pipeline\s+design)\b",
+        re.IGNORECASE,
+    )
+    _EXPLANATION_PATTERNS = re.compile(
+        r"\b(explain|teach\s+me|how\s+does\s+this\s+work|what\s+is\s+the\s+purpose\s+of|walk\s+me\s+through|elaborate\s+on)\b",
+        re.IGNORECASE,
+    )
     _COMPARISON_PATTERNS = re.compile(
         r"\b(compare|comparison|difference|differences|difference\s+between|versus|vs\.?|better\s+than|pros\s+and\s+cons|differ|distinguish|relative\s+to|in\s+contrast|contrast\s+between)\b",
         re.IGNORECASE,
@@ -31,7 +43,7 @@ class QueryRouter:
         re.IGNORECASE,
     )
     _CONVERSATIONAL_PATTERNS = re.compile(
-        r"^(hi|hello|hey|heya|hiya|greetings|howdy|good\s+(morning|afternoon|evening|day)|thanks|thank\s+you|who\s+are\s+you|what\s+can\s+you\s+do|how\s+are\s+you|how\s+can\s+you\s+help|help)(\s+(there|everyone|all|assistant|bot|today|me))?[!?,. ]*(\s*(hi|hello|hey|how\s+are\s+you(\s+today)?|how\s+can\s+you\s+help(\s+me)?|who\s+are\s+you|what\s+can\s+you\s+do|how\s+can\s+you\s+assist(\s+me)?)[!?,. ]*)*$",
+        r"^(?:hi|hello|hey|heya|hiya|greetings|howdy|good\s+(?:morning|afternoon|evening|day)|thanks|thank\s+you|who\s+are\s+you|what\s+can\s+you\s+do|how\s+are\s+you|how\s+can\s+you\s+help|help)\b",
         re.IGNORECASE,
     )
 
@@ -40,17 +52,53 @@ class QueryRouter:
 
     def get_strategy_for_category(self, category: QueryCategory) -> RetrievalStrategy:
         """Return tuned retrieval parameters per query category."""
-        if category == QueryCategory.FACTUAL:
+        if category in (QueryCategory.IMPLEMENTATION, QueryCategory.CODE):
+            return RetrievalStrategy(
+                name="implementation_code_priority",
+                dense_top_k=25,
+                bm25_top_k=25,
+                rrf_k=60,
+                rerank_top_n=8,
+                min_score_ratio=0.30,
+                enable_multi_query=True,
+                enable_parent_expansion=True,
+                temperature=0.05,
+            )
+        elif category == QueryCategory.ARCHITECTURE:
+            return RetrievalStrategy(
+                name="architecture_workflow",
+                dense_top_k=20,
+                bm25_top_k=20,
+                rrf_k=60,
+                rerank_top_n=6,
+                min_score_ratio=0.35,
+                enable_multi_query=True,
+                enable_parent_expansion=True,
+                temperature=0.1,
+            )
+        elif category == QueryCategory.EXPLANATION:
+            return RetrievalStrategy(
+                name="explanation_grounded",
+                dense_top_k=15,
+                bm25_top_k=15,
+                rrf_k=60,
+                rerank_top_n=5,
+                min_score_ratio=0.40,
+                enable_multi_query=False,
+                enable_parent_expansion=True,
+                temperature=0.1,
+            )
+        elif category == QueryCategory.FACTUAL:
             return RetrievalStrategy(
                 name="factual_precision",
-                dense_top_k=10,
-                bm25_top_k=10,
+                dense_top_k=12,
+                bm25_top_k=12,
                 rrf_k=60,
                 rerank_top_n=4,
                 min_score_ratio=0.45,
                 enable_multi_query=False,
                 enable_parent_expansion=False,
-                temperature=0.1,
+                temperature=0.05,
             )
         elif category == QueryCategory.COMPARISON:
             return RetrievalStrategy(
@@ -79,8 +127,8 @@ class QueryRouter:
         elif category == QueryCategory.PROCEDURAL:
             return RetrievalStrategy(
                 name="procedural_workflow",
-                dense_top_k=15,
-                bm25_top_k=15,
+                dense_top_k=18,
+                bm25_top_k=18,
                 rrf_k=60,
                 rerank_top_n=6,
                 min_score_ratio=0.35,
@@ -110,6 +158,22 @@ class QueryRouter:
             cat = QueryCategory.FACTUAL
             conf = 0.50
             reason = "Empty query defaulted to factual."
+        elif self._CODE_PATTERNS.search(clean_q):
+            cat = QueryCategory.CODE
+            conf = 0.95
+            reason = "Query explicitly requests code or code snippet."
+        elif self._IMPLEMENTATION_PATTERNS.search(clean_q):
+            cat = QueryCategory.IMPLEMENTATION
+            conf = 0.95
+            reason = "Query requests implementation instructions or construction details."
+        elif self._ARCHITECTURE_PATTERNS.search(clean_q):
+            cat = QueryCategory.ARCHITECTURE
+            conf = 0.90
+            reason = "Query requests architectural overview, workflow, or crew interaction."
+        elif self._EXPLANATION_PATTERNS.search(clean_q):
+            cat = QueryCategory.EXPLANATION
+            conf = 0.88
+            reason = "Query requests explanatory walkthrough."
         elif self._COMPARISON_PATTERNS.search(clean_q):
             cat = QueryCategory.COMPARISON
             conf = 0.92
@@ -129,7 +193,7 @@ class QueryRouter:
         else:
             cat = QueryCategory.FACTUAL
             conf = 0.85
-            reason = "Direct factual policy inquiry."
+            reason = "Direct factual inquiry."
 
         threshold = getattr(settings, "query_router_confidence_threshold", 0.70)
         if conf < threshold:

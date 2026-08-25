@@ -27,6 +27,7 @@ class DocumentCategory(str, Enum):
 
 
 class DocumentMetadata(BaseModel):
+    document_id: str | None = Field(default=None, description="Document unique identifier")
     source_file: str = Field(..., description="Original filename e.g. employee_handbook.pdf")
     file_path: str = Field(..., description="Relative or absolute file system path")
     file_hash: str = Field(..., description="SHA-256 or fast hash for change detection")
@@ -37,8 +38,9 @@ class DocumentMetadata(BaseModel):
     policy_id: str | None = Field(default=None, description="Formal policy identifier e.g. POL-HR-001")
     key_entities: list[str] = Field(default_factory=list, description="Extracted key entities")
     topic_tags: list[str] = Field(default_factory=list, description="Extracted domain topic tags")
-    page_number: int | None = Field(default=None, description="1-indexed page number if applicable")
-    page_label: str | None = Field(default=None)
+    page_number: int | None = Field(default=None, description="1-indexed physical page number")
+    internal_page_index: int | None = Field(default=None, description="0-indexed internal page index")
+    page_label: str | None = Field(default=None, description="Printed / display page number e.g. '82'")
     total_pages: int | None = Field(default=None)
     section_title: str | None = Field(default=None)
     section_number: str | None = Field(default=None)
@@ -46,6 +48,7 @@ class DocumentMetadata(BaseModel):
     section_level: int | None = Field(default=None)
     has_tables: bool = Field(default=False)
     has_code: bool = Field(default=False)
+    image_assets: list[dict[str, Any]] = Field(default_factory=list, description="Original visual assets on this page")
     extra: dict[str, Any] = Field(default_factory=dict)
 
 

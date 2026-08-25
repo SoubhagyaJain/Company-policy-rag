@@ -1,0 +1,27 @@
+[
+  {
+    "instruction": "Explain the company's remote work security policy regarding VPN usage.",
+    "input": "",
+    "output": "All employees working remotely must connect to the corporate VPN with multi-factor authentication (MFA) enabled before accessing internal networks, code repositories, or customer data."
+  },
+  {
+    "instruction": "Summarize the reimbursement policy for business travel meals.",
+    "input": "Receipts must be submitted within 30 days. Alcohol is not reimbursable. Daily meal cap is $75 for domestic travel and $120 for international travel.",
+    "output": "Business travel meals are reimbursable up to $75/day for domestic travel and $120/day for international travel. Receipts must be submitted within 30 days, and alcoholic beverages are strictly non-reimbursable."
+  },
+  {
+    "instruction": "What is the mandatory code review policy before merging a pull request to production?",
+    "input": "Repository: company-core-backend\nTarget branch: main",
+    "output": "Every pull request targeting the main branch requires at least two approving reviews from senior engineers, 100% passing CI/CD automated tests, zero high-severity SAST vulnerabilities, and a clean branch rebase."
+  },
+  {
+    "instruction": "Define the data retention window for customer audit logs under the enterprise compliance policy.",
+    "input": "",
+    "output": "Under the Enterprise Compliance Policy (POL-SEC-2024-03), customer audit logs, authentication records, and access logs must be retained in encrypted cold storage for a minimum of 7 years before scheduled cryptographic erasure."
+  },
+  {
+    "instruction": "How should an employee report a suspected phishing email?",
+    "input": "Received email with subject 'Urgent: Reset your corporate SSO credentials immediately'.",
+    "output": "Do not click any links or download attachments. Forward the email as an attachment to security-incident@company.internal or use the 'Report Phishing' button in the corporate email client, then notify the IT Helpdesk immediately."
+  }
+]

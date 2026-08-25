@@ -4,26 +4,34 @@ import {
   VerificationReport,
   QueryCategory,
   DocumentItem,
+  IngestionStatusResponse,
   ObservabilityData,
   HealthStatus,
   FilterOptions,
+  ObservabilitySummaryData,
+  TelemetryFilterOptions,
+  ErrorIncidentData,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== 'undefined' ? 'http://localhost:8000' : 'http://127.0.0.1:8000');
 
 export interface DonePayload {
   id?: string;
+  request_id?: string;
   answer?: string;
   citations?: any[];
   retrieval_trace?: any;
   total_latency_ms?: number;
   latency_ms?: number;
+  ttft_ms?: number;
   metrics?: Record<string, unknown>;
   status?: string;
 }
 
 export interface StreamCallbacks {
-  onStart?: (data: { session_id: string; message_id: string; id?: string }) => void;
+  onStart?: (data: { session_id: string; message_id: string; id?: string; request_id?: string }) => void;
   onChunk?: (chunk: string) => void;
   onCitation?: (citation: Citation) => void;
   onTrace?: (trace: QueryTrace) => void;
@@ -40,8 +48,12 @@ function mapCitation(c: any, index = 0): Citation {
     chunk_text: c.snippet || c.chunk_text || c.text || '',
     score: typeof c.relevance_score === 'number' ? c.relevance_score : (typeof c.score === 'number' ? c.score : 0.0),
     page: c.page_number ?? c.page,
+    page_label: c.page_label ?? (c.page_number ? String(c.page_number) : undefined),
+    internal_page_index: c.internal_page_index,
     heading: c.section_title || c.heading || c.section_path,
     category: c.category || 'General',
+    image_url: c.image_url ?? (c.image_assets && c.image_assets[0]?.asset_url ? c.image_assets[0].asset_url : null),
+    image_assets: c.image_assets ?? [],
   };
 }
 
@@ -75,6 +87,7 @@ export function mapTrace(t: any): QueryTrace {
   if (!t || typeof t !== 'object') {
     return {
       trace_id: `tr_${Date.now()}`,
+      request_id: `req_${Date.now()}`,
       timestamp: new Date().toISOString(),
       original_query: '',
       total_chunks_retrieved: 0,
@@ -143,15 +156,21 @@ export function mapTrace(t: any): QueryTrace {
     ? t.rerank_scores[0]
     : (typeof t.top_rerank_score === 'number'
       ? t.top_rerank_score
-      : (typeof t.topRerankScore === 'number' ? t.topRerankScore : 0.9));
+      : (typeof t.topRerankScore === 'number' ? t.topRerankScore : (t.verification_score ?? 0.9)));
 
   const pTokens = t.token_usage?.prompt_tokens ?? t.prompt_tokens ?? t.promptTokens ?? 0;
   const cTokens = t.token_usage?.completion_tokens ?? t.completion_tokens ?? t.completionTokens ?? 0;
 
+  const isConversationalBypass = typeof t.conversational_bypass === 'boolean'
+    ? t.conversational_bypass
+    : Boolean(retrievalStrategy === 'conversational_bypass' || t.fallback_reason === 'conversational_greeting');
+
   return {
     trace_id: t.trace_id || t.id || `tr_${Date.now()}`,
+    request_id: t.request_id || t.requestId,
     timestamp: t.timestamp || new Date().toISOString(),
     original_query: t.query || t.original_query || t.originalQuery || '',
+    resolved_query: t.resolved_query || t.resolvedQuery || t.rewritten_query || t.query_rewritten,
     query_rewritten: t.rewritten_query || t.query_rewritten || t.queryRewritten,
     expanded_queries: t.sub_queries || t.expanded_queries || t.expandedQueries || [],
     total_chunks_retrieved: t.candidate_count ?? t.total_chunks_retrieved ?? t.totalChunksRetrieved ?? t.retrieved_candidate_count ?? 0,
@@ -160,16 +179,19 @@ export function mapTrace(t: any): QueryTrace {
     total_latency_ms: t.execution_time_ms ?? t.total_latency_ms ?? t.totalLatencyMs ?? t.latency_ms ?? 0,
     prompt_tokens: pTokens,
     completion_tokens: cTokens,
-    model: t.model || 'FastAPI RAG',
+    model: t.model || t.generation_model || 'FastAPI RAG',
 
-    // Agentic Telemetry fields
+    // Agentic & Production Telemetry fields
     query_type: queryType,
     routing_confidence: routingConfidence,
     retrieval_strategy: retrievalStrategy,
+    retrieval_required: typeof t.retrieval_required === 'boolean' ? t.retrieval_required : !isConversationalBypass,
+    conversational_bypass: isConversationalBypass,
+    evidence_required: typeof t.evidence_required === 'boolean' ? t.evidence_required : !isConversationalBypass,
     inferred_filters: inferredFilters,
     applied_filters: appliedFilters,
     filter_relaxed: filterRelaxed,
-    verification_score: verificationScore,
+    verification_score: isConversationalBypass ? undefined : verificationScore,
     verification: verification,
     faithfulness_passed: faithfulnessPassed,
     retry_count: retryCount,
@@ -180,6 +202,19 @@ export function mapTrace(t: any): QueryTrace {
     similarity_scores: Array.isArray(t.similarity_scores) ? t.similarity_scores : undefined,
     rerank_scores: Array.isArray(t.rerank_scores) ? t.rerank_scores : undefined,
     sources_used: Array.isArray(t.sources_used) ? t.sources_used : undefined,
+    anchor_section: t.anchor_section ?? null,
+    evidence_text_count: t.evidence_text_count ?? 0,
+    evidence_code_count: t.evidence_code_count ?? 0,
+    evidence_diagram_count: t.evidence_diagram_count ?? 0,
+    evidence_table_count: t.evidence_table_count ?? 0,
+    section_expansion_used: Boolean(t.section_expansion || t.section_expansion_used),
+    vision_used: Boolean(t.vision_fallback || t.vision_used),
+    vision_model: t.vision_model ?? null,
+    vision_cache_status: t.vision_cache_status ?? null,
+    tokens_per_second: t.tokens_per_second ?? null,
+    ttft_ms: t.ttft_ms ?? null,
+    error: t.error ?? null,
+    safe_context_preview: t.safe_context_preview ?? null,
   };
 }
 
@@ -221,12 +256,11 @@ export class ApiClient {
       });
 
       if (!response.ok) {
-        // Fallback to non-streaming if stream endpoint returns 404 or fails
         if (response.status === 404) {
-          return this.fallbackNonStreamingChat(message, sessionId, filters, model, callbacks);
+          return await this.fallbackNonStreamingChat(message, sessionId, filters, model, callbacks);
         }
-        const errorText = await response.text();
-        throw new Error(`Chat API error (${response.status}): ${errorText}`);
+        const errText = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+        throw new Error(`HTTP ${response.status}: ${errText || 'Stream request failed'}`);
       }
 
       if (!response.body) {
@@ -301,7 +335,7 @@ export class ApiClient {
 
     switch (eventType) {
       case 'start':
-        callbacks.onStart?.(data as { session_id: string; message_id: string });
+        callbacks.onStart?.(data as { session_id: string; message_id: string; id?: string; request_id?: string });
         break;
       case 'chunk':
         if (typeof data === 'string') {
@@ -339,6 +373,7 @@ export class ApiClient {
           if (doneData.retrieval_trace) {
             const rawTrace = {
               ...doneData.retrieval_trace,
+              request_id: doneData.request_id || doneData.retrieval_trace.request_id,
               verification: doneData.retrieval_trace.verification || doneData.verification,
             };
             callbacks.onTrace?.(mapTrace(rawTrace));
@@ -374,8 +409,9 @@ export class ApiClient {
         res.citations.forEach((c, i) => callbacks.onCitation?.(mapCitation(c, i)));
       }
       if (callbacks?.onTrace) {
-        callbacks.onTrace({
+        callbacks.onTrace(mapTrace({
           trace_id: res.id || `trace_${Date.now()}`,
+          request_id: (res.metrics as any)?.request_id || `req_${Date.now()}`,
           timestamp: new Date().toISOString(),
           original_query: message,
           total_chunks_retrieved: res.citations?.length || 0,
@@ -385,7 +421,7 @@ export class ApiClient {
           prompt_tokens: 150,
           completion_tokens: 120,
           model: model || 'FastAPI RAG',
-        });
+        }));
       }
       if (callbacks?.onDone) {
         callbacks.onDone({
@@ -419,15 +455,18 @@ export class ApiClient {
     latency_ms: number;
     metrics: Record<string, unknown>;
   }> {
+    const payload: Record<string, any> = {
+      message,
+      session_id: sessionId,
+      filters: filters || {},
+    };
+    if (model && model !== 'default') {
+      payload.model = model;
+    }
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        session_id: sessionId,
-        filters: filters || {},
-        model: model || 'default',
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -438,70 +477,57 @@ export class ApiClient {
   }
 
   /**
-   * Fetch Document list: GET /api/documents
+   * Unified Production Observability Summary: GET /api/admin/observability
    */
-  async getDocuments(): Promise<DocumentItem[]> {
-    const res = await fetch(`${this.baseUrl}/api/documents`);
+  async getObservabilitySummary(filters?: TelemetryFilterOptions): Promise<ObservabilitySummaryData> {
+    const params = new URLSearchParams();
+    if (filters?.timeRange) params.set('time_range', filters.timeRange);
+    if (filters?.documentId) params.set('document_id', filters.documentId);
+    if (filters?.conversationId) params.set('conversation_id', filters.conversationId);
+    if (filters?.intent) params.set('intent', filters.intent);
+    if (filters?.model) params.set('model', filters.model);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.grounding) params.set('grounding', filters.grounding);
+    if (filters?.vision) params.set('vision', filters.vision);
+    if (filters?.cache) params.set('cache', filters.cache);
+    if (filters?.hasError !== undefined) params.set('has_error', String(filters.hasError));
+
+    const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+    const res = await fetch(url);
     if (!res.ok) {
-      throw new Error(`Failed to fetch documents (${res.status})`);
+      throw new Error(`Failed to fetch observability summary (${res.status})`);
+    }
+    const data: ObservabilitySummaryData = await res.json();
+    if (Array.isArray(data.recent_traces)) {
+      data.recent_traces = data.recent_traces.map(mapTrace);
+    }
+    return data;
+  }
+
+  /**
+   * Detailed Trace: GET /api/admin/observability/queries/{identifier}
+   */
+  async getQueryTraceDetail(identifier: string): Promise<QueryTrace> {
+    const res = await fetch(`${this.baseUrl}/api/admin/observability/queries/${encodeURIComponent(identifier)}`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch trace detail (${res.status})`);
     }
     const data = await res.json();
-    const rawDocs = data.documents || data || [];
-    return rawDocs.map((doc: any) => ({
-      id: doc.document_id || doc.id,
-      filename: doc.filename,
-      category: doc.category || 'General',
-      chunks_count: doc.chunk_count ?? doc.chunks_count ?? doc.chunks_indexed ?? 0,
-      file_size: doc.file_size_bytes ?? doc.file_size ?? 0,
-      uploaded_at: doc.created_at || doc.uploaded_at || new Date().toISOString(),
-      status: doc.status || 'indexed',
-      file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown'
-    }));
+    return mapTrace(data);
   }
 
   /**
-   * Upload Document: POST /api/documents/upload
+   * Error Incidents: GET /api/admin/observability/errors
    */
-  async uploadDocument(file: File, category = 'General'): Promise<DocumentItem> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('category', category);
+  async getObservabilityErrors(timeRange = '24h', component?: string, severity?: string): Promise<ErrorIncidentData[]> {
+    const params = new URLSearchParams({ time_range: timeRange });
+    if (component) params.set('component', component);
+    if (severity) params.set('severity', severity);
 
-    const res = await fetch(`${this.baseUrl}/api/documents/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-
+    const res = await fetch(`${this.baseUrl}/api/admin/observability/errors?${params.toString()}`);
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Upload failed (${res.status}): ${errText}`);
+      return [];
     }
-
-    const doc = await res.json();
-    return {
-      id: doc.document_id || doc.id,
-      filename: doc.filename,
-      category: doc.category || category || 'General',
-      chunks_count: doc.chunks_indexed ?? doc.chunk_count ?? doc.chunks_count ?? 0,
-      file_size: doc.file_size_bytes ?? doc.file_size ?? 0,
-      uploaded_at: doc.created_at || doc.uploaded_at || new Date().toISOString(),
-      status: doc.status || 'indexed',
-      file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown'
-    };
-  }
-
-  /**
-   * Delete Document: DELETE /api/documents/{doc_id}
-   */
-  async deleteDocument(docId: string): Promise<{ status: string; document_id: string }> {
-    const res = await fetch(`${this.baseUrl}/api/documents/${docId}`, {
-      method: 'DELETE',
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to delete document (${res.status})`);
-    }
-
     return res.json();
   }
 
@@ -554,25 +580,150 @@ export class ApiClient {
       return trace;
     });
 
-    const promptTokens = data.token_usage?.prompt_tokens ?? data.prompt_tokens ?? 0;
-    const completionTokens = data.token_usage?.completion_tokens ?? data.completion_tokens ?? 0;
-    const totalTokens = data.token_usage?.total_tokens ?? (promptTokens + completionTokens);
+    const promptTokens = data.tokens?.total_prompt_tokens ?? data.token_usage?.prompt_tokens ?? data.prompt_tokens ?? 0;
+    const completionTokens = data.tokens?.total_completion_tokens ?? data.token_usage?.completion_tokens ?? data.completion_tokens ?? 0;
+    const totalTokens = data.tokens?.total_tokens ?? data.token_usage?.total_tokens ?? data.total_tokens ?? (promptTokens + completionTokens);
 
     return {
-      total_queries: data.total_queries ?? 0,
-      avg_latency_ms: data.avg_latency_ms ?? 0,
-      avg_ttft_ms: data.avg_ttft_ms ?? 0,
-      p95_latency_ms: data.p95_latency_ms ?? 0,
+      total_queries: data.query_metrics?.total_queries ?? data.total_queries ?? 0,
+      avg_latency_ms: data.query_metrics?.avg_latency_ms ?? data.avg_latency_ms ?? 0,
+      avg_ttft_ms: data.query_metrics?.avg_ttft_ms ?? data.avg_ttft_ms ?? 0,
+      p95_latency_ms: data.query_metrics?.p95_latency_ms ?? data.p95_latency_ms ?? 0,
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
       total_tokens: totalTokens,
-      active_documents: data.active_documents ?? 0,
-      indexed_chunks: data.indexed_chunks ?? 0,
-      similarity_avg: data.score_distributions?.similarity_avg ?? 0,
-      rerank_avg: data.score_distributions?.rerank_avg ?? 0,
+      active_documents: data.ingestion?.documents_processed ?? data.active_documents ?? 0,
+      indexed_chunks: data.ingestion?.chunks_indexed ?? data.indexed_chunks ?? 0,
+      similarity_avg: data.retrieval_quality?.avg_rerank_score ?? data.score_distributions?.similarity_avg ?? 0,
+      rerank_avg: data.retrieval_quality?.avg_rerank_score ?? data.score_distributions?.rerank_avg ?? 0,
       health: healthData,
       recent_traces: mappedTraces,
     };
+  }
+
+  /**
+   * Clear Telemetry: POST /api/admin/observability/clear
+   */
+  async clearTelemetry(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/admin/observability/clear`, { method: 'POST' });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Fetch Document list: GET /api/documents
+   */
+  async getDocuments(): Promise<DocumentItem[]> {
+    const res = await fetch(`${this.baseUrl}/api/documents`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch documents (${res.status})`);
+    }
+    const data = await res.json();
+    const rawDocs = data.documents || data || [];
+    return rawDocs.map((doc: any) => ({
+      id: doc.document_id || doc.id,
+      filename: doc.filename,
+      category: doc.category || 'General',
+      chunks_count: doc.chunk_count ?? doc.chunks_count ?? doc.chunks_indexed ?? 0,
+      file_size: doc.file_size_bytes ?? doc.file_size ?? 0,
+      uploaded_at: doc.created_at || doc.uploaded_at || new Date().toISOString(),
+      status: doc.status || 'indexed',
+      progress: doc.progress ?? 100,
+      current_stage: doc.current_stage || 'READY',
+      text_ready: doc.text_ready ?? true,
+      vision_status: doc.vision_status || 'NONE',
+      vision_pages_processed: doc.vision_pages_processed ?? 0,
+      vision_pages_total: doc.vision_pages_total ?? 0,
+      visual_assets_count: doc.visual_assets_count ?? (doc.image_assets?.length ?? 0),
+      image_assets: doc.image_assets ?? [],
+      error: doc.error,
+      failed_stage: doc.failed_stage,
+      file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown',
+    }));
+  }
+
+  /**
+   * Fetch Document Ingestion Status: GET /api/documents/{doc_id}/status
+   */
+  async getDocumentStatus(docId: string): Promise<IngestionStatusResponse> {
+    const res = await fetch(`${this.baseUrl}/api/documents/${docId}/status`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch document status (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Retry Document Indexing: POST /api/documents/{doc_id}/retry
+   */
+  async retryDocument(docId: string): Promise<IngestionStatusResponse> {
+    const res = await fetch(`${this.baseUrl}/api/documents/${docId}/retry`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Retry failed (${res.status}): ${errText}`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Upload Document: POST /api/documents/upload
+   */
+  async uploadDocument(file: File, category = 'General'): Promise<DocumentItem> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+
+    const res = await fetch(`${this.baseUrl}/api/documents/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Upload failed (${res.status}): ${errText}`);
+    }
+
+    const doc = await res.json();
+    return {
+      id: doc.document_id || doc.id,
+      filename: doc.filename,
+      category: doc.category || category || 'General',
+      chunks_count: doc.chunks_indexed ?? doc.chunk_count ?? doc.chunks_count ?? 0,
+      file_size: doc.file_size_bytes ?? doc.file_size ?? 0,
+      uploaded_at: doc.created_at || doc.uploaded_at || new Date().toISOString(),
+      status: doc.status || 'READY',
+      progress: doc.progress ?? 100,
+      current_stage: doc.current_stage || 'READY',
+      text_ready: doc.text_ready ?? true,
+      vision_status: doc.vision_status || 'NONE',
+      vision_pages_processed: doc.vision_pages_processed ?? 0,
+      vision_pages_total: doc.vision_pages_total ?? 0,
+      visual_assets_count: doc.visual_assets_count ?? (doc.image_assets?.length ?? 0),
+      image_assets: doc.image_assets ?? [],
+      error: doc.error,
+      failed_stage: doc.failed_stage,
+      file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown',
+    };
+  }
+
+  /**
+   * Delete Document: DELETE /api/documents/{doc_id}
+   */
+  async deleteDocument(docId: string): Promise<{ status: string; document_id: string }> {
+    const res = await fetch(`${this.baseUrl}/api/documents/${docId}`, {
+      method: 'DELETE',
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to delete document (${res.status})`);
+    }
+
+    return res.json();
   }
 
   /**
@@ -666,7 +817,5 @@ export class ApiClient {
     }
   }
 }
-
-
 
 export const apiClient = new ApiClient();

@@ -80,6 +80,7 @@ class CitationEngine:
                     snippet = full_text[:2000].strip() + ("..." if len(full_text) > 2000 else "")
                     sec_title = _clean_section_title(meta.section_title)
 
+                    img_url = meta.extra.get("image_url") or (meta.image_assets[0].get("asset_url") if meta.image_assets else None)
                     citations.append(
                         Citation(
                             source_index=idx,
@@ -87,11 +88,15 @@ class CitationEngine:
                             document_id=meta.document_id,
                             source_file=meta.source_file,
                             page_number=meta.page_number,
+                            internal_page_index=meta.internal_page_index,
+                            page_label=meta.page_label,
                             section_title=sec_title,
                             section_path=meta.section_path if sec_title else None,
                             snippet=snippet,
                             relevance_score=_compute_confidence(sc),
                             selection_reason=selection_mode,
+                            image_url=img_url,
+                            image_assets=meta.image_assets,
                         )
                     )
 
@@ -112,6 +117,7 @@ class CitationEngine:
                 full_text = sc.chunk.text.strip()
                 snippet = full_text[:2000].strip() + ("..." if len(full_text) > 2000 else "")
                 sec_title = _clean_section_title(meta.section_title)
+                img_url = meta.extra.get("image_url") or (meta.image_assets[0].get("asset_url") if meta.image_assets else None)
 
                 citations.append(
                     Citation(
@@ -120,11 +126,15 @@ class CitationEngine:
                         document_id=meta.document_id,
                         source_file=meta.source_file,
                         page_number=meta.page_number,
+                        internal_page_index=meta.internal_page_index,
+                        page_label=meta.page_label,
                         section_title=sec_title,
                         section_path=meta.section_path if sec_title else None,
                         snippet=snippet,
                         relevance_score=_compute_confidence(sc),
                         selection_reason=selection_mode,
+                        image_url=img_url,
+                        image_assets=meta.image_assets,
                     )
                 )
 

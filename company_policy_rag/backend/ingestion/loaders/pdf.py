@@ -1,23 +1,68 @@
 from __future__ import annotations
 
 import re
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
 from backend.models.document import DocumentType, RawDocument
+from backend.models.logical_document import detect_continuation_signals
 from backend.utils.logging import logger
 from backend.utils.section_tracker import SectionTracker
+from backend.vision.image_asset_manager import ImageAssetManager
+from backend.vision.vision_service import VisionService
+from src.config import settings
 
-_CODE_PATTERN = re.compile(r"```|^\s*(def |class |import |function |const |let |var )", re.MULTILINE)
+_CODE_PATTERN = re.compile(r"```|^\s*(def |class |import |function |const |let |var |Agent\(|Task\(|Crew\()", re.MULTILINE)
 _TABLE_PATTERN = re.compile(r"\|.*\|.*\||(?:\+[-+]+\+)|(?:\t+[^\t\n]+\t+)")
+_LONE_NUMBER_RE = re.compile(r"^\s*(\d{1,4})\s*$")
 
 
 class PDFLoader(BaseLoader):
-    """Loader for PDF documents with PyMuPDF (fitz) / pypdf support."""
+    """
+    Loader for PDF documents with canonical page numbering, cross-page logical section linking,
+    continuation signal detection, standalone original image asset extraction, and
+    high-fidelity multimodal visual understanding.
+    """
+
+    def __init__(
+        self,
+        vision_service: VisionService | None = None,
+        image_asset_manager: ImageAssetManager | None = None,
+    ) -> None:
+        self.vision_service = vision_service or VisionService()
+        self.image_asset_manager = image_asset_manager or ImageAssetManager()
 
     def supports(self, file_path: Path) -> bool:
         return file_path.suffix.lower() == ".pdf"
+
+    def _detect_printed_page_number(self, text: str, physical_page_num: int) -> str:
+        """
+        Detect the human-visible printed page number from page footer/header.
+        Reconciles physical PDF index (e.g. 83) with printed document page number (e.g. 82).
+        """
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return str(physical_page_num)
+
+        # 1. Check bottom 3 lines (typical footer location)
+        for line in reversed(lines[-3:]):
+            m = _LONE_NUMBER_RE.match(line)
+            if m:
+                val = int(m.group(1))
+                if 1 <= val <= 9999:
+                    return str(val)
+
+        # 2. Check top 2 lines (header location)
+        for line in lines[:2]:
+            m = _LONE_NUMBER_RE.match(line)
+            if m:
+                val = int(m.group(1))
+                if 1 <= val <= 9999:
+                    return str(val)
+
+        return str(physical_page_num)
 
     def load(
         self,
@@ -27,63 +72,60 @@ class PDFLoader(BaseLoader):
         base_meta = self._build_base_metadata(file_path, DocumentType.PDF, base_metadata)
         documents: list[RawDocument] = []
         section_tracker = SectionTracker()
+        enable_vision = getattr(settings, "vision_enabled", True)
+        doc_id = base_meta.document_id or f"doc_{file_path.stem}"
 
-        # Try fitz (PyMuPDF) first
+        # 1. Read all pages
         fitz_pages = self._read_with_fitz(file_path)
-        if fitz_pages is not None:
-            total_pages = len(fitz_pages)
-            for idx, (page_num, text) in enumerate(fitz_pages, start=1):
-                if not text.strip():
-                    continue
-                # Update section tracker with lines on this page
-                current_ctx = None
-                for line in text.splitlines():
-                    ctx = section_tracker.process_line(line)
-                    if ctx:
-                        current_ctx = ctx
-                if current_ctx is None:
-                    current_ctx = section_tracker.current_context()
+        pages = fitz_pages if fitz_pages is not None else self._read_with_pypdf(file_path)
+        total_pages = len(pages)
 
-                has_code = bool(_CODE_PATTERN.search(text))
-                has_tables = bool(_TABLE_PATTERN.search(text))
+        prev_continuation_cues: list[str] = []
+        prev_section_ctx = None
 
-                page_meta = base_meta.model_copy(
-                    update={
-                        "page_number": page_num,
-                        "page_label": str(page_num),
-                        "total_pages": total_pages,
-                        "section_title": current_ctx.section_title,
-                        "section_number": current_ctx.section_number,
-                        "section_path": current_ctx.section_path,
-                        "section_level": current_ctx.section_level,
-                        "has_code": has_code,
-                        "has_tables": has_tables,
-                    }
-                )
-                documents.append(RawDocument(content=text, metadata=page_meta))
-            return documents
+        for idx, (page_num, text) in enumerate(pages, start=1):
+            internal_page_index = idx - 1  # 0-based
+            physical_page_num = idx  # 1-based physical
+            page_label = self._detect_printed_page_number(text, physical_page_num)
 
-        # Fallback to pypdf
-        pypdf_pages = self._read_with_pypdf(file_path)
-        total_pages = len(pypdf_pages)
-        for idx, (page_num, text) in enumerate(pypdf_pages, start=1):
-            if not text.strip():
-                continue
+            # Parse headings on this page
+            page_found_new_heading = False
             current_ctx = None
+
             for line in text.splitlines():
                 ctx = section_tracker.process_line(line)
                 if ctx:
                     current_ctx = ctx
-            if current_ctx is None:
+                    page_found_new_heading = True
+
+            # If no new heading was found on this page, but previous page had continuation cues, maintain previous section context
+            if not page_found_new_heading and prev_section_ctx is not None and prev_continuation_cues:
+                current_ctx = prev_section_ctx
+            elif current_ctx is None:
                 current_ctx = section_tracker.current_context()
 
             has_code = bool(_CODE_PATTERN.search(text))
             has_tables = bool(_TABLE_PATTERN.search(text))
+            continuation_signals = detect_continuation_signals(text)
+
+            is_continuation = bool(not page_found_new_heading and prev_continuation_cues)
+            continuation_from_page = (physical_page_num - 1) if is_continuation else None
+
+            # Standalone Original Image Asset Extraction (Direct from PDF, Zero VLM blocking)
+            page_assets = self.image_asset_manager.extract_page_images(
+                pdf_path=file_path,
+                internal_page_index=internal_page_index,
+                page_number=physical_page_num,
+                page_label=page_label,
+                document_id=doc_id,
+            )
+            assets_dict = [asdict(a) for a in page_assets]
 
             page_meta = base_meta.model_copy(
                 update={
-                    "page_number": page_num,
-                    "page_label": str(page_num),
+                    "page_number": physical_page_num,
+                    "internal_page_index": internal_page_index,
+                    "page_label": page_label,
                     "total_pages": total_pages,
                     "section_title": current_ctx.section_title,
                     "section_number": current_ctx.section_number,
@@ -91,9 +133,59 @@ class PDFLoader(BaseLoader):
                     "section_level": current_ctx.section_level,
                     "has_code": has_code,
                     "has_tables": has_tables,
+                    "image_assets": assets_dict,
+                    "extra": {
+                        **base_meta.extra,
+                        "continuation_signals": continuation_signals,
+                        "is_continuation": is_continuation,
+                        "continuation_from_page": continuation_from_page,
+                        "internal_page_index": internal_page_index,
+                        "physical_page_number": physical_page_num,
+                        "display_page_number": page_label,
+                    },
                 }
             )
-            documents.append(RawDocument(content=text, metadata=page_meta))
+
+            if text.strip():
+                documents.append(RawDocument(content=text, metadata=page_meta))
+
+            # Visual Content Extraction (Cache-only check during ingestion, never blocks)
+            if enable_vision and self.vision_service:
+                active_cue = prev_continuation_cues[0] if (is_continuation and prev_continuation_cues) else (continuation_signals[0] if continuation_signals else None)
+                visual_chunks = self.vision_service.process_pdf_page_visuals(
+                    pdf_path=file_path,
+                    page_number=physical_page_num,
+                    page_text=text,
+                    document_id=doc_id,
+                    section_title=current_ctx.section_title,
+                    continuation_cue=active_cue,
+                    live_inference=False,  # Instant cache lookup during ingestion!
+                    page_label=page_label,
+                    internal_page_index=internal_page_index,
+                )
+                for vc in visual_chunks:
+                    vis_meta = page_meta.model_copy(
+                        update={
+                            "has_code": vc.content_type == "code",
+                            "has_tables": vc.content_type == "table",
+                            "section_title": current_ctx.section_title,
+                            "section_path": current_ctx.section_path,
+                            "extra": {
+                                **page_meta.extra,
+                                "is_visual_extraction": True,
+                                "visual_type": vc.visual_type,
+                                "image_hash": vc.image_hash,
+                                "content_type": vc.content_type,
+                                "raw_code": vc.raw_code,
+                                "continuation_cue": active_cue,
+                            },
+                        }
+                    )
+                    documents.append(RawDocument(content=vc.text, metadata=vis_meta))
+
+            # Store for next page continuation
+            prev_continuation_cues = continuation_signals
+            prev_section_ctx = current_ctx
 
         return documents
 

@@ -34,6 +34,8 @@ class ChunkMetadata(BaseModel):
     topic_tags: list[str] = Field(default_factory=list, description="Extracted topic tags")
     chunk_index: int = 0
     page_number: int | None = None
+    internal_page_index: int | None = None
+    page_label: str | None = None
     section_title: str | None = None
     section_number: str | None = None
     section_path: str | None = None
@@ -44,6 +46,7 @@ class ChunkMetadata(BaseModel):
     child_ids: list[str] = Field(default_factory=list)
     content_type: ContentType = ContentType.PROSE
     is_atomic: bool = False
+    image_assets: list[dict[str, Any]] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 

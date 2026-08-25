@@ -109,6 +109,82 @@ def probe_ollama_tags(
     return True, sorted(names), None
 
 
+def probe_vision_model_status(
+    model_name: str | None = None,
+    base_url: str | None = None,
+) -> tuple[bool, str]:
+    """
+    Check whether the vision model is installed locally in Ollama.
+    Returns (is_available, message).
+    """
+    target = (model_name or settings.vision_model).strip()
+    ok, available_models, err = probe_ollama_tags(base_url=base_url)
+    if not ok:
+        return False, f"Ollama connection error while checking vision model: {err}"
+
+    # Check exact match or tag prefix match (e.g. qwen2.5vl:7b matches qwen2.5vl:7b or qwen2.5vl:latest)
+    target_base = target.split(":")[0].lower()
+    matched = False
+    for m in available_models:
+        m_lower = m.lower()
+        if m_lower == target.lower() or m_lower.split(":")[0] == target_base:
+            matched = True
+            break
+
+    if matched:
+        return True, f"Vision model '{target}' is available locally."
+    else:
+        return (
+            False,
+            f"Vision model '{target}' is not installed locally. "
+            f"To enable visual code and diagram extraction, run: ollama pull {target}",
+        )
+
+
+def execute_vision_completion(
+    prompt: str,
+    image_bytes: bytes,
+    model_name: str | None = None,
+    base_url: str | None = None,
+    timeout: float | None = None,
+) -> str:
+    """
+    Send an image + prompt to the local Ollama vision model via /api/generate.
+    Reuses model memory via keep_alive to prevent per-image reloading overhead.
+    """
+    import base64
+
+    if not image_bytes:
+        raise ValueError("Image bytes cannot be empty for vision completion.")
+
+    selected_model = (model_name or settings.vision_model).strip()
+    url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/generate"
+    req_timeout = timeout or settings.vision_request_timeout
+
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {
+        "model": selected_model,
+        "prompt": prompt,
+        "images": [b64_image],
+        "stream": False,
+        "keep_alive": "15m",  # Keep model in VRAM during ingestion batch
+        "options": {
+            "temperature": 0.0,
+        },
+    }
+
+    body = json.dumps(payload).encode("utf-8")
+    req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+
+    try:
+        with urlopen(req, timeout=req_timeout) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            return str(res_data.get("response", "")).strip()
+    except Exception as exc:
+        logger.error("Ollama vision completion error (%s): %s", selected_model, exc)
+        raise
+
+
 @lru_cache(maxsize=64)
 def fetch_model_details(
     model_name: str,

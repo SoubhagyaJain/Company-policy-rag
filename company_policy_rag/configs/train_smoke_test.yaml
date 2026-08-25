@@ -1,0 +1,52 @@
+# ==============================================================================
+# Qwen 2.5 Coder Fine-Tuning Smoke Test Configuration
+# Used for Fast Automated Verification & CI/CD Pipeline Gates
+# ==============================================================================
+
+# Model & Tokenizer
+model_name_or_path: "Qwen/Qwen2.5-Coder-7B-Instruct"
+max_seq_length: 256
+trust_remote_code: true
+
+# Dataset & Validation
+dataset_path: "company_policy_rag/data/sample_finetune/alpaca_sample.jsonl"
+val_dataset_path: null
+dataset_format: "auto"
+val_split: 0.2
+seed: 42
+skip_malformed: true
+max_samples: 10
+
+# PEFT / LoRA Architecture (Minimal Rank for Fast Step Execution)
+quantization: "none"         # Unquantized CPU/float32 mode for smoke tests
+lora_r: 4
+lora_alpha: 8
+lora_dropout: 0.0
+lora_bias: "none"
+target_modules:
+  - "q_proj"
+  - "v_proj"
+
+# Training & Optimization (Micro Steps)
+output_dir: "./outputs/smoke-test-adapter"
+num_train_epochs: 1.0
+max_steps: 2                 # Terminate after exactly 2 training steps
+per_device_train_batch_size: 1
+per_device_eval_batch_size: 1
+gradient_accumulation_steps: 1
+learning_rate: 0.0005
+lr_scheduler_type: "constant"
+warmup_ratio: 0.0
+weight_decay: 0.0
+gradient_checkpointing: false
+optim: "adamw_torch"
+bf16: false
+fp16: false
+
+# Logging & Checkpoints
+logging_steps: 1
+eval_steps: 1
+save_steps: 2
+save_total_limit: 1
+smoke_test: true
+use_cpu: true

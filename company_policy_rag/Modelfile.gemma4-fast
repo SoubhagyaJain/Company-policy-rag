@@ -1,0 +1,13 @@
+FROM gemma4:12b
+
+# Optimize context size so KV cache fits in GPU VRAM (RTX 4050 6GB)
+PARAMETER num_ctx 4096
+PARAMETER num_predict 512
+PARAMETER temperature 0.1
+PARAMETER top_k 40
+PARAMETER top_p 0.9
+PARAMETER stop "<end_of_turn>"
+PARAMETER stop "<eos>"
+
+# Pre-baked system prompt for fast RAG inference
+SYSTEM """You are an enterprise policy and legal AI assistant. Provide concise, direct, and factual answers strictly grounded in the provided document excerpts. Cite sources as [Source N]. Do not extrapolate beyond the text."""

@@ -1,0 +1,54 @@
+[
+  {
+    "conversations": [
+      {
+        "from": "system",
+        "value": "You are the Company Policy AI Assistant. Answer questions accurately based on company regulations."
+      },
+      {
+        "from": "human",
+        "value": "What is the annual leave entitlement for full-time employees?"
+      },
+      {
+        "from": "gpt",
+        "value": "Full-time employees accrue 20 paid vacation days per calendar year, in addition to 10 company-wide public holidays and 5 paid personal/sick days."
+      },
+      {
+        "from": "human",
+        "value": "Can unused vacation days be rolled over to the next year?"
+      },
+      {
+        "from": "gpt",
+        "value": "Yes, up to 5 unused vacation days may be carried over into Q1 of the following year, but must be utilized before March 31st or they will forfeit."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "system",
+        "value": "You are a specialized code assistant for company internal engineering guidelines."
+      },
+      {
+        "from": "human",
+        "value": "What logging format should be used in microservices?"
+      },
+      {
+        "from": "gpt",
+        "value": "All backend microservices must output structured JSON logs to stdout conforming to ECS (Elastic Common Schema), including fields: `timestamp`, `level`, `trace_id`, `span_id`, `service_name`, and `message`."
+      }
+    ]
+  },
+  {
+    "conversations": [
+      {
+        "from": "user",
+        "value": "What is the protocol for emergency system outages (P0 incidents)?"
+      },
+      {
+        "from": "assistant",
+        "value": "For P0 incidents, the on-call engineer must immediately declare an incident in the #incident-command Slack channel, page the Incident Commander via PagerDuty, open a dedicated Zoom bridge, and post a status update to the internal status page within 15 minutes."
+      }
+    ]
+  }
+]

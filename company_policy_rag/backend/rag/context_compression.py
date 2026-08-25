@@ -80,6 +80,95 @@ class ContextCompressor:
 
         return expanded if expanded else chunks
 
+    def pack_complementary_chunks(
+        self,
+        chunks: list[ScoredChunk],
+        query: str,
+        max_chunks: int = 5,
+    ) -> list[ScoredChunk]:
+        """
+        Ensure balanced coverage across complementary categories (description, code, task/architecture, inputs/outputs)
+        for procedural, building, or implementation queries to prevent redundant description chunks from crowding out code.
+        """
+        if not chunks or len(chunks) <= max_chunks:
+            return chunks
+
+        query_lower = query.lower()
+        is_building_query = any(
+            k in query_lower
+            for k in (
+                "how to",
+                "how can i",
+                "make",
+                "create",
+                "build",
+                "code",
+                "implementation",
+                "develop",
+                "setup",
+                "construct",
+                "agent",
+            )
+        )
+
+        if not is_building_query:
+            return chunks[:max_chunks]
+
+        prose_chunks: list[ScoredChunk] = []
+        code_chunks: list[ScoredChunk] = []
+        table_chunks: list[ScoredChunk] = []
+        other_chunks: list[ScoredChunk] = []
+
+        for sc in chunks:
+            ct = str(sc.chunk.metadata.content_type).lower()
+            extra_ct = str(sc.chunk.metadata.extra.get("content_type", "")).lower()
+            is_code = (
+                ct in ("contenttype.code", "code")
+                or extra_ct == "code"
+                or "```" in sc.chunk.text
+                or getattr(sc.chunk.metadata, "has_code", False)
+            )
+            is_table = (
+                ct in ("contenttype.table", "table")
+                or extra_ct == "table"
+                or getattr(sc.chunk.metadata, "has_tables", False)
+            )
+            if is_code:
+                code_chunks.append(sc)
+            elif is_table:
+                table_chunks.append(sc)
+            elif ct in ("contenttype.prose", "prose"):
+                prose_chunks.append(sc)
+            else:
+                other_chunks.append(sc)
+
+        selected: list[ScoredChunk] = []
+        seen_ids: set[str] = set()
+
+        def _add(sc_list: list[ScoredChunk], limit: int):
+            count = 0
+            for sc in sc_list:
+                if sc.chunk.id not in seen_ids and count < limit:
+                    selected.append(sc)
+                    seen_ids.add(sc.chunk.id)
+                    count += 1
+
+        # 1. Top 1-2 code chunks (vital for implementation queries)
+        _add(code_chunks, limit=2)
+        # 2. Top 1-2 prose description chunks
+        _add(prose_chunks, limit=2)
+        # 3. Top 1 table / diagram chunk
+        _add(table_chunks, limit=1)
+        # 4. Fill remaining budget from highest scored chunks
+        for sc in chunks:
+            if len(selected) >= max_chunks:
+                break
+            if sc.chunk.id not in seen_ids:
+                selected.append(sc)
+                seen_ids.add(sc.chunk.id)
+
+        return selected if selected else chunks[:max_chunks]
+
     def format_context_for_prompt(self, chunks: list[ScoredChunk]) -> str:
         """
         Format retrieved scored chunks into structured [Source N] context blocks for LLM synthesis.

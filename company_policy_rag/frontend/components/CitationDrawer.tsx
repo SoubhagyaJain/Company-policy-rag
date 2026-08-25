@@ -160,9 +160,11 @@ export function CitationDrawer({
                   <span className="text-[10px] uppercase font-semibold text-[#7A7468] dark:text-[#8C867B] block mb-1">
                     Page Reference
                   </span>
-                  <span className="font-mono text-xs font-bold text-[#23201C] dark:text-[#FAF8F5] flex items-center gap-1.5">
-                    <Hash className="w-3.5 h-3.5 text-terracotta-600 dark:text-terracotta-400" />
-                    {citation.page !== undefined ? `Page ${citation.page}` : 'Full Document'}
+                  <span className="font-mono text-xs font-bold text-[#23201C] dark:text-[#FAF8F5] flex items-center gap-1.5" title={citation.page_label && citation.page && citation.page_label !== String(citation.page) ? `PDF physical stream page ${citation.page}` : undefined}>
+                    <Hash className="w-3.5 h-3.5 text-terracotta-600 dark:text-terracotta-400 shrink-0" />
+                    {citation.page_label && citation.page && citation.page_label !== String(citation.page)
+                      ? `Page ${citation.page_label} (PDF p. ${citation.page})`
+                      : (citation.page !== undefined ? `Page ${citation.page}` : 'Full Document')}
                   </span>
                 </div>
 
@@ -177,6 +179,37 @@ export function CitationDrawer({
                   </span>
                 </div>
               </div>
+
+              {/* Original Visual Image Asset Preview (if present) */}
+              {citation.image_url && (
+                <div className="p-4 rounded-2xl bg-[#FAF8F5] dark:bg-[#1E1D1A] border border-[#E0D8CA] dark:border-[#2E2C27] space-y-2.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#4A453D] dark:text-[#C5BEB2] flex items-center gap-1.5">
+                      <span>🖼️ Original Document Visual Asset</span>
+                    </span>
+                    <a
+                      href={citation.image_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-terracotta-600 dark:text-terracotta-400 hover:underline flex items-center gap-1 font-mono font-medium"
+                    >
+                      Open Full Res <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+
+                  <div className="rounded-xl overflow-hidden border border-[#E5E0D8] dark:border-[#33302A] bg-[#111] max-h-72 flex items-center justify-center">
+                    <img
+                      src={citation.image_url}
+                      alt={citation.heading || 'Original Document Diagram'}
+                      className="max-h-72 w-auto object-contain hover:scale-105 transition-transform cursor-zoom-in"
+                      onClick={() => window.open(citation.image_url!, '_blank')}
+                    />
+                  </div>
+                  <p className="text-[10px] font-mono text-[#8C867B] dark:text-[#736E65]">
+                    Original high-resolution asset extracted directly from PDF (zero quality loss).
+                  </p>
+                </div>
+              )}
 
               {/* Full Verbatim Text Chunk */}
               <div className="space-y-2">
