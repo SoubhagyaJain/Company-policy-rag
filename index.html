@@ -1021,17 +1021,29 @@
   <div class="section-number">SIM</div>
   <div class="section-eyebrow">Interactive Live Workbench</div>
   <h2 class="section-title">Live RAG Pipeline Execution Simulator</h2>
-  <p class="section-subtitle">Experience how a query moves through Intent Routing, Semantic Caching, Hybrid RRF, Cross-Encoder Reranking, and 4D Verification in real-time.</p>
+  <p class="section-subtitle">Real-time interactive emulator demonstrating Intent Routing, Semantic Caching, Hybrid Dense-Sparse RRF, CUDA Neural Reranking, 4D Self-Reflection, and SSE Token Streaming.</p>
 
   <div class="simulator-card">
     <!-- Simulator Top Toolbar -->
     <div class="simulator-toolbar">
-      <div class="sim-preset-label">Select Sample Enterprise Query:</div>
-      <div class="sim-presets">
-        <button class="sim-preset-btn active" data-preset="1">🍼 Parental Leave (&gt;2 yrs)</button>
-        <button class="sim-preset-btn" data-preset="2">💻 Home Office Equipment Caps</button>
-        <button class="sim-preset-btn" data-preset="3">🛡️ Whistleblower Escalation</button>
-        <button class="sim-preset-btn" data-preset="4">⚖️ Global vs Regional Conflict</button>
+      <div>
+        <div class="sim-preset-label">Select Sample Enterprise Query:</div>
+        <div class="sim-presets">
+          <button class="sim-preset-btn active" data-preset="1">🍼 Parental Leave (&gt;2 yrs)</button>
+          <button class="sim-preset-btn" data-preset="2">💻 Equipment Allowance ($1,500)</button>
+          <button class="sim-preset-btn" data-preset="3">🛡️ Whistleblower Escalation</button>
+          <button class="sim-preset-btn" data-preset="4">⚖️ EU GDPR Precedence</button>
+          <button class="sim-preset-btn" data-preset="5">🖼️ VLM Diagram OCR (qwen2.5vl:7b)</button>
+          <button class="sim-preset-btn" data-preset="6">👋 Conversational Bypass (&lt;15ms)</button>
+        </div>
+      </div>
+
+      <div class="sim-controls-right">
+        <div class="sim-speed-selector">
+          <button class="sim-speed-btn active" data-speed="1">1x Real-Time</button>
+          <button class="sim-speed-btn" data-speed="2">2x Turbo</button>
+          <button class="sim-speed-btn" data-speed="step">Step ▶</button>
+        </div>
       </div>
     </div>
 
@@ -1039,13 +1051,38 @@
     <div class="sim-input-row">
       <div class="sim-input-wrapper">
         <span class="sim-input-icon">💬</span>
-        <input type="text" id="simQueryInput" class="sim-query-input" value="What is the paid parental leave policy for remote software engineers with over 2 years of company tenure?" placeholder="Type an enterprise compliance query...">
+        <input type="text" id="simQueryInput" class="sim-query-input" value="What is the paid parental leave policy for remote software engineers with over 2 years of company tenure?" placeholder="Type any enterprise compliance query or test your own prompt...">
       </div>
       <button id="simRunBtn" class="sim-run-btn">
         <span class="sim-run-icon">▶</span>
         <span class="sim-run-text">Run Pipeline Simulation</span>
       </button>
+      <button id="simStepNextBtn" class="sim-step-next-btn" style="display:none" title="Execute Next Stage">Next Stage ⏭</button>
       <button id="simResetBtn" class="sim-reset-btn" title="Reset Simulator">↺</button>
+    </div>
+
+    <!-- Live HUD Real-Time Strip -->
+    <div class="sim-hud-strip">
+      <div class="sim-hud-item">
+        <span class="sim-hud-label">Time to First Token</span>
+        <span class="sim-hud-value" id="hudTTFT">-- ms</span>
+      </div>
+      <div class="sim-hud-item">
+        <span class="sim-hud-label">Throughput Speed</span>
+        <span class="sim-hud-value" id="hudTokensSec">-- t/s</span>
+      </div>
+      <div class="sim-hud-item">
+        <span class="sim-hud-label">Faithfulness Score</span>
+        <span class="sim-hud-value" id="hudFaithfulness" style="color:var(--accent-emerald)">-- %</span>
+      </div>
+      <div class="sim-hud-item">
+        <span class="sim-hud-label">Model Serving</span>
+        <span class="sim-hud-value" id="hudModel" style="color:var(--accent-core)">qwen2.5:7b</span>
+      </div>
+      <div class="sim-hud-item">
+        <span class="sim-hud-label">GPU CUDA Allocation</span>
+        <span class="sim-hud-value" id="hudGPU">3.4 GB VRAM</span>
+      </div>
     </div>
 
     <!-- Step-by-Step Flow Pipeline Track -->
@@ -1053,56 +1090,49 @@
       <div class="sim-step-node" data-sim-step="1">
         <div class="sim-step-badge">01</div>
         <div class="sim-step-name">Intent Router</div>
-        <div class="sim-step-meta">Regex / Classification</div>
+        <div class="sim-step-meta">5-Type Classifier</div>
         <div class="sim-step-status">Idle</div>
       </div>
-      <div class="sim-track-line"></div>
       <div class="sim-step-node" data-sim-step="2">
         <div class="sim-step-badge">02</div>
         <div class="sim-step-name">Semantic Cache</div>
         <div class="sim-step-meta">cos_sim ≥ 0.95</div>
         <div class="sim-step-status">Idle</div>
       </div>
-      <div class="sim-track-line"></div>
       <div class="sim-step-node" data-sim-step="3">
         <div class="sim-step-badge">03</div>
         <div class="sim-step-name">Hybrid Retrieval</div>
         <div class="sim-step-meta">Chroma + BM25</div>
         <div class="sim-step-status">Idle</div>
       </div>
-      <div class="sim-track-line"></div>
       <div class="sim-step-node" data-sim-step="4">
         <div class="sim-step-badge">04</div>
         <div class="sim-step-name">RRF Fusion</div>
         <div class="sim-step-meta">k = 60 merger</div>
         <div class="sim-step-status">Idle</div>
       </div>
-      <div class="sim-track-line"></div>
       <div class="sim-step-node" data-sim-step="5">
         <div class="sim-step-badge">05</div>
         <div class="sim-step-name">Cross-Encoder</div>
         <div class="sim-step-meta">bge-reranker-large</div>
         <div class="sim-step-status">Idle</div>
       </div>
-      <div class="sim-track-line"></div>
       <div class="sim-step-node" data-sim-step="6">
         <div class="sim-step-badge">06</div>
         <div class="sim-step-name">Parent Expand</div>
-        <div class="sim-step-meta">480 tok → 2000 tok</div>
+        <div class="sim-step-meta">480 tok → 2048 tok</div>
         <div class="sim-step-status">Idle</div>
       </div>
-      <div class="sim-track-line"></div>
       <div class="sim-step-node" data-sim-step="7">
         <div class="sim-step-badge">07</div>
         <div class="sim-step-name">4D Verifier</div>
         <div class="sim-step-meta">Score ≥ 0.70</div>
         <div class="sim-step-status">Idle</div>
       </div>
-      <div class="sim-track-line"></div>
       <div class="sim-step-node" data-sim-step="8">
         <div class="sim-step-badge">08</div>
         <div class="sim-step-name">SSE Token Stream</div>
-        <div class="sim-step-meta">Grounded Answer</div>
+        <div class="sim-step-meta">Verified Output</div>
         <div class="sim-step-status">Idle</div>
       </div>
     </div>
@@ -1113,14 +1143,14 @@
       <div class="sim-panel sim-panel--telemetry">
         <div class="sim-panel-header">
           <div class="sim-panel-title">
-            <span class="sim-panel-indicator"></span>
+            <span class="sim-panel-indicator" id="simIndicator"></span>
             <span>Live Pipeline Trace &amp; Retrieval Inspector</span>
           </div>
           <span class="sim-latency-badge" id="simTotalLatency">Total: 0ms</span>
         </div>
 
         <div class="sim-trace-log" id="simTraceLog">
-          <div class="sim-log-item sim-log--info">Ready to execute. Select a preset or click 'Run Pipeline Simulation'.</div>
+          <div class="sim-log-item sim-log--info">Ready to execute. Select a preset or type any custom query to inspect real-time execution.</div>
         </div>
 
         <!-- 4D Verification Metric Breakdown -->
@@ -1159,7 +1189,7 @@
             <span class="sim-panel-icon">⚡</span>
             <span>Synthesized Grounded Response (SSE Stream)</span>
           </div>
-          <span class="sim-model-tag" id="simModelTag">Qwen 2.5 Coder 7B (QLoRA)</span>
+          <span class="sim-model-tag" id="simModelTag">qwen2.5:7b (GPU CUDA)</span>
         </div>
 
         <div class="sim-output-body" id="simOutputBody">

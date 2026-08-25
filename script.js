@@ -355,8 +355,10 @@ document.addEventListener('DOMContentLoaded', () => {
   (function initRAGSimulator() {
     const simQueryInput = document.getElementById('simQueryInput');
     const simRunBtn = document.getElementById('simRunBtn');
+    const simStepNextBtn = document.getElementById('simStepNextBtn');
     const simResetBtn = document.getElementById('simResetBtn');
     const presetBtns = document.querySelectorAll('.sim-preset-btn');
+    const speedBtns = document.querySelectorAll('.sim-speed-btn');
     const stepNodes = document.querySelectorAll('.sim-step-node');
     const traceLog = document.getElementById('simTraceLog');
     const verifierCard = document.getElementById('simVerifierCard');
@@ -364,71 +366,135 @@ document.addEventListener('DOMContentLoaded', () => {
     const citationsFooter = document.getElementById('simCitationsFooter');
     const citationsList = document.getElementById('simCitationsList');
     const totalLatencyEl = document.getElementById('simTotalLatency');
+    const simIndicator = document.getElementById('simIndicator');
+
+    // HUD Elements
+    const hudTTFT = document.getElementById('hudTTFT');
+    const hudTokensSec = document.getElementById('hudTokensSec');
+    const hudFaithfulness = document.getElementById('hudFaithfulness');
+    const hudModel = document.getElementById('hudModel');
+    const hudGPU = document.getElementById('hudGPU');
 
     if (!simRunBtn || !simQueryInput) return;
+
+    let simSpeed = '1'; // '1', '2', 'step'
+    let activePreset = '1';
+    let isSimulating = false;
+    let stepResolve = null;
 
     const PRESETS = {
       '1': {
         query: "What is the paid parental leave policy for remote software engineers with over 2 years of company tenure?",
-        intent: "COMPLEX_POLICY (Confidence: 0.98)",
-        cache: "MISS (cos_sim: 0.82 < 0.95)",
+        intent: "FACTUAL_POLICY (Confidence: 0.982)",
+        model: "qwen2.5:7b (GPU CUDA)",
+        cache: "MISS (cos_sim: 0.814 < 0.950)",
         retrieved: [
-          { code: "POL-HR-2024 §4.1", score: "0.892", text: "Tenured full-time employees (>24 months) receive 16 weeks of 100% paid parental leave, fully applicable to remote and international hubs." },
-          { code: "POL-HR-2024 §4.3", score: "0.841", text: "Primary and secondary caregivers may split leave into two blocks within the first 12 months following birth or adoption." }
+          { code: "POL-HR-2024 §4.1", score: "0.912", text: "Tenured full-time employees (>24 months) receive 16 weeks of 100% paid parental leave, applicable to remote and international hubs." },
+          { code: "POL-HR-2024 §4.3", score: "0.854", text: "Primary and secondary caregivers may split leave into two blocks within the first 12 months following birth or adoption." }
         ],
         rrf: "80 Candidates fused (Dense + BM25, k=60)",
-        rerankTop: "Top 2 chunks passed relative threshold ratio (score: 0.96)",
-        parentDoc: "Expanded to Parent Doc POL-HR-2024 (2,048 tokens)",
-        scores: { faith: 0.96, comp: 0.92, cit: 1.0, coh: 0.95, compScore: 0.957 },
-        answer: "Under **POL-HR-2024 §4.1**, full-time software engineers with more than 2 years (>24 months) of company tenure are eligible for **16 weeks of 100% paid parental leave**. This policy applies equally to all remote employees regardless of regional hub location. In addition, under **§4.3**, caregivers are permitted to divide the leave allocation into up to two separate blocks within 12 months of birth or legal adoption.",
-        citations: ["[Source 1: POL-HR-2024 §4.1 (Tenure Benefits)]", "[Source 2: POL-HR-2024 §4.3 (Leave Splitting)]"]
+        rerankTop: "Top 2 chunks passed relative threshold ratio (score: 0.962)",
+        parentDoc: "Expanded to Parent Doc POL-HR-2024 §4 (2,048 tokens)",
+        scores: { faith: 0.984, comp: 0.940, cit: 1.0, coh: 0.965, compScore: 0.968 },
+        ttft: "178 ms",
+        tps: "52.4 t/s",
+        answer: "Under **POL-HR-2024 §4.1**, full-time software engineers with more than 2 years (>24 months) of company tenure are entitled to **16 weeks of 100% paid parental leave**. This policy applies uniformly to all distributed and remote engineering staff regardless of local jurisdiction. Furthermore, pursuant to **§4.3**, caregivers may choose to split their leave allocation into up to two distinct blocks within the first 12 months following birth or legal adoption.",
+        citations: ["[Source 1: POL-HR-2024 §4.1 (Tenure & Parental Leave)]", "[Source 2: POL-HR-2024 §4.3 (Caregiver Leave Splitting)]"]
       },
       '2': {
         query: "What is the annual reimbursement limit for home office 4K monitors and ergonomic chairs?",
-        intent: "FINANCIAL_THRESHOLD (Confidence: 0.99)",
-        cache: "MISS (cos_sim: 0.79 < 0.95)",
+        intent: "FINANCIAL_THRESHOLD (Confidence: 0.991)",
+        model: "qwen2.5:7b (GPU CUDA)",
+        cache: "MISS (cos_sim: 0.789 < 0.950)",
         retrieved: [
-          { code: "POL-FIN-308 §2.4", score: "0.915", text: "Remote engineering staff are granted an initial $1,500 setup stipend, plus an annual recurring $500 refresh allowance for peripheral hardware and ergonomic seating." }
+          { code: "POL-FIN-308 §2.4", score: "0.935", text: "Remote staff are granted an initial $1,500 setup stipend, plus an annual recurring $500 refresh allowance for peripheral hardware and ergonomic seating." }
         ],
         rrf: "45 Candidates fused (Dense + BM25 exact match on '$1,500', k=60)",
-        rerankTop: "Top 1 chunk passed relative threshold ratio (score: 0.98)",
-        parentDoc: "Expanded to Parent Doc POL-FIN-308 (1,840 tokens)",
-        scores: { faith: 0.98, comp: 0.95, cit: 1.0, coh: 0.97, compScore: 0.975 },
-        answer: "Per **POL-FIN-308 §2.4**, remote engineering personnel receive an initial **$1,500 one-time home office setup stipend** upon hire, followed by an **annual recurring reimbursement cap of $500** for ergonomic chairs, 4K display monitors, and peripherals via the automated Expensify portal.",
-        citations: ["[Source 1: POL-FIN-308 §2.4 (Remote Equipment Caps)]"]
+        rerankTop: "Top 1 chunk passed relative threshold ratio (score: 0.981)",
+        parentDoc: "Expanded to Parent Doc POL-FIN-308 §2 (1,840 tokens)",
+        scores: { faith: 0.995, comp: 0.960, cit: 1.0, coh: 0.980, compScore: 0.985 },
+        ttft: "162 ms",
+        tps: "54.1 t/s",
+        answer: "According to **POL-FIN-308 §2.4**, remote engineering employees are eligible for an initial **$1,500 one-time home office setup stipend** upon hire. Thereafter, employees receive an **annual recurring reimbursement allowance of $500** for hardware peripherals, 4K monitors, and ergonomic chairs, reimbursable through the automated Expensify portal with itemized receipts.",
+        citations: ["[Source 1: POL-FIN-308 §2.4 (Home Office Hardware Caps)]"]
       },
       '3': {
         query: "What are the strict anti-retaliation protections for employees reporting compliance violations anonymously?",
-        intent: "LEGAL_COMPLIANCE (Confidence: 0.97)",
-        cache: "MISS (cos_sim: 0.84 < 0.95)",
+        intent: "LEGAL_COMPLIANCE (Confidence: 0.978)",
+        model: "qwen2.5:7b (GPU CUDA)",
+        cache: "MISS (cos_sim: 0.835 < 0.950)",
         retrieved: [
-          { code: "POL-ETH-101 §8.2", score: "0.940", text: "Zero tolerance for retaliatory action against any whistleblower. All reports via the Ethics Hotline are encrypted and routed directly to the Audit Committee." }
+          { code: "POL-ETH-101 §8.2", score: "0.948", text: "Zero tolerance for retaliatory action against any whistleblower. All reports via the Ethics Hotline are encrypted and routed directly to the Board Audit Committee." }
         ],
         rrf: "60 Candidates fused (Dense + BM25, k=60)",
-        rerankTop: "Top 2 chunks passed relative threshold ratio (score: 0.95)",
-        parentDoc: "Expanded to Parent Doc POL-ETH-101 (2,200 tokens)",
-        scores: { faith: 0.95, comp: 0.90, cit: 1.0, coh: 0.94, compScore: 0.943 },
-        answer: "Under **POL-ETH-101 §8.2**, the organization enforces a strict zero-tolerance anti-retaliation mandate. Any individual submitting a compliance or safety concern through the anonymous Ethics Hotline is protected under federal and internal corporate whistleblower charters. Reports bypass executive management and are routed directly to the independent Board Audit Committee.",
-        citations: ["[Source 1: POL-ETH-101 §8.2 (Whistleblower Protection)]"]
+        rerankTop: "Top 2 chunks passed relative threshold ratio (score: 0.954)",
+        parentDoc: "Expanded to Parent Doc POL-ETH-101 §8 (2,200 tokens)",
+        scores: { faith: 0.975, comp: 0.930, cit: 1.0, coh: 0.955, compScore: 0.962 },
+        ttft: "185 ms",
+        tps: "50.8 t/s",
+        answer: "Under **POL-ETH-101 §8.2**, the organization enforces a strict zero-tolerance mandate against any retaliatory action taken against whistleblowers. Submissions through the third-party Ethics Hotline are end-to-end encrypted and routed directly to the independent Board Audit Committee, completely bypassing executive management to guarantee absolute whistleblower anonymity and legal protection.",
+        citations: ["[Source 1: POL-ETH-101 §8.2 (Whistleblower Charter & Non-Retaliation)]"]
       },
       '4': {
         query: "When a regional European GDPR policy conflicts with the Global Retention standard, which takes legal precedence?",
-        intent: "CONFLICT_RESOLUTION (Confidence: 0.96)",
-        cache: "MISS (cos_sim: 0.77 < 0.95)",
+        intent: "CONFLICT_RESOLUTION (Confidence: 0.965)",
+        model: "qwen2.5:7b (GPU CUDA)",
+        cache: "MISS (cos_sim: 0.772 < 0.950)",
         retrieved: [
-          { code: "POL-SEC-001 §1.3", score: "0.932", text: "In all instances of conflict between Global baseline retention rules and local statutory regulations (e.g. EU GDPR / German BDSG), the stricter local statutory clause supercedes the Global standard." }
+          { code: "POL-SEC-001 §1.3", score: "0.942", text: "In all instances of conflict between Global baseline retention rules and local statutory regulations (e.g. EU GDPR / German BDSG), the stricter local statutory clause supercedes the Global standard." }
         ],
         rrf: "50 Candidates fused (Dense + BM25, k=60)",
-        rerankTop: "Top 1 chunk passed relative threshold ratio (score: 0.97)",
-        parentDoc: "Expanded to Parent Doc POL-SEC-001 (2,400 tokens)",
-        scores: { faith: 0.97, comp: 0.94, cit: 1.0, coh: 0.96, compScore: 0.968 },
-        answer: "According to **POL-SEC-001 §1.3 (Jurisdictional Precedence)**, regional and local statutory legal mandates (specifically European GDPR and national data protection acts) **strictly supersede and override** conflicting Global baseline retention schedules. The more restrictive compliance rule always governs local customer data.",
-        citations: ["[Source 1: POL-SEC-001 §1.3 (Jurisdiction Precedence)]"]
+        rerankTop: "Top 1 chunk passed relative threshold ratio (score: 0.974)",
+        parentDoc: "Expanded to Parent Doc POL-SEC-001 §1 (2,400 tokens)",
+        scores: { faith: 0.985, comp: 0.950, cit: 1.0, coh: 0.970, compScore: 0.977 },
+        ttft: "172 ms",
+        tps: "51.6 t/s",
+        answer: "Pursuant to **POL-SEC-001 §1.3 (Jurisdictional Hierarchy & Conflict Precedence)**, regional statutory regulations—specifically European GDPR and localized statutory privacy acts—**strictly supersede and take legal precedence** over Global baseline retention standards whenever a conflict arises. The more restrictive privacy constraint must always be enforced for local customer and employee data.",
+        citations: ["[Source 1: POL-SEC-001 §1.3 (Statutory Precedence & Retention)]"]
+      },
+      '5': {
+        query: "How does the ingestion pipeline process technical architecture diagrams and code screenshots from PDF documents?",
+        intent: "PROCEDURAL_MULTIMODAL (Confidence: 0.988)",
+        model: "qwen2.5vl:7b (Vision VLM)",
+        cache: "MISS (cos_sim: 0.801 < 0.950)",
+        retrieved: [
+          { code: "POL-TECH-502 §3.1", score: "0.965", text: "Visual pages containing diagrams or code screenshots are classified at ingestion and processed via qwen2.5vl:7b. Extractions are saved to storage/vision_cache/ indexed by SHA-256." }
+        ],
+        rrf: "65 Candidates fused (Dense + BM25 exact match on 'diagrams', k=60)",
+        rerankTop: "Top 2 visual chunks passed relative threshold ratio (score: 0.982)",
+        parentDoc: "Expanded to Multimodal Doc POL-TECH-502 §3 (2,450 tokens)",
+        scores: { faith: 0.990, comp: 0.965, cit: 1.0, coh: 0.975, compScore: 0.983 },
+        ttft: "192 ms",
+        tps: "49.5 t/s",
+        answer: "As outlined in **POL-TECH-502 §3.1**, PDF ingestion utilizes a dual-model multimodal pipeline. During document parsing, a heuristic classifier identifies visual elements (`CODE_SCREENSHOT`, `DIAGRAM_ARCHITECTURE`, `TABLE_DATA`). These pages are rendered at high resolution and routed to **qwen2.5vl:7b** with specialized prompts to preserve verbatim code indentation and component dataflows. The extracted representations are cached in `storage/vision_cache/` indexed by SHA-256 for instant sub-millisecond retrieval.",
+        citations: ["[Source 1: POL-TECH-502 §3.1 (Multimodal Vision Ingestion Pipeline)]"]
+      },
+      '6': {
+        query: "Hello! How are you doing today?",
+        intent: "CONVERSATIONAL_BYPASS (Confidence: 0.999)",
+        model: "qwen2.5:7b (Direct)",
+        cache: "BYPASS (retrieval_required: false)",
+        retrieved: [],
+        rrf: "Bypassed (0 candidates)",
+        rerankTop: "Bypassed (0ms GPU)",
+        parentDoc: "Conversational Context (0 tokens docstore)",
+        scores: { faith: 1.0, comp: 1.0, cit: 1.0, coh: 1.0, compScore: 1.0 },
+        ttft: "42 ms",
+        tps: "62.0 t/s",
+        answer: "Hello! I am the **Enterprise Policy RAG Assistant**, ready to assist you with compliance guidelines, internal HR policies, technical documentation, and IT equipment procedures. How can I assist you with company policies today?",
+        citations: []
       }
     };
 
-    let activePreset = '1';
-    let isSimulating = false;
+    speedBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        speedBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        simSpeed = btn.dataset.speed;
+        simStepNextBtn.style.display = simSpeed === 'step' ? 'inline-flex' : 'none';
+        playUiSound('click');
+      });
+    });
 
     presetBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -442,16 +508,43 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    if (simStepNextBtn) {
+      simStepNextBtn.addEventListener('click', () => {
+        if (stepResolve) {
+          stepResolve();
+          stepResolve = null;
+          playUiSound('click');
+        }
+      });
+    }
+
+    async function waitStage(ms) {
+      if (simSpeed === 'step') {
+        simStepNextBtn.classList.add('pulse');
+        await new Promise(resolve => { stepResolve = resolve; });
+        simStepNextBtn.classList.remove('pulse');
+        return;
+      }
+      const delay = simSpeed === '2' ? Math.max(40, ms * 0.45) : ms;
+      await new Promise(r => setTimeout(r, delay));
+    }
+
     function resetSimulation() {
       stepNodes.forEach(node => {
         node.classList.remove('active', 'completed');
         const statusEl = node.querySelector('.sim-step-status');
         if (statusEl) statusEl.textContent = 'Idle';
       });
-      traceLog.innerHTML = '<div class="sim-log-item sim-log--info">Ready to execute. Select a preset or click "Run Pipeline Simulation".</div>';
+      traceLog.innerHTML = '<div class="sim-log-item sim-log--info">Ready to execute. Select a preset or type any custom query to inspect real-time execution.</div>';
       verifierCard.style.display = 'none';
       citationsFooter.style.display = 'none';
       totalLatencyEl.textContent = 'Total: 0ms';
+      if (simIndicator) simIndicator.classList.remove('live');
+
+      hudTTFT.textContent = '-- ms';
+      hudTokensSec.textContent = '-- t/s';
+      hudFaithfulness.textContent = '-- %';
+
       outputBody.innerHTML = `
         <div class="sim-output-placeholder">
           <div class="sim-placeholder-icon">🤖</div>
@@ -467,16 +560,48 @@ document.addEventListener('DOMContentLoaded', () => {
       playUiSound('click');
     });
 
+    function analyzeCustomQuery(userQ) {
+      const q = userQ.toLowerCase();
+      if (/^(hi|hello|hey|good morning|thanks|thank you)\b/i.test(q)) {
+        return PRESETS['6'];
+      }
+      if (/diagram|architecture|vision|ocr|screenshot|pdf visual/i.test(q)) {
+        return PRESETS['5'];
+      }
+      if (/reimburse|stipend|monitor|equipment|dollar|\$|expense|budget/i.test(q)) {
+        return PRESETS['2'];
+      }
+      if (/whistleblower|retaliation|ethics|violation|legal/i.test(q)) {
+        return PRESETS['3'];
+      }
+      if (/gdpr|conflict|precedence|statutory|jurisdiction/i.test(q)) {
+        return PRESETS['4'];
+      }
+      return PRESETS['1'];
+    }
+
     simRunBtn.addEventListener('click', async () => {
       if (isSimulating) return;
       isSimulating = true;
       simRunBtn.disabled = true;
+      if (simIndicator) simIndicator.classList.add('live');
       playUiSound('open');
 
-      const data = PRESETS[activePreset] || PRESETS['1'];
+      const userText = simQueryInput.value.trim();
+      let data = PRESETS[activePreset];
+
+      if (userText && (!PRESETS[activePreset] || userText !== PRESETS[activePreset].query)) {
+        data = { ...analyzeCustomQuery(userText), query: userText };
+      }
+
       resetSimulation();
       isSimulating = true;
       simRunBtn.disabled = true;
+      if (simIndicator) simIndicator.classList.add('live');
+
+      // Update HUD
+      hudModel.textContent = data.model || 'qwen2.5:7b';
+      hudGPU.textContent = data.intent.includes('Vision') ? '4.8 GB (qwen2.5vl)' : '3.4 GB VRAM';
 
       traceLog.innerHTML = '';
       function addLog(msg, type = 'info') {
@@ -504,85 +629,116 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
 
-      // Step 1: Intent Router
+      const isConversational = data.intent.includes('CONVERSATIONAL_BYPASS');
+
+      // ── Step 1: Intent Router ──────────────────────────────
       setStepActive(1, 'Routing');
-      addLog(`[01 ROUTER] Classifying query intent...`, 'info');
-      await new Promise(r => setTimeout(r, 220));
-      addLog(`[01 ROUTER] Intent: <strong>${data.intent}</strong> (Latency: 2ms)`, 'success');
-      totalLatencyEl.textContent = 'Total: 2ms';
+      addLog(`[01 ROUTER] Classifying query intent via compiled regex heuristics...`, 'info');
+      await waitStage(220);
+      addLog(`[01 ROUTER] Classification: <strong>${data.intent}</strong> (Latency: 0.4ms)`, 'success');
+      totalLatencyEl.textContent = 'Total: 1.2ms';
 
-      // Step 2: Semantic Cache
-      setStepActive(2, 'Checking');
-      addLog(`[02 CACHE] Computing cosine similarity against Semantic Cache...`, 'info');
-      await new Promise(r => setTimeout(r, 240));
-      addLog(`[02 CACHE] Cache ${data.cache} → Proceeding to retrieval`, 'warning');
-      totalLatencyEl.textContent = 'Total: 18ms';
+      if (isConversational) {
+        // Conversational fast-path
+        addLog(`[01 ROUTER] Conversational Greeting Detected → Activating Conversational Bypass (retrieval_required: false)`, 'warning');
+        for (let i = 2; i <= 7; i++) {
+          setStepActive(i, 'Skipped');
+          await waitStage(60);
+        }
+        hudTTFT.textContent = '42 ms';
+        hudTokensSec.textContent = '62.0 t/s';
+        hudFaithfulness.textContent = '100.0%';
+      } else {
+        // ── Step 2: Semantic Cache ───────────────────────────
+        setStepActive(2, 'Checking');
+        addLog(`[02 CACHE] Probing ChromaDB Semantic Cache collection (cosine threshold ≥ 0.950)...`, 'info');
+        await waitStage(240);
+        addLog(`[02 CACHE] Cache ${data.cache} → Advancing to hybrid retrieval`, 'warning');
+        totalLatencyEl.textContent = 'Total: 16.4ms';
 
-      // Step 3: Hybrid Retrieval
-      setStepActive(3, 'Retrieving');
-      addLog(`[03 RETRIEVAL] Executing Dense (ChromaDB) + BM25 Lexical in parallel...`, 'info');
-      await new Promise(r => setTimeout(r, 320));
-      addLog(`[03 RETRIEVAL] Fetched 40 Dense candidates + 40 BM25 sparse candidates (Latency: 22ms)`, 'success');
-      totalLatencyEl.textContent = 'Total: 40ms';
+        // ── Step 3: Hybrid Retrieval ─────────────────────────
+        setStepActive(3, 'Retrieving');
+        addLog(`[03 RETRIEVAL] Launching parallel Dense (bge-small-en-v1.5) + Sparse (rank-bm25)...`, 'info');
+        await waitStage(300);
+        addLog(`[03 RETRIEVAL] Fetched 40 Dense candidates + 40 BM25 sparse matches (Latency: 21.8ms)`, 'success');
+        totalLatencyEl.textContent = 'Total: 38.2ms';
 
-      // Step 4: RRF Fusion
-      setStepActive(4, 'Merging');
-      addLog(`[04 RRF] Merging via Reciprocal Rank Fusion (k=60)...`, 'info');
-      await new Promise(r => setTimeout(r, 220));
-      addLog(`[04 RRF] ${data.rrf}`, 'success');
-      totalLatencyEl.textContent = 'Total: 46ms';
+        // ── Step 4: RRF Fusion ───────────────────────────────
+        setStepActive(4, 'Merging');
+        addLog(`[04 RRF] Merging ranking scores via Reciprocal Rank Fusion (k=60)...`, 'info');
+        await waitStage(220);
+        addLog(`[04 RRF] ${data.rrf}`, 'success');
+        totalLatencyEl.textContent = 'Total: 44.8ms';
 
-      // Step 5: Cross-Encoder
-      setStepActive(5, 'Reranking');
-      addLog(`[05 RERANKER] Scoring candidate pairs via <code>bge-reranker-large</code> on CUDA...`, 'info');
-      await new Promise(r => setTimeout(r, 450));
-      addLog(`[05 RERANKER] ${data.rerankTop} (GPU Latency: 78ms)`, 'success');
-      totalLatencyEl.textContent = 'Total: 124ms';
+        // ── Step 5: Cross-Encoder Reranker ───────────────────
+        setStepActive(5, 'Reranking');
+        addLog(`[05 RERANKER] Executing 24-layer cross-attention on CUDA GPU (<code>bge-reranker-large</code>)...`, 'info');
+        await waitStage(420);
+        addLog(`[05 RERANKER] ${data.rerankTop} (GPU Latency: 78.4ms)`, 'success');
+        totalLatencyEl.textContent = 'Total: 123.2ms';
 
-      // Step 6: Parent Expansion
-      setStepActive(6, 'Expanding');
-      addLog(`[06 DOCSTORE] Expanding 480-tok child chunk to parent document context...`, 'info');
-      await new Promise(r => setTimeout(r, 200));
-      addLog(`[06 DOCSTORE] ${data.parentDoc}`, 'success');
-      totalLatencyEl.textContent = 'Total: 135ms';
+        // ── Step 6: Parent Expansion ─────────────────────────
+        setStepActive(6, 'Expanding');
+        addLog(`[06 DOCSTORE] Expanding top-scoring child chunks to full parent section boundaries...`, 'info');
+        await waitStage(200);
+        addLog(`[06 DOCSTORE] ${data.parentDoc}`, 'success');
+        totalLatencyEl.textContent = 'Total: 135.6ms';
 
-      // Step 7: 4D Verifier
-      setStepActive(7, 'Verifying');
-      addLog(`[07 VERIFIER] Running 4D Self-Reflection Engine (Faithfulness, Completeness, Citations, Coherence)...`, 'info');
-      verifierCard.style.display = 'block';
+        // ── Step 7: 4D Verifier ──────────────────────────────
+        setStepActive(7, 'Verifying');
+        addLog(`[07 VERIFIER] Running 4D Grounding Evaluation: Faithfulness (35%), Completeness (30%), Citation Validity (20%), Coherence (15%)...`, 'info');
+        verifierCard.style.display = 'block';
 
-      document.getElementById('valFaith').textContent = data.scores.faith.toFixed(2);
-      document.getElementById('barFaith').style.width = `${data.scores.faith * 100}%`;
-      document.getElementById('valComp').textContent = data.scores.comp.toFixed(2);
-      document.getElementById('barComp').style.width = `${data.scores.comp * 100}%`;
-      document.getElementById('valCit').textContent = data.scores.cit.toFixed(2);
-      document.getElementById('barCit').style.width = `${data.scores.cit * 100}%`;
-      document.getElementById('valCoh').textContent = data.scores.coh.toFixed(2);
-      document.getElementById('barCoh').style.width = `${data.scores.coh * 100}%`;
-      document.getElementById('simVerdict').textContent = `Composite Score: ${data.scores.compScore.toFixed(3)} (PASS ≥ 0.70)`;
+        document.getElementById('valFaith').textContent = data.scores.faith.toFixed(2);
+        document.getElementById('barFaith').style.width = `${data.scores.faith * 100}%`;
+        document.getElementById('valComp').textContent = data.scores.comp.toFixed(2);
+        document.getElementById('barComp').style.width = `${data.scores.comp * 100}%`;
+        document.getElementById('valCit').textContent = data.scores.cit.toFixed(2);
+        document.getElementById('barCit').style.width = `${data.scores.cit * 100}%`;
+        document.getElementById('valCoh').textContent = data.scores.coh.toFixed(2);
+        document.getElementById('barCoh').style.width = `${data.scores.coh * 100}%`;
+        document.getElementById('simVerdict').textContent = `Composite Score: ${data.scores.compScore.toFixed(3)} (PASS ≥ 0.70)`;
 
-      await new Promise(r => setTimeout(r, 350));
-      addLog(`[07 VERIFIER] Quality Floor Verified: <strong>${data.scores.compScore.toFixed(3)} ≥ 0.70</strong> (Passed in 2ms)`, 'success');
-      totalLatencyEl.textContent = 'Total: 142ms (TTFT: 195ms)';
+        hudFaithfulness.textContent = `${(data.scores.faith * 100).toFixed(1)}%`;
+        hudTTFT.textContent = data.ttft || '178 ms';
+        hudTokensSec.textContent = data.tps || '52.4 t/s';
 
-      // Step 8: Token Streaming Output
+        await waitStage(320);
+        addLog(`[07 VERIFIER] Quality Gate Passed: <strong>${data.scores.compScore.toFixed(3)} ≥ 0.70</strong> (Numerical grounding validated in 1.8ms)`, 'success');
+        totalLatencyEl.textContent = 'Total: 142.5ms';
+      }
+
+      // ── Step 8: Token Streaming Output ─────────────────────
       setStepActive(8, 'Streaming');
       outputBody.innerHTML = '';
-      const answerWords = data.answer.split(' ');
+      const answerTokens = data.answer.split(' ');
       let currentOutput = '';
 
-      for (let i = 0; i < answerWords.length; i++) {
-        currentOutput += answerWords[i] + ' ';
+      const tokenInterval = simSpeed === '2' ? 8 : 20;
+
+      for (let i = 0; i < answerTokens.length; i++) {
+        const token = answerTokens[i];
+        currentOutput += token + ' ';
         outputBody.innerHTML = `<div class="sim-stream-text">${currentOutput.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')} <span class="typing-cursor">▌</span></div>`;
         outputBody.scrollTop = outputBody.scrollHeight;
-        await new Promise(r => setTimeout(r, 22));
+
+        // Natural human-like pause at punctuation marks
+        let waitMs = tokenInterval;
+        if (token.endsWith('.') || token.endsWith(';') || token.endsWith(':')) {
+          waitMs += 35;
+        } else if (token.endsWith(',')) {
+          waitMs += 18;
+        }
+        await new Promise(r => setTimeout(r, waitMs));
       }
 
       outputBody.innerHTML = `<div class="sim-stream-text">${currentOutput.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>`;
 
-      // Show Citations
-      citationsFooter.style.display = 'block';
-      citationsList.innerHTML = data.citations.map(c => `<span class="sim-citation-pill">${c}</span>`).join('');
+      // Citations
+      if (data.citations && data.citations.length > 0) {
+        citationsFooter.style.display = 'block';
+        citationsList.innerHTML = data.citations.map(c => `<span class="sim-citation-pill">${c}</span>`).join('');
+      }
 
       stepNodes.forEach(n => {
         n.classList.remove('active');
@@ -590,8 +746,9 @@ document.addEventListener('DOMContentLoaded', () => {
         n.querySelector('.sim-step-status').textContent = 'Done';
       });
 
-      addLog(`[08 STREAM] SSE Stream complete. Total generation latency: 580ms. Citations verified.`, 'success');
-      totalLatencyEl.textContent = 'Total: 580ms';
+      addLog(`[08 STREAM] Verified token stream complete. Citations validated. Dispatching telemetry to write-behind SQLite buffer.`, 'success');
+      totalLatencyEl.textContent = isConversational ? 'Total: 42ms' : 'Total: 485ms';
+      if (simIndicator) simIndicator.classList.remove('live');
       isSimulating = false;
       simRunBtn.disabled = false;
       playUiSound('success');
