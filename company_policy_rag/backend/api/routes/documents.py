@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.dependencies import get_document_service
 from backend.models.api_dto import (
@@ -14,8 +15,26 @@ from backend.models.api_dto import (
     IngestionStatusResponse,
 )
 from backend.services.document_service import MAX_FILE_SIZE_BYTES, DocumentService
+from backend.utils.logging import logger
 
 router = APIRouter(tags=["Documents"])
+_UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
+
+
+async def _read_upload_with_limit(file: UploadFile) -> bytes:
+    """Read an upload incrementally so oversized bodies are rejected early."""
+    content = bytearray()
+    while True:
+        block = await file.read(_UPLOAD_READ_CHUNK_BYTES)
+        if not block:
+            break
+        content.extend(block)
+        if len(content) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="File size exceeds maximum allowed limit of 100MB.",
+            )
+    return bytes(content)
 
 
 @router.post(
@@ -36,27 +55,24 @@ async def upload_document_file(
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename cannot be empty.")
 
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File size exceeds maximum allowed limit of 100MB.",
-        )
+    content = await _read_upload_with_limit(file)
 
     try:
-        res = doc_service.upload_document(
-            filename=file.filename,
-            content_bytes=content,
-            category=category,
-            chunk_strategy=chunk_strategy,
+        res = await run_in_threadpool(
+            doc_service.upload_document,
+            file.filename,
+            content,
+            category,
+            chunk_strategy,
         )
         return res
     except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as val_err:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
     except Exception as exc:
+        logger.exception("Document upload failed for filename=%s: %s", Path(file.filename).name, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process document upload: {exc!s}",
+            detail="Failed to process document upload.",
         )
 
 
@@ -135,6 +151,23 @@ def list_document_image_assets(
     }
 
 
+@router.get("/api/documents/{doc_id}/visual-assets/{asset_id}")
+def get_document_visual_asset_file(
+    doc_id: str,
+    asset_id: str,
+    doc_service: DocumentService = Depends(get_document_service),
+):
+    """Serve standalone original high-resolution visual asset file by asset_id or image_hash."""
+    asset = doc_service.image_asset_manager.get_asset(doc_id, asset_id)
+    if not asset or not Path(asset.file_path).is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Visual asset '{asset_id}' not found for document '{doc_id}'.",
+        )
+    media_type = "image/png" if asset.file_path.endswith(".png") else "image/jpeg"
+    return FileResponse(asset.file_path, media_type=media_type)
+
+
 @router.get("/api/documents/{doc_id}/images/{image_hash}")
 def get_document_image_file(
     doc_id: str,
@@ -152,18 +185,19 @@ def get_document_image_file(
     return FileResponse(asset.file_path, media_type=media_type)
 
 
-@router.get("/api/documents/{doc_id}/pages/{page_number}/image")
+@router.get("/api/documents/{doc_id}/pages/{page_identifier}/image")
 def get_document_page_image_file(
     doc_id: str,
-    page_number: int,
+    page_identifier: str,
     doc_service: DocumentService = Depends(get_document_service),
 ):
-    """Serve standalone original image for a specific physical page number."""
-    asset = doc_service.image_asset_manager.get_page_asset(doc_id, page_number)
+    """Serve standalone original image for a specific page (supports physical page, internal index, or printed label)."""
+    parsed_id: int | str = int(page_identifier) if page_identifier.isdigit() else page_identifier
+    asset = doc_service.image_asset_manager.get_page_asset(doc_id, parsed_id)
     if not asset or not Path(asset.file_path).is_file():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No image asset found for page {page_number} in document '{doc_id}'.",
+            detail=f"No image asset found for page '{page_identifier}' in document '{doc_id}'.",
         )
     media_type = "image/png" if asset.file_path.endswith(".png") else "image/jpeg"
     return FileResponse(asset.file_path, media_type=media_type)

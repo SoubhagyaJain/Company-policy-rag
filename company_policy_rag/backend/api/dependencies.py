@@ -13,6 +13,7 @@ try:
 except Exception:
     Ollama = None
 
+from backend.models.conversation import ConversationStateManager
 from backend.rag.pipeline import RAGPipeline
 from backend.rag.semantic_cache import SemanticCacheManager
 from backend.retrieval.hybrid import HybridRetriever
@@ -28,6 +29,7 @@ _lock = threading.RLock()
 _telemetry_service: TelemetryService | None = None
 _document_service: DocumentService | None = None
 _semantic_cache_manager: SemanticCacheManager | None = None
+_conversation_state_manager: ConversationStateManager | None = None
 _rag_pipeline: RAGPipeline | None = None
 _chat_service: ChatService | None = None
 
@@ -48,6 +50,15 @@ def get_document_service() -> DocumentService:
             if _document_service is None:
                 _document_service = DocumentService()
     return _document_service
+
+
+def get_conversation_state_manager() -> ConversationStateManager:
+    global _conversation_state_manager
+    if _conversation_state_manager is None:
+        with _lock:
+            if _conversation_state_manager is None:
+                _conversation_state_manager = ConversationStateManager()
+    return _conversation_state_manager
 
 
 def get_semantic_cache_manager() -> SemanticCacheManager:
@@ -82,12 +93,12 @@ def get_rag_pipeline() -> RAGPipeline:
                 reranker_model = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-large")
                 reranker_top_n = int(os.getenv("RERANKER_TOP_N", "5"))
                 reranker_min_ratio = float(os.getenv("RERANK_MIN_SCORE_RATIO", "0.40"))
-                
+
                 reranker = CrossEncoderReranker(
                     model_name=reranker_model,
                     top_n=reranker_top_n,
                     device=reranker_device,
-                    min_ratio=reranker_min_ratio
+                    min_ratio=reranker_min_ratio,
                 )
 
                 hybrid_retriever = HybridRetriever(
@@ -95,13 +106,13 @@ def get_rag_pipeline() -> RAGPipeline:
                     bm25_index=bm25_index,
                     reranker=reranker,
                 )
-                
+
                 # Initialize LLM
                 ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
                 ollama_model = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:7b")
                 temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
                 request_timeout = float(os.getenv("LLM_REQUEST_TIMEOUT", "300.0"))
-                
+
                 llm = None
                 global Ollama
                 if Ollama is None:
@@ -120,7 +131,7 @@ def get_rag_pipeline() -> RAGPipeline:
                         )
                     except Exception:
                         llm = None
-                
+
                 cache_manager = get_semantic_cache_manager()
                 _rag_pipeline = RAGPipeline(
                     hybrid_retriever=hybrid_retriever,
@@ -139,20 +150,27 @@ def get_chat_service() -> ChatService:
             if _chat_service is None:
                 pipeline = get_rag_pipeline()
                 telemetry = get_telemetry_service()
+                state_manager = get_conversation_state_manager()
                 _chat_service = ChatService(
                     rag_pipeline=pipeline,
                     telemetry_service=telemetry,
+                    state_manager=state_manager,
                 )
     return _chat_service
 
 
 def reset_dependencies() -> None:
     """Reset singletons (useful for test isolation)."""
-    global _telemetry_service, _document_service, _rag_pipeline, _chat_service, _semantic_cache_manager
+    global _telemetry_service, _document_service, _rag_pipeline, _chat_service, _semantic_cache_manager, _conversation_state_manager
     with _lock:
         if _semantic_cache_manager is not None:
             try:
                 _semantic_cache_manager.clear()
+            except Exception:
+                pass
+        if _conversation_state_manager is not None:
+            try:
+                _conversation_state_manager.clear_all()
             except Exception:
                 pass
         _telemetry_service = None
@@ -160,5 +178,4 @@ def reset_dependencies() -> None:
         _rag_pipeline = None
         _chat_service = None
         _semantic_cache_manager = None
-
-
+        _conversation_state_manager = None

@@ -753,7 +753,7 @@ def format_node_for_prompt(node: NodeWithScore, index: int) -> str:
     """
     meta = node.metadata or {}
     source = meta.get("source_file", "unknown")
-    page = meta.get("page_number")
+    page = meta.get("display_page_number") or meta.get("page_label") or meta.get("page_number")
     section_path = meta.get("section_path") or meta.get("section_title") or ""
     section_number = meta.get("section_number")
 

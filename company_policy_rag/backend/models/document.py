@@ -40,6 +40,7 @@ class DocumentMetadata(BaseModel):
     topic_tags: list[str] = Field(default_factory=list, description="Extracted domain topic tags")
     page_number: int | None = Field(default=None, description="1-indexed physical page number")
     internal_page_index: int | None = Field(default=None, description="0-indexed internal page index")
+    display_page_number: str | int | None = Field(default=None, description="Human-visible printed page number/label e.g. 98")
     page_label: str | None = Field(default=None, description="Printed / display page number e.g. '82'")
     total_pages: int | None = Field(default=None)
     section_title: str | None = Field(default=None)
@@ -50,6 +51,15 @@ class DocumentMetadata(BaseModel):
     has_code: bool = Field(default=False)
     image_assets: list[dict[str, Any]] = Field(default_factory=list, description="Original visual assets on this page")
     extra: dict[str, Any] = Field(default_factory=dict)
+
+    def get_page_identity(self) -> PageIdentity:
+        from backend.models.page_identity import PageIdentity
+        return PageIdentity.from_indices(
+            internal_page_index=self.internal_page_index,
+            physical_page_number=self.page_number,
+            display_page_number=self.display_page_number,
+            page_label=self.page_label,
+        )
 
 
 class ExtractedDocumentMetadata(BaseModel):

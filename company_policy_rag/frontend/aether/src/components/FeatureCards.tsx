@@ -10,7 +10,7 @@ export function FeatureCards({ onPolicy, onGuidebook, onEval }: Props) {
   const cards = [
     {
       icon: FileText,
-      title: "Policy Assistant",
+      title: "Nexus AI",
       desc: "Grounded answers from your employee handbook — leave, benefits, conduct, and compliance.",
       action: "Start Chat",
       onClick: onPolicy,

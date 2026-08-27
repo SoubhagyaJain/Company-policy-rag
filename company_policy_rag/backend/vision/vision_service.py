@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.models.logical_document import detect_continuation_signals
+from backend.models.page_identity import PageIdentity
 from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
@@ -20,7 +21,7 @@ _CODE_CUES = re.compile(
     r"(?:def\s+|class\s+|import\s+|from\s+\w+\s+import|function\s+|const\s+|let\s+|"
     r"here'?s\s+(?:the\s+)?code|see\s+code\s+below|implementation|code:|snippet|python|"
     r"agent\s*=|task\s*=|crew|crewai|langchain|analyst agent|writer agent|"
-    r"let'?s\s+implement|the\s+following\s+code|check\s+this\s+code)",
+    r"let'?s\s+implement|the\s+following\s+code|check\s+this\s+code|kickoff|result\s*=)",
     re.IGNORECASE,
 )
 
@@ -28,7 +29,7 @@ _DIAGRAM_CUES = re.compile(
     r"(?:diagram|architecture|workflow|flowchart|pipeline|figure\s+\d+|illustration|"
     r"system overview|component graph|data flow|interaction diagram|schema)",
     re.IGNORECASE,
-)
+) 
 
 _TABLE_CUES = re.compile(
     r"(?:table\s+\d+|benchmark results|comparison table|matrix|summary of features|parameters\s+table)",
@@ -73,8 +74,34 @@ class VisualContentType(str, Enum):
     CODE_SCREENSHOT = "code_screenshot"
     DIAGRAM_ARCHITECTURE = "diagram_architecture"
     TABLE_DATA = "table_data"
+    FIGURE = "figure"
+    IMAGE = "image"
     SCANNED_TEXT = "scanned_text"
     DECORATIVE_IMAGE = "decorative_image"
+
+
+def _content_type_for_visual_type(visual_type: str | VisualContentType) -> str:
+    """Map a persisted visual type back to the public chunk content type."""
+    value = visual_type.value if isinstance(visual_type, VisualContentType) else str(visual_type)
+    if value == VisualContentType.CODE_SCREENSHOT.value:
+        return "code"
+    if value == VisualContentType.TABLE_DATA.value:
+        return "table"
+    return "prose"
+
+
+def _coerce_visual_type(value: VisualContentType | str | None) -> VisualContentType | None:
+    """Normalize the request-level visual types accepted by older callers."""
+    if isinstance(value, VisualContentType):
+        return value
+    normalized = str(value or "").strip().lower()
+    if "code" in normalized:
+        return VisualContentType.CODE_SCREENSHOT
+    if "table" in normalized:
+        return VisualContentType.TABLE_DATA
+    if normalized and any(token in normalized for token in ("diagram", "architecture", "figure", "image", "workflow")):
+        return VisualContentType.DIAGRAM_ARCHITECTURE
+    return None
 
 
 class VisionCircuitBreaker:
@@ -122,6 +149,7 @@ class VisualDetectionResult:
     image_bytes: bytes | None = None
     image_hash: str | None = None
     page_number: int = 1
+    display_page_number: str | int | None = None
     page_label: str = "1"
     internal_page_index: int = 0
     image_count: int = 0
@@ -134,12 +162,22 @@ class VisualExtractionChunk:
     content_type: str  # 'code', 'table', 'diagram', or 'prose'
     visual_type: str
     page_number: int
+    display_page_number: str | int | None = None
     page_label: str = "1"
     internal_page_index: int = 0
     image_hash: str = ""
+    asset_id: str | None = None
     section_title: str | None = None
     raw_code: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def get_page_identity(self) -> PageIdentity:
+        return PageIdentity.from_indices(
+            internal_page_index=self.internal_page_index,
+            physical_page_number=self.page_number,
+            display_page_number=self.display_page_number,
+            page_label=self.page_label,
+        )
 
 
 class VisionService:
@@ -173,6 +211,7 @@ class VisionService:
         image_bytes: bytes | None = None,
         image_count: int = 0,
         page_number: int = 1,
+        display_page_number: str | int | None = None,
         page_label: str = "1",
         internal_page_index: int = 0,
         image_width: int = 0,
@@ -183,6 +222,7 @@ class VisionService:
         Evaluate whether a PDF page contains visual information that warrants vision processing.
         Uses heuristics to skip plain text pages and classify visual pages.
         """
+        disp_label = str(page_label) if page_label is not None else str(display_page_number or page_number or 1)
         # Rule 1: No images and no visual cues -> Pure text, skip
         if image_count == 0 and image_bytes is None:
             return VisualDetectionResult(
@@ -191,7 +231,8 @@ class VisionService:
                 confidence=0.99,
                 reason="Plain text page with zero embedded images.",
                 page_number=page_number,
-                page_label=page_label,
+                display_page_number=display_page_number,
+                page_label=disp_label,
                 internal_page_index=internal_page_index,
             )
 
@@ -204,8 +245,9 @@ class VisionService:
                     confidence=0.90,
                     reason=f"Small decorative image ignored ({image_width}x{image_height}).",
                     page_number=page_number,
-                    page_label=page_label,
-                    internal_page_index=internal_page_index,
+                    display_page_number=display_page_number,
+                    page_label=disp_label,
+                    internal_page_index=internal_page_index,       
                 )
 
         img_hash = VisionCacheManager.compute_image_hash(image_bytes) if image_bytes else None
@@ -221,7 +263,8 @@ class VisionService:
                 image_bytes=image_bytes,
                 image_hash=img_hash,
                 page_number=page_number,
-                page_label=page_label,
+                display_page_number=display_page_number,
+                page_label=disp_label,
                 internal_page_index=internal_page_index,
                 image_count=image_count,
                 dimensions=(image_width, image_height) if image_width and image_height else None,
@@ -237,7 +280,8 @@ class VisionService:
                 image_bytes=image_bytes,
                 image_hash=img_hash,
                 page_number=page_number,
-                page_label=page_label,
+                display_page_number=display_page_number,
+                page_label=disp_label,
                 internal_page_index=internal_page_index,
                 image_count=image_count,
                 dimensions=(image_width, image_height) if image_width and image_height else None,
@@ -253,7 +297,8 @@ class VisionService:
                 image_bytes=image_bytes,
                 image_hash=img_hash,
                 page_number=page_number,
-                page_label=page_label,
+                display_page_number=display_page_number,
+                page_label=disp_label,
                 internal_page_index=internal_page_index,
                 image_count=image_count,
                 dimensions=(image_width, image_height) if image_width and image_height else None,
@@ -269,7 +314,8 @@ class VisionService:
                 image_bytes=image_bytes,
                 image_hash=img_hash,
                 page_number=page_number,
-                page_label=page_label,
+                display_page_number=display_page_number,
+                page_label=disp_label,
                 internal_page_index=internal_page_index,
                 image_count=image_count,
                 dimensions=(image_width, image_height) if image_width and image_height else None,
@@ -285,7 +331,8 @@ class VisionService:
                 image_bytes=image_bytes,
                 image_hash=img_hash,
                 page_number=page_number,
-                page_label=page_label,
+                display_page_number=display_page_number,
+                page_label=disp_label,
                 internal_page_index=internal_page_index,
                 image_count=image_count,
                 dimensions=(image_width, image_height) if image_width and image_height else None,
@@ -300,7 +347,8 @@ class VisionService:
             image_bytes=image_bytes,
             image_hash=img_hash,
             page_number=page_number,
-            page_label=page_label,
+            display_page_number=display_page_number,
+            page_label=disp_label,
             internal_page_index=internal_page_index,
             image_count=image_count,
         )
@@ -311,24 +359,27 @@ class VisionService:
         visual_type: VisualContentType,
         document_id: str | None = None,
         page_number: int | None = None,
+        display_page_number: str | int | None = None,
         page_label: str | None = None,
         internal_page_index: int | None = None,
         section_title: str | None = None,
         extra_metadata: dict[str, Any] | None = None,
-        timeout: float = 40.0,
+        timeout: float | None = None,
         is_query_time: bool = False,
     ) -> VisualExtractionChunk | None:
         """
         Extract code or structural description from image bytes using the vision model and disk cache.
         Includes circuit breaker, bounded concurrency, negative caching, and strict retry limits:
         - Ingestion time: ZERO retries (max_attempts = 1).
-        - Query time: Controlled at most 1 retry (max_attempts = 2).
+        - Query time: Controlled bounded retries with adaptive downscaling.
         """
         if not image_bytes:
             return None
 
+        effective_timeout = timeout or getattr(settings, "vision_request_timeout", 35.0)
         image_hash = VisionCacheManager.compute_image_hash(image_bytes)
-        disp_label = page_label or str(page_number or 1)
+        asset_id = f"ast_{image_hash[:12]}"
+        disp_label = str(page_label) if page_label is not None else str(display_page_number or page_number or 1)
         int_idx = internal_page_index if internal_page_index is not None else ((page_number or 1) - 1)
         t_start = time.perf_counter()
 
@@ -342,7 +393,7 @@ class VisionService:
         if cached_entry:
             extracted_text = cached_entry.get("extracted_text", "")
             cached_type = cached_entry.get("visual_type", visual_type.value)
-            content_type = "code" if cached_type == VisualContentType.CODE_SCREENSHOT.value else "prose"
+            content_type = _content_type_for_visual_type(cached_type)
             try:
                 from backend.api.dependencies import get_telemetry_service
                 get_telemetry_service().record_vision_event(
@@ -367,9 +418,11 @@ class VisionService:
                 content_type=content_type,
                 visual_type=cached_type,
                 page_number=page_number or 1,
+                display_page_number=display_page_number,
                 page_label=disp_label,
                 internal_page_index=int_idx,
                 image_hash=image_hash,
+                asset_id=asset_id,
                 section_title=section_title,
                 raw_code=extracted_text if content_type == "code" else None,
                 metadata=cached_entry.get("metadata", {}),
@@ -399,7 +452,8 @@ class VisionService:
             return None
 
         # 4. Select Specialized Prompt
-        if visual_type == VisualContentType.CODE_SCREENSHOT:
+        is_code_type = (visual_type == VisualContentType.CODE_SCREENSHOT)
+        if is_code_type:
             prompt = CODE_EXTRACTION_PROMPT
             content_type = "code"
         elif visual_type == VisualContentType.TABLE_DATA:
@@ -421,13 +475,17 @@ class VisionService:
             )
             return None
 
-        # 6. Optimize/Downscale Image for Fast VLM Inference (Max Dim 1024px)
+        # 6. Optimize/Downscale Image for Fast VLM Inference
         max_dim = getattr(settings, "vision_inference_max_dimension", 1024)
-        inference_image_bytes = ImageAssetManager.get_optimized_inference_bytes(image_bytes, max_dim=max_dim)
+        inference_image_bytes = ImageAssetManager.get_optimized_inference_bytes(
+            image_bytes,
+            is_code=is_code_type,
+            max_dim=max_dim,
+        )
 
-        # 7. Determine Retry Policy: Ingestion = 0 retries (1 attempt), Query-time = 1 retry (2 attempts)
+        # 7. Determine Retry Policy: Ingestion = 0 retries (1 attempt), Query-time = configured retries
         if is_query_time:
-            max_attempts = 1 + getattr(settings, "vision_max_lazy_retries", 1)
+            max_attempts = 1 + getattr(settings, "vision_max_lazy_retries", 0)
         else:
             max_attempts = 1 + getattr(settings, "vision_max_ingestion_retries", 0)
 
@@ -436,9 +494,21 @@ class VisionService:
 
         with self._semaphore:
             for attempt in range(1, max_attempts + 1):
+                cur_timeout = effective_timeout
+                cur_img_bytes = inference_image_bytes
+
+                # Adaptive retry on second attempt: downscale image to 768px and reduce timeout
+                if attempt > 1:
+                    cur_timeout = min(effective_timeout, 20.0)
+                    cur_img_bytes = ImageAssetManager.get_optimized_inference_bytes(
+                        image_bytes,
+                        is_code=False,
+                        max_dim=768,
+                    )
+
                 try:
                     logger.info(
-                        "[VISION] Processing visual content: model=%s, doc=%s, page=%s (label=%s, idx=%s), type=%s, hash=%s, attempt=%d/%d",
+                        "[VISION] Processing visual content: model=%s, doc=%s, page=%s (label=%s, idx=%s), type=%s, hash=%s, attempt=%d/%d, timeout=%.1fs",
                         self.vision_model,
                         document_id,
                         page_number,
@@ -448,12 +518,13 @@ class VisionService:
                         image_hash[:8],
                         attempt,
                         max_attempts,
+                        cur_timeout,
                     )
                     extracted_text = execute_vision_completion(
                         prompt=prompt,
-                        image_bytes=inference_image_bytes,
+                        image_bytes=cur_img_bytes,
                         model_name=self.vision_model,
-                        timeout=timeout,
+                        timeout=cur_timeout,
                     )
                     if extracted_text:
                         self._circuit_breaker.record_success()
@@ -474,6 +545,9 @@ class VisionService:
                         disp_label,
                         elapsed,
                     )
+                    # If timeout or fatal error on attempt 1 with no adaptive retry, break early
+                    if "timeout" in str(exc).lower() and attempt >= max_attempts:
+                        break
         elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
 
         if not extracted_text:
@@ -503,9 +577,18 @@ class VisionService:
                 )
             return None
 
-        # Format code block cleanly if it is code extraction
-        if visual_type == VisualContentType.CODE_SCREENSHOT and not extracted_text.startswith("```"):
-            extracted_text = f"```python\n{extracted_text}\n```"
+        # Check if the extracted text looks like code even if detected as diagram initially
+        is_code = (
+            visual_type == VisualContentType.CODE_SCREENSHOT
+            or "```python" in extracted_text
+            or "```" in extracted_text
+            or bool(_CODE_CUES.search(extracted_text))
+        )
+        if is_code:
+            visual_type = VisualContentType.CODE_SCREENSHOT
+            content_type = "code"
+            if not extracted_text.startswith("```"):
+                extracted_text = f"```python\n{extracted_text}\n```"
 
         # 8. Persist to Cache & Update Image Asset
         meta_dict = {
@@ -513,8 +596,10 @@ class VisionService:
             "vision_model": self.vision_model,
             "section_title": section_title,
             "page_label": disp_label,
+            "display_page_number": display_page_number,
             "internal_page_index": int_idx,
-            "image_url": f"/api/documents/{document_id}/images/{image_hash}" if document_id else None,
+            "asset_id": asset_id,
+            "image_url": f"/api/documents/{document_id}/visual-assets/{asset_id}" if document_id else None,
             **(extra_metadata or {}),
         }
         self.cache.set(
@@ -560,26 +645,106 @@ class VisionService:
             content_type=content_type,
             visual_type=visual_type.value,
             page_number=page_number or 1,
+            display_page_number=display_page_number,
             page_label=disp_label,
             internal_page_index=int_idx,
             image_hash=image_hash,
+            asset_id=asset_id,
             section_title=section_title,
             raw_code=extracted_text if content_type == "code" else None,
             metadata=meta_dict,
         )
 
+    def extract_stored_assets(
+        self,
+        document_id: str,
+        page_number: int,
+        section_title: str | None = None,
+        required_visual_type: VisualContentType | str | None = None,
+        timeout: float | None = None,
+        is_query_time: bool = True,
+        max_assets: int = 4,
+    ) -> list[VisualExtractionChunk]:
+        """Extract saved original assets instead of re-rendering an entire PDF page.
+
+        A page can contain several visuals. Selecting the largest embedded image can
+        miss a smaller code screenshot, so code requests must inspect the original
+        matching assets individually.
+        """
+        assets = self.image_asset_manager.get_page_assets_by_physical_page(document_id, page_number)
+        requested_type = _coerce_visual_type(required_visual_type)
+        if requested_type is not None:
+            if requested_type == VisualContentType.DIAGRAM_ARCHITECTURE:
+                # Asset classification is heuristic. A relevant diagram can be stored
+                # as a figure or generic image, so keep those candidates for the VLM.
+                diagram_types = ("diagram", "architecture", "figure", "image", "workflow")
+                assets = [
+                    asset
+                    for asset in assets
+                    if any(token in (asset.visual_type or "").lower() for token in diagram_types)
+                    or any(token in (asset.content_type or "").lower() for token in diagram_types)
+                ]
+            else:
+                required = requested_type.value
+                assets = [
+                    asset
+                    for asset in assets
+                    if required in (asset.visual_type or "").lower()
+                    or required in (asset.content_type or "").lower()
+                ]
+
+        results: list[VisualExtractionChunk] = []
+        for asset in assets[:max_assets]:
+            try:
+                image_bytes = Path(asset.file_path).read_bytes()
+            except OSError as exc:
+                logger.warning(
+                    "[VISION] Could not read saved asset %s for doc=%s page=%s: %s",
+                    asset.asset_id,
+                    document_id,
+                    page_number,
+                    exc,
+                )
+                continue
+
+            visual_type = (
+                VisualContentType.CODE_SCREENSHOT
+                if "code" in (asset.visual_type or "").lower()
+                else VisualContentType.TABLE_DATA
+                if "table" in (asset.visual_type or "").lower()
+                else VisualContentType.DIAGRAM_ARCHITECTURE
+            )
+            extracted = self.extract_from_image(
+                image_bytes=image_bytes,
+                visual_type=visual_type,
+                document_id=document_id,
+                page_number=asset.physical_page_number,
+                display_page_number=asset.display_page_number,
+                page_label=asset.page_label,
+                internal_page_index=asset.internal_page_index,
+                section_title=section_title or asset.section_title,
+                timeout=timeout,
+                is_query_time=is_query_time,
+            )
+            if extracted:
+                results.append(extracted)
+
+        return results
+
     def process_pdf_page_visuals(
         self,
         pdf_path: Path | str,
         page_number: int,
-        page_text: str,
+        page_text: str = "",
         document_id: str | None = None,
         section_title: str | None = None,
         continuation_cue: str | None = None,
         live_inference: bool = True,
-        timeout: float = 40.0,
+        timeout: float | None = None,
+        display_page_number: str | int | None = None,
         page_label: str | None = None,
         internal_page_index: int | None = None,
+        required_visual_type: VisualContentType | str | None = None,
         is_query_time: bool = False,
     ) -> list[VisualExtractionChunk]:
         """
@@ -591,8 +756,18 @@ class VisionService:
         if not path.is_file():
             return results
 
+        if document_id and (display_page_number is None or page_label is None or internal_page_index is None):
+            known_assets = self.image_asset_manager.get_page_assets_by_physical_page(document_id, page_number)
+            if known_assets:
+                if display_page_number is None:
+                    display_page_number = known_assets[0].display_page_number
+                if page_label is None:
+                    page_label = known_assets[0].page_label
+                if internal_page_index is None:
+                    internal_page_index = known_assets[0].internal_page_index
+
         int_idx = internal_page_index if internal_page_index is not None else (page_number - 1)
-        disp_label = page_label or str(page_number)
+        disp_label = str(page_label) if page_label is not None else str(display_page_number or page_number)
 
         try:
             import fitz
@@ -603,6 +778,19 @@ class VisionService:
                 return results
 
             page = doc[int_idx]
+            page_text_extracted = page.get_text()
+            if not page_text:
+                page_text = page_text_extracted
+
+            if display_page_number is None or page_label is None:
+                from backend.ingestion.page_detector import PrintedPageDetector
+                p_ident = PrintedPageDetector.detect_single_page(page_text_extracted, page_number)
+                if display_page_number is None:
+                    display_page_number = p_ident.display_page_number
+                if page_label is None:
+                    page_label = p_ident.page_label
+                disp_label = str(page_label)
+
             image_list = page.get_images(full=True)
             image_count = len(image_list)
 
@@ -648,6 +836,7 @@ class VisionService:
                     image_bytes=best_image_bytes,
                     image_count=image_count,
                     page_number=page_number,
+                    display_page_number=display_page_number,
                     page_label=disp_label,
                     internal_page_index=int_idx,
                     image_width=best_w,
@@ -655,9 +844,70 @@ class VisionService:
                     continuation_cue=continuation_cue,
                 )
                 if detection.has_visual and detection.image_bytes:
+                    img_hash = detection.image_hash or VisionCacheManager.compute_image_hash(detection.image_bytes)
+                    asset_id = f"ast_{img_hash[:12]}"
+
+                    # If query specifically requires a certain visual type (e.g. code_screenshot),
+                    # check positive cache first. If not cached, skip live inference if visual type doesn't match!
+                    if required_visual_type:
+                        req_val = required_visual_type.value if hasattr(required_visual_type, "value") else str(required_visual_type)
+                        if detection.visual_type.value != req_val:
+                            cached_entry = self.cache.get(
+                                image_hash=img_hash,
+                                vision_model=self.vision_model,
+                                document_id=document_id,
+                                page_number=page_number,
+                            )
+                            if cached_entry:
+                                extracted_text = cached_entry.get("extracted_text", "")
+                                cached_type = cached_entry.get("visual_type", detection.visual_type.value)
+                                content_type = _content_type_for_visual_type(cached_type)
+                                results.append(
+                                    VisualExtractionChunk(
+                                        text=extracted_text,
+                                        content_type=content_type,
+                                        visual_type=cached_type,
+                                        page_number=page_number,
+                                        display_page_number=display_page_number,
+                                        page_label=disp_label,
+                                        internal_page_index=int_idx,
+                                        image_hash=img_hash,
+                                        asset_id=asset_id,
+                                        section_title=section_title,
+                                        raw_code=extracted_text if content_type == "code" else None,
+                                        metadata=cached_entry.get("metadata", {}),
+                                    )
+                                )
+                                return results
+
+                            requested = _coerce_visual_type(required_visual_type)
+                            if requested is None:
+                                logger.info(
+                                    "[VISION] Skipping live inference on mismatched visual type '%s' (query requires '%s') for doc=%s page=%s (label=%s)",
+                                    detection.visual_type.value,
+                                    req_val,
+                                    document_id,
+                                    page_number,
+                                    disp_label,
+                                )
+                                return results
+
+                            # Text-only heuristics can call a diagram a code screenshot
+                            # (and vice versa). At query time the explicit request is more
+                            # reliable, so use its specialised prompt rather than silently
+                            # discarding the only candidate visual.
+                            logger.info(
+                                "[VISION] Reclassifying heuristic visual type '%s' as requested '%s' for doc=%s page=%s (label=%s)",
+                                detection.visual_type.value,
+                                requested.value,
+                                document_id,
+                                page_number,
+                                disp_label,
+                            )
+                            detection.visual_type = requested
+
                     if not live_inference:
                         # Cache-only lookup during initial fast load
-                        img_hash = detection.image_hash or VisionCacheManager.compute_image_hash(detection.image_bytes)
                         cached_entry = self.cache.get(
                             image_hash=img_hash,
                             vision_model=self.vision_model,
@@ -667,16 +917,18 @@ class VisionService:
                         if cached_entry:
                             extracted_text = cached_entry.get("extracted_text", "")
                             cached_type = cached_entry.get("visual_type", detection.visual_type.value)
-                            content_type = "code" if cached_type == VisualContentType.CODE_SCREENSHOT.value else "prose"
+                            content_type = _content_type_for_visual_type(cached_type)
                             results.append(
                                 VisualExtractionChunk(
                                     text=extracted_text,
                                     content_type=content_type,
                                     visual_type=cached_type,
                                     page_number=page_number,
+                                    display_page_number=display_page_number,
                                     page_label=disp_label,
                                     internal_page_index=int_idx,
                                     image_hash=img_hash,
+                                    asset_id=asset_id,
                                     section_title=section_title,
                                     raw_code=extracted_text if content_type == "code" else None,
                                     metadata=cached_entry.get("metadata", {}),
@@ -689,6 +941,7 @@ class VisionService:
                         visual_type=detection.visual_type,
                         document_id=document_id,
                         page_number=page_number,
+                        display_page_number=display_page_number,
                         page_label=disp_label,
                         internal_page_index=int_idx,
                         section_title=section_title,

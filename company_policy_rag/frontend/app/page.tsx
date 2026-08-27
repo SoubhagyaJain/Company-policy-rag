@@ -86,9 +86,15 @@ export default function HomePage() {
 
   /* Persist chat messages back into the active session whenever messages change */
   useEffect(() => {
-    if (isLoaded && activeSessionId && messages.length > 0) {
+    if (!isLoaded || !activeSessionId || messages.length === 0) return;
+
+    // Streaming updates arrive rapidly. Persist the latest snapshot after the
+    // burst settles instead of rewriting sessions/localStorage for every token.
+    const persistTimer = window.setTimeout(() => {
       updateSessionMessages(activeSessionId, messages);
-    }
+    }, 180);
+
+    return () => window.clearTimeout(persistTimer);
   }, [messages, activeSessionId, isLoaded, updateSessionMessages]);
 
   /* ─── Handlers ───────────────────────────────── */

@@ -19,15 +19,17 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import { QueryTrace } from '../lib/types';
 
 interface QueryTraceDrawerProps {
   trace: QueryTrace | null;
   onClose: () => void;
+  onDelete?: (traceId: string) => void;
 }
 
-export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClose }) => {
+export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClose, onDelete }) => {
   const [showRawJson, setShowRawJson] = useState(false);
   const [activeTab, setActiveTab] = useState<'waterfall' | 'evidence' | 'grounding' | 'json'>('waterfall');
 
@@ -102,12 +104,29 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
             )}
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 text-charcoal-muted hover:text-charcoal dark:text-cream-400 dark:hover:text-cream-100 hover:bg-cream-200 dark:hover:bg-sand-dark rounded-xl transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onDelete && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Delete trace "${trace.original_query.slice(0, 30)}..."?`)) {
+                    onDelete(trace.trace_id);
+                    onClose();
+                  }
+                }}
+                className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 rounded-xl transition-colors"
+                title="Delete this query trace"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 text-charcoal-muted hover:text-charcoal dark:text-cream-400 dark:hover:text-cream-100 hover:bg-cream-200 dark:hover:bg-sand-dark rounded-xl transition-colors"
+              title="Close drawer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Quick KPI Strip */}

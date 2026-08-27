@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { ChatMessageData, Citation, FilterOptions, DocumentItem } from '../lib/types';
 import { ChatMessage } from './ChatMessage';
+import { AmbientKnowledgeField } from './AmbientKnowledgeField';
 import { apiClient } from '../lib/api-client';
 
 interface ChatWindowProps {
@@ -328,9 +329,10 @@ export function ChatWindow({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-57px)] bg-[#FAF8F5] dark:bg-[#161513] relative overflow-hidden font-sans">
+    <div className="flex-1 flex flex-col h-[calc(100vh-57px)] bg-[#F7F3EA] dark:bg-[#151512] relative overflow-hidden font-sans isolation-isolate">
+      <AmbientKnowledgeField />
       {/* Top Bar - Minimalist Anthropic Header */}
-      <div className="px-4 py-2.5 border-b border-[#E8E2D5]/70 dark:border-[#262421]/70 flex items-center justify-between backdrop-blur-md bg-[#FAF8F5]/80 dark:bg-[#161513]/80 z-20">
+      <div className="px-4 py-2.5 border-b border-[#E8E2D5]/60 dark:border-[#302D27]/60 flex items-center justify-between bg-[#FAF8F5]/90 dark:bg-[#161513]/90 z-20">
         <div className="flex items-center gap-2">
           {/* Enhanced Document / Category Filter Pill */}
           <div className="relative" ref={filterRef}>
@@ -618,13 +620,13 @@ export function ChatWindow({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-4 custom-scrollbar"
+        className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-4 custom-scrollbar"
       >
         {messages.length === 0 ? (
           /* Anthropic-Style Elegant Welcome Screen */
           <div className="max-w-2xl mx-auto py-10 sm:py-16 text-center space-y-8 animate-in fade-in duration-300">
             {/* Claude-style warm sun / star emblem */}
-            <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-b from-terracotta-500/20 to-terracotta-600/10 text-terracotta-600 dark:text-terracotta-400 flex items-center justify-center border border-terracotta-500/30 shadow-sm">
+            <div className="knowledge-emblem w-16 h-16 mx-auto rounded-full bg-[#F8F3E8]/88 dark:bg-[#201E1A]/88 text-terracotta-600 dark:text-terracotta-400 flex items-center justify-center border border-terracotta-500/30 shadow-sm">
               <Sparkles className="w-8 h-8 stroke-[1.8]" />
             </div>
 
@@ -646,7 +648,7 @@ export function ChatWindow({
                   <button
                     key={idx}
                     onClick={() => handlePromptClick(item.prompt)}
-                    className="p-4 rounded-2xl bg-[#F3EFE6]/70 dark:bg-[#1E1D1A]/80 border border-[#E5E0D5] dark:border-[#2D2B27] hover:border-terracotta-500/50 hover:bg-[#EDE8DC] dark:hover:bg-[#252420] transition-all duration-200 group shadow-xs"
+                    className="p-4 rounded-2xl bg-[#F8F4EA]/88 dark:bg-[#1E1D1A]/88 border border-white/55 dark:border-[#3A3730]/65 hover:border-terracotta-500/50 hover:bg-[#F3EBDD]/95 dark:hover:bg-[#252420]/95 transition-all duration-200 group shadow-[0_12px_35px_rgba(74,58,37,0.06)]"
                   >
                     <div className="flex items-center gap-2 mb-1.5">
                       <Icon className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400 group-hover:scale-105 transition-transform" />
@@ -698,10 +700,10 @@ export function ChatWindow({
       </AnimatePresence>
 
       {/* Floating Claude-Style Input Container */}
-      <div className="p-4 sm:p-5 bg-gradient-to-t from-[#FAF8F5] via-[#FAF8F5]/90 to-transparent dark:from-[#161513] dark:via-[#161513]/90 z-20">
+      <div className="p-4 sm:p-5 bg-gradient-to-t from-[#F7F3EA] via-[#F7F3EA]/82 to-transparent dark:from-[#151512] dark:via-[#151512]/84 z-20">
         <div className="max-w-3xl mx-auto space-y-2">
           {/* Main Rounded Input Box */}
-          <div className="relative rounded-3xl bg-[#F4F0E6] dark:bg-[#201F1C] border border-[#E2DBD0] dark:border-[#2F2D29] focus-within:border-terracotta-500/70 focus-within:ring-2 focus-within:ring-terracotta-500/15 shadow-sm p-2 sm:p-3 transition-all">
+          <div className="relative rounded-3xl bg-[#F8F4EB]/94 dark:bg-[#201F1C]/94 border border-white/65 dark:border-[#3A3731]/75 focus-within:border-terracotta-500/70 focus-within:ring-2 focus-within:ring-terracotta-500/15 shadow-[0_16px_50px_rgba(63,48,31,0.11)] p-2 sm:p-3 transition-all">
             <textarea
               ref={textareaRef}
               value={input}

@@ -1,4 +1,6 @@
 import time
+import asyncio
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -113,8 +115,10 @@ def warmup_rag_system() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager: preloads and warms up all models before accepting traffic."""
-    warmup_rag_system()
-    yield      
+    await asyncio.to_thread(warmup_rag_system)
+    yield
+
+
 def create_app() -> FastAPI:
     """FastAPI application factory configuring CORS, routers, and global error handling."""
     app = FastAPI(
@@ -122,7 +126,7 @@ def create_app() -> FastAPI:
         description="FastAPI backend providing RAG chat, sub-1s TTFT SSE streaming, document ingestion, and admin observability.",
         version="1.0.0",
         docs_url="/docs",
-        redoc_url="/redoc",
+        redoc_url="/redoc",  
         lifespan=lifespan,
     )
 
@@ -147,14 +151,17 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def filter_polling_logs_middleware(request: Request, call_next):
         path = request.url.path
+        request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:12]}"
+        request.state.request_id = request_id
         is_polling = path in ("/api/health", "/api/admin/observability") or (path.startswith("/api/documents/") and path.endswith("/status"))
         
         t0 = time.perf_counter()
         response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
         elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
 
         if not is_polling:
-            logger.info("[HTTP] %s %s -> %d (%.2fms)", request.method, path, response.status_code, elapsed_ms)
+            logger.info("[HTTP] request_id=%s %s %s -> %d (%.2fms)", request_id, request.method, path, response.status_code, elapsed_ms)
         else:
             logger.debug("[HTTP POLL] %s %s -> %d (%.2fms)", request.method, path, response.status_code, elapsed_ms)
 
@@ -171,10 +178,16 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        logger.exception("Unhandled server error on %s: %s", request.url.path, exc)
+        request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
+        logger.exception("Unhandled server error request_id=%s path=%s: %s", request_id, request.url.path, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": f"Internal server error: {exc!s}", "error_code": "INTERNAL_ERROR"},
+            content={
+                "detail": "Internal server error.",
+                "error_code": "INTERNAL_ERROR",
+                "request_id": request_id,
+            },
+            headers={"X-Request-ID": request_id},
         )
 
     @app.get("/")

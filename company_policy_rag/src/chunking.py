@@ -104,7 +104,7 @@ def _chunk_code(
     parent_id: str,
 ) -> list[TextNode]:
     source_file = base_meta.get("source_file", "document")
-    page = base_meta.get("page_number")
+    page = base_meta.get("display_page_number") or base_meta.get("page_label") or base_meta.get("page_number")
     page_label = f" p.{page}" if page else ""
     prefix = f"[CODE BLOCK — {source_file}{page_label}]\n"
     body = prefix + text

@@ -2,7 +2,7 @@ import type { ChatMessage } from "../api/client";
 import type { Citation } from "./CitationPanel";
 import { FeedbackBar } from "./FeedbackBar";
 import { ObservabilityPanel } from "./ObservabilityPanel";
-import { ThinkingBlock } from "./ThinkingBlock";
+import { ThinkingPanel } from "./ThinkingPanel";
 
 interface Props {
   messages: ChatMessage[];
@@ -43,7 +43,28 @@ export function ChatThread({
         return (
           <div key={i} className="flex justify-start">
             <div className="max-w-[90%] px-5 py-4 rounded-2xl rounded-bl-md bg-sidebar text-white/90 text-sm shadow-[0_8px_32px_rgba(28,24,48,0.12)] border border-white/5">
-              {m.thinking && <ThinkingBlock thinking={m.thinking} />}
+              {((m.thinking_events && m.thinking_events.length > 0) || m.thinking) && (
+                <ThinkingPanel
+                  events={
+                    m.thinking_events ||
+                    (m.thinking
+                      ? [
+                          {
+                            id: 'thk_legacy',
+                            query_id: '',
+                            stage: 'answer_planning',
+                            status: 'completed',
+                            title: 'Reasoning',
+                            summary: m.thinking,
+                            duration_ms: 0,
+                          },
+                        ]
+                      : [])
+                  }
+                  isStreaming={m.isStreaming}
+                  reasoningSummary={m.reasoning_summary}
+                />
+              )}
               <div className="whitespace-pre-wrap leading-relaxed">
                 {m.content}
                 {m.isStreaming && (

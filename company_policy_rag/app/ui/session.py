@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+import uuid
 
 import streamlit as st
 from llama_index.core.agent import ReActAgent
@@ -60,10 +61,14 @@ def settings_fingerprint() -> str:
 def ensure_session_state() -> None:
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = f"sess_{uuid.uuid4().hex[:12]}"
     if "initialized" not in st.session_state:
         st.session_state.initialized = False
     if "corpus_scope" not in st.session_state:
         st.session_state.corpus_scope = "all"
+    if "thinking_detail_level" not in st.session_state:
+        st.session_state.thinking_detail_level = "standard"
     if "timing_samples" not in st.session_state:
         st.session_state.timing_samples = []
     if "chat_mode" not in st.session_state:
@@ -128,18 +133,70 @@ def ensure_query_engine(user_message: str | None = None) -> Any:
     return engine
 
 
+def clear_chat_session() -> None:
+    """Clear conversation history and evict session from backend state manager."""
+    session_id = st.session_state.get("session_id")
+    if session_id:
+        try:
+            from backend.api.dependencies import get_chat_service
+            chat_service = get_chat_service()
+            chat_service.clear_session(session_id)
+        except Exception:
+            pass
+    st.session_state.messages = []
+    st.session_state.pending_user_prompt = None
+    st.session_state.session_id = f"sess_{uuid.uuid4().hex[:12]}"
+    memory = st.session_state.get("memory")
+    if memory is not None:
+        memory.reset()
+
+
 def run_direct_turn(user_message: str) -> AgentTurnResult:
-    """Single-shot RAG without ReAct agent overhead."""
+    """Single-shot RAG with Thinking State Machine and evidence tracking."""
     scope = st.session_state.get("corpus_scope", "all")
-    turn = run_chat_turn(
-        user_message,
-        corpus_scope=scope,
-        chat_mode="direct",
-        grounding_mode=resolve_grounding_mode(),
-    )
+    detail_level = st.session_state.get("thinking_detail_level", "standard")
+    session_id = st.session_state.get("session_id")
+    if not session_id:
+        session_id = f"sess_{uuid.uuid4().hex[:12]}"
+        st.session_state.session_id = session_id
+
+    try:
+        from backend.api.dependencies import get_chat_service
+        from backend.models.api_dto import ChatRequest
+
+        chat_service = get_chat_service()
+        req = ChatRequest(
+            message=user_message,
+            session_id=session_id,
+            grounding_mode=resolve_grounding_mode(),
+            document_scope=None if scope == "all" else scope,
+            thinking_detail_level=detail_level,
+        )
+        res = chat_service.execute_query(req)
+
+        turn = AgentTurnResult(
+            answer=res.answer,
+            citations=[c.model_dump() if hasattr(c, "model_dump") else c for c in res.citations],
+            timing=res.timing,
+            low_confidence=res.low_confidence,
+            grounding_mode=resolve_grounding_mode(),
+            thinking_events=[ev.model_dump() if hasattr(ev, "model_dump") else ev for ev in res.thinking_events],
+            reasoning_summary=res.reasoning_summary.model_dump() if hasattr(res.reasoning_summary, "model_dump") else res.reasoning_summary,
+            retrieval_trace=res.retrieval_trace,
+            message_id=res.id,
+        )
+    except Exception as exc:
+        logger.warning("Backend ChatService execution fallback in direct turn: %s", exc)
+        turn = run_chat_turn(
+            user_message,
+            corpus_scope=scope,
+            chat_mode="direct",
+            grounding_mode=resolve_grounding_mode(),
+        )
+
     if turn.timing:
         samples: list[float] = st.session_state.get("timing_samples", [])
-        e2e = turn.timing.get("e2e_ms", 0)
+        e2e = turn.timing.get("e2e_ms", 0) or turn.timing.get("total_latency_ms", 0)
         if e2e:
             samples.append(float(e2e))
             st.session_state.timing_samples = samples[-50:]
@@ -151,17 +208,52 @@ def run_agent_turn(
     user_message: str,
     memory: ChatMemoryBuffer | None,
 ) -> AgentTurnResult:
-    del agent, memory  # backend managed by chat_service
+    """Agentic multi-turn with FollowUpResolver and conversation evidence continuity."""
+    del agent, memory  # backend managed by ChatService ConversationStateManager
     scope = st.session_state.get("corpus_scope", "all")
-    turn = run_chat_turn(
-        user_message,
-        corpus_scope=scope,
-        chat_mode="agent",
-        grounding_mode=resolve_grounding_mode(),
-    )
+    detail_level = st.session_state.get("thinking_detail_level", "standard")
+    session_id = st.session_state.get("session_id")
+    if not session_id:
+        session_id = f"sess_{uuid.uuid4().hex[:12]}"
+        st.session_state.session_id = session_id
+
+    try:
+        from backend.api.dependencies import get_chat_service
+        from backend.models.api_dto import ChatRequest
+
+        chat_service = get_chat_service()
+        req = ChatRequest(
+            message=user_message,
+            session_id=session_id,
+            grounding_mode=resolve_grounding_mode(),
+            document_scope=None if scope == "all" else scope,
+            thinking_detail_level=detail_level,
+        )
+        res = chat_service.execute_query(req)
+
+        turn = AgentTurnResult(
+            answer=res.answer,
+            citations=[c.model_dump() if hasattr(c, "model_dump") else c for c in res.citations],
+            timing=res.timing,
+            low_confidence=res.low_confidence,
+            grounding_mode=resolve_grounding_mode(),
+            thinking_events=[ev.model_dump() if hasattr(ev, "model_dump") else ev for ev in res.thinking_events],
+            reasoning_summary=res.reasoning_summary.model_dump() if hasattr(res.reasoning_summary, "model_dump") else res.reasoning_summary,
+            retrieval_trace=res.retrieval_trace,
+            message_id=res.id,
+        )
+    except Exception as exc:
+        logger.warning("Backend ChatService execution fallback in agent turn: %s", exc)
+        turn = run_chat_turn(
+            user_message,
+            corpus_scope=scope,
+            chat_mode="agent",
+            grounding_mode=resolve_grounding_mode(),
+        )
+
     if turn.timing:
         samples: list[float] = st.session_state.get("timing_samples", [])
-        e2e = turn.timing.get("e2e_ms", 0)
+        e2e = turn.timing.get("e2e_ms", 0) or turn.timing.get("total_latency_ms", 0)
         if e2e:
             samples.append(float(e2e))
             st.session_state.timing_samples = samples[-50:]

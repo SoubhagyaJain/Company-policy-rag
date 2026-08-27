@@ -81,6 +81,274 @@
   .dropzone-active {
     @apply border-terracotta-500 bg-terracotta-500/5 dark:bg-terracotta-500/10;
   }
+
+  /* Living knowledge atlas — a cartographic background for the chat canvas. */
+  .knowledge-field {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    contain: paint;
+    background:
+      radial-gradient(circle at 52% 45%, rgba(255, 252, 245, 0.66), transparent 39%),
+      linear-gradient(145deg, #f8f3e9 0%, #f5efe4 52%, #f3eee5 100%);
+  }
+
+  .dark .knowledge-field {
+    background:
+      radial-gradient(circle at 52% 45%, rgba(37, 34, 28, 0.68), transparent 42%),
+      linear-gradient(145deg, #171612 0%, #141411 58%, #171511 100%);
+  }
+
+  .knowledge-aurora {
+    position: absolute;
+    width: 44vw;
+    min-width: 420px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    opacity: 0.44;
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  .dark .knowledge-aurora {
+    opacity: 0.24;
+  }
+
+  .knowledge-aurora--clay {
+    top: -27%;
+    left: -12%;
+    background: radial-gradient(circle, rgba(196, 88, 52, 0.46), rgba(196, 88, 52, 0) 69%);
+    animation: atlas-clay-drift 26s ease-in-out infinite alternate;
+  }
+
+  .knowledge-aurora--sage {
+    right: -15%;
+    bottom: -31%;
+    background: radial-gradient(circle, rgba(72, 124, 111, 0.42), rgba(72, 124, 111, 0) 69%);
+    animation: atlas-sage-drift 31s ease-in-out infinite alternate;
+  }
+
+  .knowledge-aurora--gold {
+    top: 26%;
+    left: 38%;
+    width: 27vw;
+    min-width: 280px;
+    background: radial-gradient(circle, rgba(220, 169, 77, 0.32), rgba(220, 169, 77, 0) 68%);
+    animation: atlas-gold-drift 24s ease-in-out infinite alternate;
+  }
+
+  .knowledge-atlas {
+    position: absolute;
+    inset: -12%;
+    width: 124%;
+    height: 124%;
+    overflow: visible;
+    transform: translate3d(0, 0, 0);
+    will-change: transform;
+    animation: atlas-float 32s ease-in-out infinite alternate;
+  }
+
+  .knowledge-contours {
+    fill: none;
+    stroke: rgba(116, 91, 64, 0.13);
+    stroke-width: 1.05;
+    stroke-linecap: round;
+    stroke-dasharray: 3 11;
+    animation: contour-breathe 9s ease-in-out infinite alternate;
+  }
+
+  .knowledge-contours--near {
+    stroke: rgba(69, 110, 100, 0.14);
+    stroke-dasharray: 2 14;
+    animation-delay: -4s;
+  }
+
+  .dark .knowledge-contours {
+    stroke: rgba(224, 180, 130, 0.13);
+  }
+
+  .dark .knowledge-contours--near {
+    stroke: rgba(115, 175, 158, 0.13);
+  }
+
+  .knowledge-route {
+    fill: none;
+    stroke: rgba(179, 73, 43, 0.2);
+    stroke-width: 1.15;
+    stroke-linecap: round;
+    stroke-dasharray: 1 9 24 11;
+    animation: route-travel 19s linear infinite;
+  }
+
+  .dark .knowledge-route {
+    stroke: rgba(222, 119, 85, 0.22);
+  }
+
+  .knowledge-node__core {
+    fill: rgba(177, 69, 38, 0.66);
+  }
+
+  .knowledge-node__halo {
+    fill: none;
+    stroke: rgba(177, 69, 38, 0.26);
+    stroke-width: 1;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: node-bloom 4.8s ease-out infinite;
+  }
+
+  .dark .knowledge-node__core {
+    fill: rgba(225, 127, 94, 0.68);
+  }
+
+  .dark .knowledge-node__halo {
+    stroke: rgba(225, 127, 94, 0.28);
+  }
+
+  .knowledge-node--2 .knowledge-node__halo { animation-delay: -1.1s; }
+  .knowledge-node--3 .knowledge-node__halo { animation-delay: -2.6s; }
+  .knowledge-node--4 .knowledge-node__halo { animation-delay: -3.7s; }
+  .knowledge-node--5 .knowledge-node__halo { animation-delay: -1.9s; }
+  .knowledge-node--6 .knowledge-node__halo { animation-delay: -4.2s; }
+
+  .knowledge-scan {
+    position: absolute;
+    left: -10%;
+    width: 120%;
+    height: 24%;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(255, 255, 255, 0.17) 47%,
+      rgba(181, 96, 59, 0.08) 50%,
+      transparent 54%
+    );
+    animation: atlas-scan 13s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .dark .knowledge-scan {
+    opacity: 0.42;
+  }
+
+  .knowledge-grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.055;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+  }
+
+  .dark .knowledge-grain {
+    opacity: 0.03;
+    mix-blend-mode: screen;
+  }
+
+  .knowledge-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to right, rgba(247, 243, 234, 0.58), transparent 17%, transparent 83%, rgba(247, 243, 234, 0.52)),
+      radial-gradient(ellipse at center, transparent 28%, rgba(247, 243, 234, 0.34) 100%);
+  }
+
+  .dark .knowledge-vignette {
+    background:
+      linear-gradient(to right, rgba(21, 21, 18, 0.62), transparent 17%, transparent 83%, rgba(21, 21, 18, 0.56)),
+      radial-gradient(ellipse at center, transparent 28%, rgba(21, 21, 18, 0.34) 100%);
+  }
+
+  .knowledge-emblem {
+    position: relative;
+    box-shadow:
+      0 0 0 8px rgba(193, 79, 45, 0.035),
+      0 18px 50px rgba(128, 73, 40, 0.1);
+    animation: emblem-float 6s ease-in-out infinite;
+  }
+
+  .knowledge-emblem::after {
+    content: '';
+    position: absolute;
+    inset: -9px;
+    border: 1px dashed rgba(183, 75, 43, 0.22);
+    border-radius: 47% 53% 45% 55%;
+    animation: emblem-orbit 18s linear infinite;
+  }
+}
+
+@keyframes atlas-clay-drift {
+  from { transform: translate3d(-5%, -5%, 0) rotate(-8deg) scale(0.9); }
+  to { transform: translate3d(42%, 31%, 0) rotate(19deg) scale(1.15); }
+}
+
+@keyframes atlas-sage-drift {
+  from { transform: translate3d(7%, 9%, 0) rotate(6deg) scale(0.92); }
+  to { transform: translate3d(-41%, -34%, 0) rotate(-17deg) scale(1.12); }
+}
+
+@keyframes atlas-gold-drift {
+  from { transform: translate3d(-28%, 24%, 0) rotate(-12deg) scale(0.86); }
+  to { transform: translate3d(52%, -37%, 0) rotate(24deg) scale(1.2); }
+}
+
+@keyframes atlas-float {
+  from { transform: translate3d(-0.8%, -0.5%, 0) scale(1.01); }
+  to { transform: translate3d(0.8%, 0.6%, 0) scale(1.025); }
+}
+
+@keyframes contour-breathe {
+  from { opacity: 0.48; }
+  to { opacity: 0.9; }
+}
+
+@keyframes route-travel {
+  to { stroke-dashoffset: -180; }
+}
+
+@keyframes node-bloom {
+  0%, 22% { opacity: 0; transform: scale(0.25); }
+  48% { opacity: 0.72; }
+  100% { opacity: 0; transform: scale(1.65); }
+}
+
+@keyframes atlas-scan {
+  0%, 8% { transform: translate3d(0, -125%, 0); opacity: 0; }
+  22% { opacity: 0.6; }
+  78% { opacity: 0.36; }
+  92%, 100% { transform: translate3d(0, 510%, 0); opacity: 0; }
+}
+
+@keyframes emblem-float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-7px) rotate(1deg); }
+}
+
+@keyframes emblem-orbit {
+  to { transform: rotate(360deg); }
+}
+
+/* Keep the identity on smaller or low-refresh devices without saturating the GPU. */
+@media (max-width: 768px), (update: slow) {
+  .knowledge-aurora {
+    animation-duration: 42s;
+  }
+
+  .knowledge-aurora--gold,
+  .knowledge-scan {
+    display: none;
+  }
+
+  .knowledge-atlas,
+  .knowledge-contours,
+  .knowledge-route {
+    animation: none;
+  }
+
+  .knowledge-node__halo {
+    animation-duration: 8s;
+  }
 }
 
 /* ─── Utilities ────────────────────────────────── */

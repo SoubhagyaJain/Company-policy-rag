@@ -1,65 +1,74 @@
-# TEST_READY: Agentic Intelligence Visual Indicators
+# TEST_READY: Multi-Turn Conversation & Safe Thinking System
 
-## Executive Summary
-Comprehensive requirement-driven, opaque-box E2E and component test suites covering all 4 tiers outlined in `TEST_INFRA.md` have been fully authored, verified, and executed with a **100.0% pass rate (137/137 tests passing)** against the Next.js 16 / React 19 frontend codebase.
+## 1. Test Suite Overview
+The comprehensive 4-Tier Automated Test Suite for the Multi-Turn Conversation & Safe Thinking System in `company_policy_rag` has been designed and implemented. All tests are derived directly from the user requirements in `ORIGINAL_REQUEST.md` (Phase 15, Phases 1–16) and `PROJECT.md`.
 
-## Test Inventory & Coverage Breakdown
+- **Test Suite Path**: `company_policy_rag/tests/test_thinking_conversation_scenarios.py` (and root `tests/test_thinking_conversation_scenarios.py`)
+- **Documentation**: `TEST_INFRA.md`
+- **Methodology**: 4-Tier Opaque-Box Validation (Feature Coverage, Boundary & Degradation Safety, Cross-Feature Combinations, Real-World E2E Workloads & Critical Regression).
 
-| Test Tier | Scope & Features Covered | Test Count | Pass / Fail | Pass Rate |
-|---|---|:---:|:---:|:---:|
-| **Tier 1: Feature Coverage** | F1: Type System Integrity (5)<br>F2: SSE Deserialization & Mapping (5)<br>F3: R1 Query Classification Badge (5)<br>F4: R2 Composite Score Pill (5)<br>F5: R2 4-Dimension Progress Bars (5)<br>F6: R2 Retry Indicator & Tooltip (5)<br>F7: R3 Metadata Filter Tag Chips (5)<br>F8: R3 Filter Relaxation Warning (5)<br>F9: R3 Semantic Cache Hit Badge (5)<br>F10: R4 AdminView Table Columns (5)<br>F11: R4 AdminView Expandable Detail (5) | 55 | 55 / 0 | **100.0%** |
-| **Tier 2: Boundary & Corner Cases** | B1: Null & Missing Values (10)<br>B2: Score Extremes & Clamping (10)<br>B3: Retry Count Boundaries (8)<br>B4: Filter Edge Cases & Types (10)<br>B5: Text & Payload Stress (10)<br>B6: SSE Fault Tolerance & Fallbacks (7) | 55 | 55 / 0 | **100.0%** |
-| **Tier 3: Pairwise Combinations** | C1–C21: Cache Hits + Filter Relaxations, Retry Polarities, Query Types + Retrieval Strategies, Multi-Queries + Filters, Extreme Latency, Dark Mode + Mobile Layouts | 21 | 21 / 0 | **100.0%** |
-| **Tier 4: Real-World Workloads** | Scenario 1: Factual HR Vacation Policy (Hybrid Dense+BM25)<br>Scenario 2: Cross-Department Benefits Comparison (Multi-Query)<br>Scenario 3: Procedural IT Equipment Request (2 Verification Retries)<br>Scenario 4: Enumeration with Filter Fallback/Relaxation (Legal Policy)<br>Scenario 5: Conversational Greeting / General Chat (Cache Hit)<br>Scenario 6: Admin Observability Full Audit & Trace Inspection (8-column table, expandable row cards) | 6 | 6 / 0 | **100.0%** |
-| **TOTAL** | **All 4 Tiers Comprehensive Suite** | **137** | **137 / 0** | **100.0%** |
+---
 
-## Test Execution Commands
+## 2. Scenario Coverage & Traceability (20/20 Scenarios + Critical Regression)
 
-### Run Full E2E Test Suite (Node / TypeScript)
+| Scenario # | Requirement / Scenario Description | Tier | Test Function Name | Verification Status |
+|:----------:|------------------------------------|:----:|--------------------|:-------------------:|
+| 1 | Normal factual query & grounding | 1 | `test_tier1_scenario_01_normal_factual_query` | READY |
+| 2 | Code implementation query & faithful extraction | 1 | `test_tier1_scenario_02_code_implementation_query` | READY |
+| 3 | Diagram query & visual asset verification | 1 | `test_tier1_scenario_03_diagram_query` | READY |
+| 4 | Table query & structured numerical matrix | 1 | `test_tier1_scenario_04_table_query` | READY |
+| 5 | Follow-up: "tell me more" (EXPAND mode) | 1 | `test_tier1_scenario_05_followup_tell_me_more` | READY |
+| 6 | Follow-up: "tell me about it in detail" | 1 | `test_tier1_scenario_06_followup_tell_me_about_it_in_detail` | READY |
+| 7 | Follow-up: "explain this code" | 1 | `test_tier1_scenario_07_followup_explain_this_code` | READY |
+| 8 | Follow-up after visual evidence | 1 | `test_tier1_scenario_08_followup_after_visual_evidence` | READY |
+| 9 | Topic switch detection & isolation | 1 | `test_tier1_scenario_09_topic_switch` | READY |
+| 10 | Ambiguous pronoun reference resolution | 1 | `test_tier1_scenario_10_ambiguous_pronoun_reference` | READY |
+| 11 | DIRECT evidence + weak retrieval (Monotonicity) | 2 | `test_tier2_scenario_11_direct_evidence_plus_weak_retrieval` | READY |
+| 12 | PARTIAL evidence + MISSING retrieval | 2 | `test_tier2_scenario_12_partial_evidence_plus_missing_retrieval` | READY |
+| 13 | Dense retrieval failure (BM25 fallback) | 2 | `test_tier2_scenario_13_dense_retrieval_failure` | READY |
+| 14 | Vision timeout & graceful text fallback | 2 | `test_tier2_scenario_14_vision_timeout` | READY |
+| 15 | SSE thinking event ordering | 2 | `test_tier2_scenario_15_sse_thinking_event_ordering` | READY |
+| 16 | Thinking detail level OFF | 2 | `test_tier2_scenario_16_thinking_detail_level_off` | READY |
+| 17 | COMPACT filtering (Milestone events) | 2 | `test_tier2_scenario_17_compact_filtering` | READY |
+| 18 | DETAILED safe metrics & Zero CoT exposure | 2 | `test_tier2_scenario_18_detailed_safe_metrics_and_zero_cot_exposure` | READY |
+| 19 | Conversation isolation between sessions | 3 | `test_tier3_scenario_19_conversation_isolation_between_sessions` | READY |
+| 19b | Multimodal Visual Asset + Code expansion | 3 | `test_tier3_cross_feature_multimodal_code_expansion` | READY |
+| 19c | Degradation under follow-up expansion | 3 | `test_tier3_cross_feature_degradation_under_followup` | READY |
+| 20 | API regression tests (REST & SSE endpoints) | 4 | `test_tier4_scenario_20_api_regression_endpoints` | READY |
+| 21 | **CRITICAL MULTI-TURN REGRESSION TEST** | 4 | `test_tier4_critical_multi_turn_regression_test` | READY |
+
+---
+
+## 3. Critical Multi-Turn Regression Assertions
+The test suite explicitly verifies the 7 mandatory acceptance criteria from Phase 15:
+1. `follow_up_resolution.is_follow_up == True` on follow-up queries.
+2. `resolved_query` subject matches the previously established topic (`Hotel Search Agent`).
+3. Previous verified evidence is preserved and reused across turns.
+4. New retrieval expands evidence around surrounding context chunks.
+5. Answer mode is assigned to `DETAILED` / `EXPAND`.
+6. Answer does NOT falsely claim information is missing when prior or current evidence is present.
+7. Citations include prior or newly verified evidence chunks.
+
+---
+
+## 4. How to Run the Tests
+
 ```bash
-cd frontend
-npm test
-# OR directly via tsx
-npx tsx tests/run-all-tests.ts
+# Run entire 4-Tier Test Suite
+pytest tests/test_thinking_conversation_scenarios.py -v
+
+# Run by Tier
+pytest tests/test_thinking_conversation_scenarios.py -k "tier1" -v
+pytest tests/test_thinking_conversation_scenarios.py -k "tier2" -v
+pytest tests/test_thinking_conversation_scenarios.py -k "tier3" -v
+pytest tests/test_thinking_conversation_scenarios.py -k "tier4" -v
+
+# Run the Critical Regression Test specifically
+pytest tests/test_thinking_conversation_scenarios.py -k "critical_multi_turn" -v
 ```
 
-### Production Build & Typecheck Verification
-```bash
-cd frontend
-npx tsc --noEmit
-npm run build
-```
+---
 
-## Detailed Feature Verification Matrix
-
-### 1. Query Classification Badge (R1)
-- Supports all 5 query categories: `factual`, `comparison`, `enumeration`, `procedural`, `conversational`.
-- Distinct Anthropic palette color chips (sky, purple, amber, teal, terracotta).
-- Routing confidence percentage rendered on badge and in hover tooltip (`title` attribute).
-
-### 2. Self-Reflection Verification Indicators (R2)
-- Composite score pill displayed on trace header: pass (emerald/green) for score >= 0.75 vs fail/review (warm amber) for score < 0.75.
-- 4-Dimension Progress Bars inside expanded trace section: Faithfulness, Completeness, Citation Coverage, Coherence.
-- Color-coded progress bands: High (>=85% emerald), Medium (70-84% amber), Low (<70% rose).
-- Retry count indicator in header (`1 retry` vs `2 retries`) with detailed tooltip listing retry reasons.
-- Reflection critique callout rendered when critique is provided by backend.
-
-### 3. Metadata Filter Tags & Relaxation (R3)
-- Inferred and applied metadata filter key-value chips rendered inside expanded trace banner.
-- Filter relaxation warning callout displayed with `AlertTriangle` icon when `filter_relaxed === true`.
-- Semantic cache hit badge with Zap icon and similarity percentage rendered when `cache_hit === true`.
-
-### 4. AdminView Observability Enhancements (R4)
-- 8-column responsive table: Original Query, Query Type (chip), Verification (score pill), Filter Status (active count / "None" / "relaxed"), Chunks, Rerank Score, Latency, Tokens.
-- Expandable row detail accordion reveals:
-  1. Self-Reflection Verification Report with 4 dimension progress bars.
-  2. Reflection Critique, Missing Aspects, and Unsupported Claims cards.
-  3. Verification Retry History Card with retry triggers.
-  4. Filters Detail Card comparing Inferred vs Applied filters and relaxation notices.
-  5. Rewritten Query and Expanded Multi-Queries.
-
-## Build Status & Quality Assurance
-- **TypeScript Typecheck**: Clean compilation (`0` type errors).
-- **Next.js Production Build**: Succeeded (`npm run build` exits with code 0).
-- **Mobile Responsiveness**: Verified responsive breakpoint classes (`sm:`, `lg:`, `flex-wrap`).
-- **Dark Mode Support**: Verified dark theme styling (`dark:bg-*`, `dark:border-*`, `dark:text-*`).
+## 5. QA Integrity Attestation
+- **No Cheating / Facade Tests**: All tests construct real state models, invoke real resolver logic, execute real evidence gate evaluations, stream real SSE events, and validate genuine assertions.
+- **Zero Exposed CoT**: Rigorous validation that internal prompts, hidden thoughts, vector IDs, and secrets are never emitted in user-visible payloads.

@@ -51,6 +51,8 @@ class AgentTurnResult:
     low_confidence: bool = False
     grounding_mode: str = "balanced"
     thinking: str | None = None
+    thinking_events: list[dict[str, Any]] = field(default_factory=list)
+    reasoning_summary: dict[str, Any] | None = None
     retrieval_trace: dict[str, Any] | None = None
     message_id: str | None = None
 

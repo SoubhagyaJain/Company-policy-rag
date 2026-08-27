@@ -16,6 +16,8 @@ import { runTier3Tests } from './tier3_combinations.test';
 import { runTier4Tests } from './tier4_scenarios.test';
 import { runAdversarialTests as runChallenger1Tests } from './adversarial_challenger1.test';
 import { runAllChallenger2Tests } from './adversarial_challenger2.test';
+import { runMilestone4Tests } from './milestone4_thinking_ui.test';
+import { runAdversarialM4ChallengerTests } from './adversarial_challenger_m4_1.test';
 
 async function main() {
   console.log('\n' + '='.repeat(80));
@@ -33,6 +35,8 @@ async function main() {
     ...runTier4Tests(),
     ...runChallenger1Tests(),
     ...ch2Results,
+    ...runMilestone4Tests(),
+    ...runAdversarialM4ChallengerTests(),
   ];
 
   const totalDuration = performance.now() - startTime;

@@ -16,7 +16,12 @@ from backend.rag.citations import CitationEngine
 from backend.services.document_service import DocumentService
 from backend.vision.image_asset_manager import ImageAsset, ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
-from backend.vision.vision_service import VisionCircuitBreaker, VisionService, VisualContentType
+from backend.vision.vision_service import (
+    VisionCircuitBreaker,
+    VisionService,
+    VisualContentType,
+    VisualExtractionChunk,
+)
 from src.config import settings
 
 
@@ -112,14 +117,17 @@ def test_controlled_query_time_lazy_retries(temp_dir):
 
     with patch("backend.vision.vision_service.execute_vision_completion", side_effect=mock_vision):
         with patch.object(service, "is_available", return_value=(True, "Ready")):
-            res = service.extract_from_image(
-                image_bytes=img_bytes,
-                visual_type=VisualContentType.DIAGRAM_ARCHITECTURE,
-                document_id="doc_test_lazy_retry",
-                page_number=83,
-                page_label="82",
-                is_query_time=True,  # Query-time lazy mode
-            )
+            # Retry policy is deployment-configurable; explicitly exercise the
+            # one-retry mode instead of depending on a machine-local .env file.
+            with patch.object(settings, "vision_max_lazy_retries", 1):
+                res = service.extract_from_image(
+                    image_bytes=img_bytes,
+                    visual_type=VisualContentType.DIAGRAM_ARCHITECTURE,
+                    document_id="doc_test_lazy_retry",
+                    page_number=83,
+                    page_label="82",
+                    is_query_time=True,  # Query-time lazy mode
+                )
 
     assert res is not None
     assert res.text == "Recovered diagram description on retry."
@@ -190,7 +198,50 @@ def test_standalone_image_asset_extraction(temp_dir):
     assert asset.width == 400
     assert asset.height == 300
     assert Path(asset.file_path).exists()
-    assert asset.asset_url == f"/api/documents/doc_sample_123/images/{asset.image_hash}"
+    assert asset.asset_url == f"/api/documents/doc_sample_123/visual-assets/{asset.asset_id}"
+
+
+def test_saved_code_assets_are_extracted_individually(temp_dir):
+    """Code retrieval must use the original code asset, not the page's largest image."""
+    asset_mgr = ImageAssetManager(storage_dir=temp_dir / "images")
+    service = VisionService(
+        cache_manager=VisionCacheManager(storage_dir=temp_dir / "cache"),
+        image_asset_manager=asset_mgr,
+    )
+
+    img = Image.new("RGB", (320, 180), color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    asset = asset_mgr.save_image_asset(
+        document_id="doc_code_asset",
+        internal_page_index=4,
+        page_number=5,
+        page_label="5",
+        image_bytes=buf.getvalue(),
+        visual_type="code_screenshot",
+        content_type="code_screenshot",
+    )
+
+    extracted = VisualExtractionChunk(
+        text="```python\nanswer = 42\n```",
+        content_type="code",
+        visual_type="code_screenshot",
+        page_number=5,
+        image_hash=asset.image_hash,
+        asset_id=asset.asset_id,
+        raw_code="```python\nanswer = 42\n```",
+    )
+    service.extract_from_image = MagicMock(return_value=extracted)
+
+    results = service.extract_stored_assets(
+        document_id="doc_code_asset",
+        page_number=5,
+        required_visual_type=VisualContentType.CODE_SCREENSHOT,
+    )
+
+    assert results == [extracted]
+    assert service.extract_from_image.call_args.kwargs["visual_type"] == VisualContentType.CODE_SCREENSHOT
+    assert service.extract_from_image.call_args.kwargs["is_query_time"] is True
 
 
 def test_image_survives_vision_model_failure(temp_dir):

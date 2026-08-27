@@ -142,7 +142,7 @@ ollama pull gemma2:9b
 ### 2. Backend Setup
 
 ```bash
-cd company_policy_rag
+ npm install -g @openai/codex
 
 # Create virtual environment
 python -m venv .venv

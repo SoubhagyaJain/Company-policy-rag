@@ -11,6 +11,9 @@ import {
   ObservabilitySummaryData,
   TelemetryFilterOptions,
   ErrorIncidentData,
+  ThinkingEvent,
+  ThinkingDetailLevel,
+  ReasoningSummary,
 } from './types';
 
 const API_BASE =
@@ -28,10 +31,14 @@ export interface DonePayload {
   ttft_ms?: number;
   metrics?: Record<string, unknown>;
   status?: string;
+  thinking_events?: ThinkingEvent[];
+  reasoning_summary?: ReasoningSummary;
+  thinking_detail_level?: ThinkingDetailLevel;
 }
 
 export interface StreamCallbacks {
   onStart?: (data: { session_id: string; message_id: string; id?: string; request_id?: string }) => void;
+  onThinking?: (event: ThinkingEvent) => void;
   onChunk?: (chunk: string) => void;
   onCitation?: (citation: Citation) => void;
   onTrace?: (trace: QueryTrace) => void;
@@ -39,19 +46,59 @@ export interface StreamCallbacks {
   onError?: (error: Error) => void;
 }
 
+export function mapThinkingEvent(raw: any): ThinkingEvent {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: `thk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      query_id: '',
+      stage: 'received',
+      status: 'completed',
+      title: 'Processing',
+      summary: typeof raw === 'string' ? raw : '',
+      details: {},
+      duration_ms: 0,
+    };
+  }
+  return {
+    id: raw.id || `thk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    query_id: raw.query_id || '',
+    stage: raw.stage || 'received',
+    status: raw.status || 'completed',
+    title: raw.title || (raw.stage ? String(raw.stage).replace(/_/g, ' ') : 'Thinking...'),
+    summary: raw.summary || '',
+    details: raw.details && typeof raw.details === 'object' ? raw.details : {},
+    started_at: raw.started_at,
+    completed_at: raw.completed_at,
+    duration_ms: typeof raw.duration_ms === 'number' ? raw.duration_ms : 0,
+  };
+}
+
 function mapCitation(c: any, index = 0): Citation {
+  const displayPage = c.display_page_number ?? c.page_label ?? (c.page_number ? String(c.page_number) : undefined);
   return {
     id: c.chunk_id || c.id || `cit_${index}_${Date.now()}`,
+    source_index: typeof c.source_index === 'number' ? c.source_index : index + 1,
     document_id: c.document_id,
-    title: c.source_file || c.title || 'Document Source',
+    document_name: c.document_name || c.source_file || c.title,
+    title: c.document_name || c.source_file || c.title || 'Document Source',
     source: c.source_file || c.source || '',
     chunk_text: c.snippet || c.chunk_text || c.text || '',
+    snippet: c.snippet || c.chunk_text || c.text || '',
     score: typeof c.relevance_score === 'number' ? c.relevance_score : (typeof c.score === 'number' ? c.score : 0.0),
-    page: c.page_number ?? c.page,
-    page_label: c.page_label ?? (c.page_number ? String(c.page_number) : undefined),
+    relevance_score: typeof c.relevance_score === 'number' ? c.relevance_score : (typeof c.score === 'number' ? c.score : 0.0),
+    page: typeof displayPage === 'number' ? displayPage : (typeof c.page_number === 'number' ? c.page_number : undefined),
+    page_number: c.page_number ?? c.page,
+    physical_page_number: c.physical_page_number ?? c.page_number ?? c.page,
+    display_page_number: displayPage,
+    page_label: c.page_label ? String(c.page_label) : (displayPage ? String(displayPage) : undefined),
     internal_page_index: c.internal_page_index,
     heading: c.section_title || c.heading || c.section_path,
+    section_title: c.section_title || c.heading,
+    section_path: c.section_path,
     category: c.category || 'General',
+    evidence_type: c.evidence_type || (c.image_url || (c.image_assets && c.image_assets.length > 0) ? 'DIAGRAM_ARCHITECTURE' : 'TEXT'),
+    visual_asset_id: c.visual_asset_id || (c.image_assets && c.image_assets[0]?.asset_id),
+    visual_status: c.visual_status,
     image_url: c.image_url ?? (c.image_assets && c.image_assets[0]?.asset_url ? c.image_assets[0].asset_url : null),
     image_assets: c.image_assets ?? [],
   };
@@ -234,7 +281,8 @@ export class ApiClient {
     filters?: FilterOptions,
     model?: string,
     callbacks?: StreamCallbacks,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    thinkingDetailLevel: ThinkingDetailLevel = 'standard'
   ): Promise<void> {
     const url = `${this.baseUrl}/api/chat/stream`;
     const payload = {
@@ -242,6 +290,7 @@ export class ApiClient {
       session_id: sessionId,
       filters: filters || {},
       model: model || 'default',
+      thinking_detail_level: thinkingDetailLevel,
     };
 
     try {
@@ -337,6 +386,12 @@ export class ApiClient {
       case 'start':
         callbacks.onStart?.(data as { session_id: string; message_id: string; id?: string; request_id?: string });
         break;
+      case 'thinking':
+        if (data) {
+          const thinkingEv = mapThinkingEvent(data);
+          callbacks.onThinking?.(thinkingEv);
+        }
+        break;
       case 'chunk':
         if (typeof data === 'string') {
           callbacks.onChunk?.(data);
@@ -369,6 +424,9 @@ export class ApiClient {
             doneData.citations.forEach((c: any, i: number) => {
               callbacks.onCitation?.(mapCitation(c, i));
             });
+          }
+          if (Array.isArray(doneData.thinking_events)) {
+            doneData.thinking_events = doneData.thinking_events.map(mapThinkingEvent);
           }
           if (doneData.retrieval_trace) {
             const rawTrace = {
@@ -607,6 +665,36 @@ export class ApiClient {
   async clearTelemetry(): Promise<boolean> {
     try {
       const res = await fetch(`${this.baseUrl}/api/admin/observability/clear`, { method: 'POST' });
+      if (!res.ok) {
+        // Fallback to DELETE method or legacy endpoint
+        const delRes = await fetch(`${this.baseUrl}/api/admin/traces`, { method: 'DELETE' });
+        return delRes.ok;
+      }
+      return res.ok;
+    } catch {
+      try {
+        const delRes = await fetch(`${this.baseUrl}/api/admin/traces`, { method: 'DELETE' });
+        return delRes.ok;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  /**
+   * Delete single trace: DELETE /api/admin/observability/queries/{identifier}
+   */
+  async deleteTrace(identifier: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/admin/observability/queries/${encodeURIComponent(identifier)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const fallbackRes = await fetch(`${this.baseUrl}/api/admin/traces/${encodeURIComponent(identifier)}`, {
+          method: 'DELETE',
+        });
+        return fallbackRes.ok;
+      }
       return res.ok;
     } catch {
       return false;

@@ -34,9 +34,11 @@ def render_sources_compact(citations: list[dict[str, Any]]) -> None:
     with st.expander(f"📚 {len(prepared)} {noun}", expanded=False):
         for i, citation in enumerate(prepared, 1):
             label = format_citation_primary(citation)
+            ev_type = citation.get("evidence_type") or ("DIAGRAM" if citation.get("image_url") or citation.get("page_images") else "TEXT")
+            type_badge = f"`[{ev_type}]` " if ev_type else ""
             if settings.citation_show_relevance_score and citation.get("score") is not None:
                 label = f"{label} · {citation['score']:.2f}"
-            st.markdown(f"**{i}.** {label}")
+            st.markdown(f"**{i}.** {type_badge}{label}")
             source_file = citation.get("source_file", "unknown")
             st.caption(f"`{shorten_source_filename(source_file)}`")
             if settings.citation_show_excerpts:

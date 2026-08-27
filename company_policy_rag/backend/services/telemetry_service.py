@@ -265,18 +265,19 @@ class TelemetryService:
 
     # ── Legacy & RAGResponse Compatibility ────────────────────
 
-    def record_trace(self, trace: TraceSummary) -> TraceSummary:
+    def record_trace(self, trace: TraceSummary, *, count_query: bool = True) -> TraceSummary:
         """Record legacy TraceSummary into circular deque and bridge to DB."""
         with self._lock:
             self._traces.appendleft(trace)
-            self._total_queries += 1
-            p_tok = trace.token_usage.get("prompt_tokens", 0)
-            c_tok = trace.token_usage.get("completion_tokens", 0)
-            self._prompt_tokens += p_tok
-            self._completion_tokens += c_tok
-            self._all_latencies.append(trace.execution_time_ms)
-            if trace.ttft_ms is not None:
-                self._all_ttfts.append(trace.ttft_ms)
+            if count_query:
+                self._total_queries += 1
+                p_tok = trace.token_usage.get("prompt_tokens", 0)
+                c_tok = trace.token_usage.get("completion_tokens", 0)
+                self._prompt_tokens += p_tok
+                self._completion_tokens += c_tok
+                self._all_latencies.append(trace.execution_time_ms)
+                if trace.ttft_ms is not None:
+                    self._all_ttfts.append(trace.ttft_ms)
             if trace.similarity_scores:
                 self._all_similarity_scores.extend(trace.similarity_scores)
             if trace.rerank_scores:
@@ -457,8 +458,9 @@ class TelemetryService:
             completion_tokens=comp_tok,
             total_tokens=tot_tok,
             generation_model=rag_response.model,
-            query_scope=t.query_scope if t else "global",
+            query_scope=(t.query_scope or "global") if t else "global",
             active_document_name=t.active_document_name if t else None,
+
             sources_used=sorted(list({c.source_file for c in rag_response.citations if c.source_file})),
             safe_context_preview=rag_response.answer[:300] + ("..." if len(rag_response.answer) > 300 else ""),
         )
@@ -501,7 +503,9 @@ class TelemetryService:
             retry_count=record.retry_count,
             retry_reasons=record.retry_reasons,
         )
-        self.record_trace(legacy_summary)
+        # The canonical record already updated counters. Keep the legacy view
+        # without counting the same request a second time.
+        self.record_trace(legacy_summary, count_query=False)
         return legacy_summary
 
     # ── Subsystem Health Probing ──────────────────────────────
@@ -538,8 +542,10 @@ class TelemetryService:
 
         # 6. Text Model Probe
         text_model = getattr(settings, "llm_model", "qwen2.5:7b")
-        text_status = SubsystemStatus.HEALTHY
-        if ollama_ok:
+        text_status = SubsystemStatus.UNAVAILABLE if not ollama_ok else SubsystemStatus.HEALTHY
+        if not ollama_ok:
+            details["text_model"] = "Ollama is unavailable; text model readiness could not be verified"
+        else:
             matched_text = any(m.lower().startswith(text_model.split(":")[0].lower()) for m in models_list)
             if not matched_text:
                 text_status = SubsystemStatus.DEGRADED
@@ -607,8 +613,8 @@ class TelemetryService:
         )
 
         # 2. Aggregated DB Metrics
-        aggs = self.db.compute_aggregates(time_range=time_range)
-        traces, total_traces_count = self.db.get_filtered_traces(
+        aggs = self.db.compute_aggregates(time_range=time_range, document_id=document_id)
+        all_traces, total_traces_count = self.db.get_filtered_traces(
             time_range=time_range,
             document_id=document_id,
             conversation_id=conversation_id,
@@ -619,22 +625,31 @@ class TelemetryService:
             vision=vision,
             cache=cache,
             has_error=has_error,
-            limit=50,
+            limit=None,
         )
+        traces = all_traces[:50]
+        health.error_rate = aggs["error_rate"]
 
         # Requests per minute
         mins = 1440.0
-        if time_range == "5m":
+        tr_lower = (time_range or "24h").strip().lower()
+        if tr_lower in ("3s", "live"):
+            mins = 3.0 / 60.0
+        elif tr_lower.endswith("s") and tr_lower[:-1].isdigit():
+            mins = max(0.01, int(tr_lower[:-1]) / 60.0)
+        elif tr_lower == "5m":
             mins = 5.0
-        elif time_range == "15m":
+        elif tr_lower == "15m":
             mins = 15.0
-        elif time_range == "1h":
+        elif tr_lower == "1h":
             mins = 60.0
-        elif time_range == "6h":
+        elif tr_lower == "6h":
             mins = 360.0
-        elif time_range == "7d":
+        elif tr_lower == "24h":
+            mins = 1440.0
+        elif tr_lower == "7d":
             mins = 10080.0
-        rpm = round(aggs["total_queries"] / mins, 2)
+        rpm = round(aggs["total_queries"] / max(0.01, mins), 2)
 
         query_metrics = QueryMetrics(
             total_queries=aggs["total_queries"],
@@ -650,34 +665,45 @@ class TelemetryService:
             requests_per_minute=rpm,
         )
 
-        # 3. Latency Breakdown from recent traces
+        # 3. Latency Breakdown from stage timings recorded on matching traces.
+        # Missing stages stay None so the UI never invents timings.
+        stage_values: dict[str, list[float]] = {
+            name: [] for name in LatencyBreakdown.model_fields if name != "total_latency_ms"
+        }
+        for trace in all_traces:
+            for name in stage_values:
+                value = getattr(trace.stage_timings, name, None)
+                if value is not None:
+                    stage_values[name].append(float(value))
+
+        averaged_stages = {
+            name: round(sum(values) / len(values), 2) if values else None
+            for name, values in stage_values.items()
+        }
+        if averaged_stages["ttft_ms"] is None:
+            averaged_stages["ttft_ms"] = aggs["avg_ttft_ms"]
         lat_bd = LatencyBreakdown(
-            request_received_ms=1.2,
-            query_classification_ms=8.5,
-            query_rewrite_ms=14.0,
-            conversation_memory_ms=3.2,
-            embedding_ms=22.0,
-            bm25_ms=11.5,
-            vector_search_ms=18.0,
-            hybrid_fusion_ms=28.5,
-            reranking_ms=45.0,
-            section_expansion_ms=12.0,
-            visual_detection_ms=5.0,
-            vision_extraction_ms=0.0,
-            context_build_ms=6.0,
-            ttft_ms=aggs["avg_ttft_ms"],
-            generation_ms=round((aggs["avg_latency_ms"] or 1000.0) * 0.7, 2),
-            streaming_ms=120.0,
+            **averaged_stages,
             total_latency_ms=aggs["avg_latency_ms"] or 0.0,
         )
 
         # 4. Retrieval Quality Metrics
+        evidence_queries = [trace for trace in all_traces if trace.evidence_required]
+        evidence_sufficiency_rate = (
+            round(
+                sum(1 for trace in evidence_queries if trace.final_chunk_count > 0 and trace.faithfulness_passed)
+                / len(evidence_queries),
+                4,
+            )
+            if evidence_queries
+            else 0.0
+        )
         retrieval_quality = RetrievalQualityMetrics(
             retrieval_hit_rate=aggs["hit_rate"],
             avg_candidate_count=aggs["avg_candidates"],
             avg_rerank_score=aggs["avg_verification_score"],
             avg_final_chunk_count=aggs["avg_final_chunks"],
-            evidence_sufficiency_rate=1.0,
+            evidence_sufficiency_rate=evidence_sufficiency_rate,
             measured_metrics={
                 "retrieval_hit_rate": aggs["hit_rate"],
                 "candidate_pool_avg": aggs["avg_candidates"],
@@ -685,42 +711,79 @@ class TelemetryService:
             },
             proxy_metrics={
                 "reranked_top_score_avg": aggs["avg_verification_score"],
-                "evidence_sufficiency_rate": 1.0,
+                "evidence_sufficiency_rate": evidence_sufficiency_rate,
             },
             evaluation_metrics={
                 "evaluation_mode": "No ground-truth benchmark attached (proxy metrics active)",
             },
         )
 
-        # 5. Grounding
+        # 5. Grounding: aggregate only verifier measurements actually recorded.
+        grounding_records = [
+            trace.grounding
+            for trace in all_traces
+            if not trace.conversational_bypass
+            and trace.grounding.grounding_status != GroundingStatus.NOT_APPLICABLE
+        ]
+
+        def _avg_grounding(field: str) -> float | None:
+            values = [getattr(item, field) for item in grounding_records]
+            measured = [float(value) for value in values if value is not None]
+            return round(sum(measured) / len(measured), 2) if measured else None
+
+        grounding_statuses = {item.grounding_status for item in grounding_records}
+        if not grounding_records:
+            aggregate_grounding_status = GroundingStatus.NOT_APPLICABLE
+        elif grounding_statuses == {GroundingStatus.GROUNDED}:
+            aggregate_grounding_status = GroundingStatus.GROUNDED
+        elif grounding_statuses == {GroundingStatus.UNSUPPORTED}:
+            aggregate_grounding_status = GroundingStatus.UNSUPPORTED
+        else:
+            aggregate_grounding_status = GroundingStatus.PARTIALLY_GROUNDED
+
         grounding_summary = GroundingTelemetry(
-            supported_claims_pct=96.5,
-            unsupported_claims_pct=0.8,
-            inferred_claims_pct=2.7,
-            citation_count=len(traces) * 2,
-            citation_coverage_pct=98.2,
-            grounding_status=GroundingStatus.GROUNDED,
+            supported_claims_pct=_avg_grounding("supported_claims_pct"),
+            unsupported_claims_pct=_avg_grounding("unsupported_claims_pct"),
+            inferred_claims_pct=_avg_grounding("inferred_claims_pct"),
+            citation_count=sum(item.citation_count for item in grounding_records),
+            citation_coverage_pct=_avg_grounding("citation_coverage_pct"),
+            grounding_status=aggregate_grounding_status,
+            supported_claims=list(dict.fromkeys(claim for item in grounding_records for claim in item.supported_claims)),
+            unsupported_claims=list(dict.fromkeys(claim for item in grounding_records for claim in item.unsupported_claims)),
+            inferred_claims=list(dict.fromkeys(claim for item in grounding_records for claim in item.inferred_claims)),
         )
 
         # 6. Vision Telemetry
         vis_failures = self.db.get_vision_failures(time_range=time_range, limit=10)
         cache_metrics = self.db.compute_cache_metrics(time_range=time_range)
-        vis_cache_hit_rate = cache_metrics.get("Vision Cache", CacheTypeMetrics(name="Vision Cache")).hit_rate
+
+        # Prefer explicit cache events; fall back to CACHE_HIT vision events.
+        vision_cache_metrics = cache_metrics.get("Vision Cache", CacheTypeMetrics(name="Vision Cache"))
+        if vision_cache_metrics.hits + vision_cache_metrics.misses > 0:
+            effective_hit_rate = vision_cache_metrics.hit_rate
+        elif aggs["vision_reqs"] > 0:
+            effective_hit_rate = round(aggs["vision_cache_hits"] / aggs["vision_reqs"], 4)
+        else:
+            effective_hit_rate = None
+
+        negative_vision_cache = cache_metrics.get(
+            "Negative Vision Cache", CacheTypeMetrics(name="Negative Vision Cache")
+        )
 
         vision_telem = VisionTelemetry(
-            model_name="qwen2.5vl:7b",
-            visual_pages_detected=aggs["vision_reqs"] + aggs["vision_cache_hits"],
-            code_screenshots=int(aggs["vision_reqs"] * 0.4),
-            diagrams=int(aggs["vision_reqs"] * 0.4),
-            tables=int(aggs["vision_reqs"] * 0.2),
+            model_name=str(settings.vision_model),
+            visual_pages_detected=aggs["visual_pages_detected"],
+            code_screenshots=aggs["vision_code_screenshots"],
+            diagrams=aggs["vision_diagrams"],
+            tables=aggs["vision_tables"],
             requests_count=aggs["vision_reqs"],
             success_count=aggs["vision_success"],
-            failure_count=aggs["vision_timeouts"],
+            failure_count=aggs["vision_failures"],
             timeout_count=aggs["vision_timeouts"],
             avg_latency_ms=aggs["vision_avg_lat"],
             p95_latency_ms=aggs["vision_p95_lat"],
-            cache_hit_rate=vis_cache_hit_rate or 0.74,
-            negative_cache_hit_rate=0.0,
+            cache_hit_rate=effective_hit_rate,
+            negative_cache_hit_rate=negative_vision_cache.hit_rate,
             circuit_breaker_state=self._circuit_breaker_state,
             recent_failures=vis_failures,
         )
@@ -743,15 +806,30 @@ class TelemetryService:
         )
 
         # 8. Token Telemetry
+        def _avg_token_part(*keys: str) -> float:
+            values = [
+                trace.token_breakdown[key]
+                for trace in all_traces
+                for key in keys
+                if key in trace.token_breakdown
+            ]
+            return round(sum(values) / len(values), 1) if values else 0.0
+
+        def _percentile(values: list[int], percentile: float) -> float:
+            if not values:
+                return 0.0
+            ordered = sorted(values)
+            return float(ordered[min(len(ordered) - 1, int(len(ordered) * percentile))])
+
         token_telem = TokenTelemetry(
-            avg_system_prompt_tokens=134.0,
-            avg_memory_tokens=92.0,
-            avg_user_query_tokens=21.0,
-            avg_rag_context_tokens=max(0.0, aggs["avg_prompt_tokens"] - 247.0),
+            avg_system_prompt_tokens=_avg_token_part("system_prompt", "system_prompt_tokens"),
+            avg_memory_tokens=_avg_token_part("memory", "memory_tokens"),
+            avg_user_query_tokens=_avg_token_part("user_query", "user_query_tokens"),
+            avg_rag_context_tokens=_avg_token_part("rag_context", "rag_context_tokens"),
             avg_prompt_tokens=aggs["avg_prompt_tokens"],
-            p95_prompt_tokens=round(aggs["avg_prompt_tokens"] * 1.3, 1),
+            p95_prompt_tokens=_percentile([trace.prompt_tokens for trace in all_traces], 0.95),
             avg_completion_tokens=aggs["avg_completion_tokens"],
-            p95_completion_tokens=round(aggs["avg_completion_tokens"] * 1.4, 1),
+            p95_completion_tokens=_percentile([trace.completion_tokens for trace in all_traces], 0.95),
             total_prompt_tokens=aggs["sum_prompt_tokens"],
             total_completion_tokens=aggs["sum_completion_tokens"],
             total_tokens=aggs["sum_prompt_tokens"] + aggs["sum_completion_tokens"],
@@ -762,13 +840,13 @@ class TelemetryService:
         mem_telem = MemoryTelemetry(
             active_sessions=aggs["active_sessions"],
             messages_today=aggs["memory_events_count"],
-            memory_hit_rate=0.88,
+            memory_hit_rate=aggs["memory_hit_rate"],
             reference_resolution_success_rate=aggs["memory_resolution_rate"],
-            summary_updates=int(aggs["active_sessions"] * 0.5),
-            avg_memory_latency_ms=aggs["avg_memory_latency_ms"] or 3.2,
-            avg_recent_turn_tokens=110.0,
-            avg_summary_tokens=65.0,
-            avg_memory_retrieval_tokens=40.0,
+            summary_updates=0,
+            avg_memory_latency_ms=aggs["avg_memory_latency_ms"],
+            avg_recent_turn_tokens=0.0,
+            avg_summary_tokens=0.0,
+            avg_memory_retrieval_tokens=0.0,
             recent_resolutions=recent_res,
         )
 
@@ -783,7 +861,7 @@ class TelemetryService:
             ready_count=ready_cnt or doc_count,
             processing_count=proc_cnt,
             failed_count=fail_cnt,
-            pages_processed=sum(it.pages_count for it in ing_traces) or (doc_count * 15),
+            pages_processed=sum(it.pages_count for it in ing_traces),
             chunks_indexed=chunk_count,
             embeddings_generated=chunk_count,
             vector_index_ready=vector_db_ready,
@@ -924,6 +1002,49 @@ class TelemetryService:
                 if t.trace_id == trace_id:
                     return t
             return None
+
+    def delete_trace(self, identifier: str) -> bool:
+        """Delete a single query trace by trace_id or request_id from memory and persistent storage."""
+        with self._lock:
+            previous_trace_count = len(self._traces)
+            previous_record_count = len(self._trace_records)
+            self._traces = collections.deque(
+                [t for t in self._traces if t.trace_id != identifier and getattr(t, "request_id", None) != identifier],
+                maxlen=self.max_traces,
+            )
+            self._trace_records = collections.deque(
+                [t for t in self._trace_records if t.trace_id != identifier and t.request_id != identifier],
+                maxlen=self.max_traces,
+            )
+            memory_deleted = (
+                len(self._traces) < previous_trace_count
+                or len(self._trace_records) < previous_record_count
+            )
+            if memory_deleted:
+                canonical = list(self._trace_records)
+                if canonical:
+                    self._total_queries = len(canonical)
+                    self._prompt_tokens = sum(t.prompt_tokens for t in canonical)
+                    self._completion_tokens = sum(t.completion_tokens for t in canonical)
+                    self._all_latencies = collections.deque(
+                        (t.execution_time_ms for t in canonical), maxlen=self.max_traces
+                    )
+                    self._all_ttfts = collections.deque(
+                        (t.ttft_ms for t in canonical if t.ttft_ms is not None), maxlen=self.max_traces
+                    )
+                else:
+                    legacy = list(self._traces)
+                    self._total_queries = len(legacy)
+                    self._prompt_tokens = sum(t.token_usage.get("prompt_tokens", 0) for t in legacy)
+                    self._completion_tokens = sum(t.token_usage.get("completion_tokens", 0) for t in legacy)
+                    self._all_latencies = collections.deque(
+                        (t.execution_time_ms for t in legacy), maxlen=self.max_traces
+                    )
+                    self._all_ttfts = collections.deque(
+                        (t.ttft_ms for t in legacy if t.ttft_ms is not None), maxlen=self.max_traces
+                    )
+        db_deleted = self.db.delete_query_trace(identifier)
+        return memory_deleted or db_deleted
 
     def clear(self) -> None:
         with self._lock:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, cast
@@ -99,6 +101,52 @@ def unpack_chroma_metadata(meta_dict: dict[str, Any]) -> ChunkMetadata:
     except Exception:
         content_type = ContentType.PROSE
 
+    raw_page = meta_dict.get("page_number") if meta_dict.get("page_number") is not None else extra.get("page_number")
+    page_number = int(raw_page) if (raw_page is not None and str(raw_page).strip() and str(raw_page).strip().isdigit()) else None
+
+    raw_disp = meta_dict.get("display_page_number") if meta_dict.get("display_page_number") is not None else extra.get("display_page_number")
+    if raw_disp is not None:
+        if isinstance(raw_disp, int):
+            display_page_number: str | int | None = raw_disp
+        elif isinstance(raw_disp, str) and raw_disp.strip().isdigit():
+            display_page_number = int(raw_disp.strip())
+        elif isinstance(raw_disp, str) and raw_disp.strip():
+            display_page_number = raw_disp.strip()
+        else:
+            display_page_number = None
+    else:
+        display_page_number = None
+
+    raw_label = meta_dict.get("page_label") if meta_dict.get("page_label") is not None else extra.get("page_label")
+    if raw_label is not None and str(raw_label).strip():
+        page_label: str | None = str(raw_label).strip()
+    elif display_page_number is not None:
+        page_label = str(display_page_number)
+    elif page_number is not None:
+        page_label = str(page_number)
+    else:
+        page_label = None
+
+    raw_idx = meta_dict.get("internal_page_index") if meta_dict.get("internal_page_index") is not None else extra.get("internal_page_index")
+    if raw_idx is not None and str(raw_idx).strip() and str(raw_idx).strip().lstrip("-").isdigit():
+        internal_page_index: int | None = int(raw_idx)
+    elif page_number is not None:
+        internal_page_index = max(0, page_number - 1)
+    else:
+        internal_page_index = None
+
+    has_code = bool(
+        meta_dict.get("has_code", False)
+        or extra.get("has_code", False)
+        or (content_type == ContentType.CODE)
+    )
+    has_tables = bool(
+        meta_dict.get("has_tables", False)
+        or extra.get("has_tables", False)
+        or (content_type == ContentType.TABLE)
+    )
+    visual_asset_ids = _split_csv(meta_dict.get("visual_asset_ids")) or _split_csv(extra.get("visual_asset_ids"))
+
     return ChunkMetadata(
         document_id=str(meta_dict.get("document_id", "unknown")),
         source_file=str(meta_dict.get("source_file", "unknown")),
@@ -107,7 +155,10 @@ def unpack_chroma_metadata(meta_dict: dict[str, Any]) -> ChunkMetadata:
         document_type=str(meta_dict.get("document_type", "unknown")),
         category=str(meta_dict.get("category", "general")),
         chunk_index=int(meta_dict.get("chunk_index", 0)),
-        page_number=int(meta_dict["page_number"]) if meta_dict.get("page_number") is not None else None,
+        page_number=page_number,
+        internal_page_index=internal_page_index,
+        display_page_number=display_page_number,
+        page_label=page_label,
         section_title=str(meta_dict["section_title"]) if meta_dict.get("section_title") is not None else None,
         section_number=str(meta_dict["section_number"]) if meta_dict.get("section_number") is not None else None,
         section_path=str(meta_dict["section_path"]) if meta_dict.get("section_path") is not None else None,
@@ -123,6 +174,9 @@ def unpack_chroma_metadata(meta_dict: dict[str, Any]) -> ChunkMetadata:
         policy_id=str(meta_dict["policy_id"]) if meta_dict.get("policy_id") is not None else None,
         key_entities=_split_csv(meta_dict.get("key_entities")),
         topic_tags=_split_csv(meta_dict.get("topic_tags")),
+        has_code=has_code,
+        has_tables=has_tables,
+        visual_asset_ids=visual_asset_ids,
         extra=extra,
     )
 
@@ -143,7 +197,48 @@ class ChromaVectorStore(VectorStoreInterface):
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self._collection: Any = None
         self._memory_chunks: dict[str, Chunk] = {}
+        self._lock = threading.RLock()
+        self._corpus_version_cache: str | None = None
         self._init_chroma()
+
+    def corpus_version(self) -> str:
+        """Return a stable fingerprint of the indexed corpus for cache isolation."""
+        with self._lock:
+            if self._corpus_version_cache is not None:
+                return self._corpus_version_cache
+
+            digest = hashlib.sha256()
+            rows_found = False
+            if self._collection is not None:
+                try:
+                    result = self._collection.get(include=["documents", "metadatas"])
+                    rows = zip(
+                        result.get("ids", []),
+                        result.get("documents", []) or [],
+                        result.get("metadatas", []) or [],
+                    )
+                    for chunk_id, document, metadata in sorted(rows, key=lambda row: str(row[0])):
+                        rows_found = True
+                        digest.update(str(chunk_id).encode("utf-8"))
+                        digest.update(b"\0")
+                        digest.update(str(document or "").encode("utf-8"))
+                        digest.update(b"\0")
+                        digest.update(str((metadata or {}).get("file_hash", "")).encode("utf-8"))
+                        digest.update(b"\0")
+                except Exception as exc:
+                    logger.warning("Failed to fingerprint Chroma corpus; using memory index: %s", exc)
+
+            if not rows_found:
+                for chunk_id, chunk in sorted(self._memory_chunks.items()):
+                    digest.update(str(chunk_id).encode("utf-8"))
+                    digest.update(b"\0")
+                    digest.update(chunk.text.encode("utf-8"))
+                    digest.update(b"\0")
+                    digest.update(str(chunk.metadata.file_hash or "").encode("utf-8"))
+                    digest.update(b"\0")
+
+            self._corpus_version_cache = f"kb_{digest.hexdigest()[:20]}"
+            return self._corpus_version_cache
 
     def _init_chroma(self) -> None:
         try:
@@ -181,8 +276,10 @@ class ChromaVectorStore(VectorStoreInterface):
         if not chunks:
             return
 
-        for chunk in chunks:
-            self._memory_chunks[chunk.id] = chunk
+        with self._lock:
+            for chunk in chunks:
+                self._memory_chunks[chunk.id] = chunk
+            self._corpus_version_cache = None
 
         if self._collection is not None:
             try:
@@ -300,7 +397,9 @@ class ChromaVectorStore(VectorStoreInterface):
 
         # Fallback in-memory search
         scored_memory: list[ScoredChunk] = []
-        for chunk in self._memory_chunks.values():
+        with self._lock:
+            memory_chunks = list(self._memory_chunks.values())
+        for chunk in memory_chunks:
             if not self._matches_filters(chunk, filters):
                 continue
             if chunk.embedding is not None:
@@ -313,12 +412,14 @@ class ChromaVectorStore(VectorStoreInterface):
         return scored_memory[:top_k]
 
     def delete_by_source(self, source_file: str) -> None:
-        to_delete = [
-            cid for cid, chunk in self._memory_chunks.items()
-            if chunk.metadata.source_file == source_file
-        ]
-        for cid in to_delete:
-            del self._memory_chunks[cid]
+        with self._lock:
+            to_delete = [
+                cid for cid, chunk in self._memory_chunks.items()
+                if chunk.metadata.source_file == source_file
+            ]
+            for cid in to_delete:
+                del self._memory_chunks[cid]
+            self._corpus_version_cache = None
 
         if self._collection is not None:
             try:
@@ -327,12 +428,14 @@ class ChromaVectorStore(VectorStoreInterface):
                 logger.warning("Failed to delete from Chroma by source_file: %s", exc)
 
     def delete_by_document_id(self, document_id: str) -> None:
-        to_delete = [
-            cid for cid, chunk in self._memory_chunks.items()
-            if chunk.metadata.document_id == document_id
-        ]
-        for cid in to_delete:
-            del self._memory_chunks[cid]
+        with self._lock:
+            to_delete = [
+                cid for cid, chunk in self._memory_chunks.items()
+                if chunk.metadata.document_id == document_id
+            ]
+            for cid in to_delete:
+                del self._memory_chunks[cid]
+            self._corpus_version_cache = None
 
         if self._collection is not None:
             try:
@@ -346,10 +449,13 @@ class ChromaVectorStore(VectorStoreInterface):
                 return cast(int, self._collection.count())
             except Exception:
                 pass
-        return len(self._memory_chunks)
+        with self._lock:
+            return len(self._memory_chunks)
 
     def clear(self) -> None:
-        self._memory_chunks.clear()
+        with self._lock:
+            self._memory_chunks.clear()
+            self._corpus_version_cache = None
         if self._collection is not None:
             try:
                 all_ids = self._collection.get(include=[])["ids"]

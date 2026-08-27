@@ -14,6 +14,8 @@ import {
   Layers,
   Sparkles,
   ExternalLink,
+  ZoomIn,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Citation } from '../lib/types';
 import { formatScore } from '../lib/utils';
@@ -30,6 +32,7 @@ export function CitationDrawer({
   onClose,
 }: CitationDrawerProps) {
   const [copied, setCopied] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
 
   const handleCopyChunk = () => {
     if (citation?.chunk_text) {
@@ -44,6 +47,8 @@ export function CitationDrawer({
   const scorePct = citation.score !== undefined ? formatScore(citation.score) : null;
   const wordCount = citation.chunk_text ? citation.chunk_text.trim().split(/\s+/).length : 0;
   const charCount = citation.chunk_text ? citation.chunk_text.length : 0;
+  const displayPage = citation.display_page_number ?? citation.page_label ?? citation.page;
+  const isVisual = citation.evidence_type === 'DIAGRAM_ARCHITECTURE' || citation.evidence_type === 'CODE_SCREENSHOT' || citation.evidence_type === 'TABLE_DATA' || Boolean(citation.image_url);
 
   return (
     <AnimatePresence>
@@ -75,7 +80,7 @@ export function CitationDrawer({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-serif font-bold text-sm text-[#23201C] dark:text-[#FAF8F5]">
-                      Grounding Citation
+                      Grounding Citation [{citation.source_index ?? 1}]
                     </h3>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-terracotta-600 text-white">
                       Verified
@@ -113,7 +118,7 @@ export function CitationDrawer({
                 </div>
 
                 <h4 className="font-serif text-base font-bold text-[#1E1C1A] dark:text-[#FAF8F5] leading-snug break-all">
-                  {citation.title || citation.source || 'Policy Document'}
+                  {citation.document_name || citation.title || citation.source || 'Policy Document'}
                 </h4>
 
                 {citation.source && citation.source !== citation.title && (
@@ -158,13 +163,14 @@ export function CitationDrawer({
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3.5 rounded-2xl bg-[#F7F4EC] dark:bg-[#1E1D1A] border border-[#E5DFD2] dark:border-[#2D2B26]">
                   <span className="text-[10px] uppercase font-semibold text-[#7A7468] dark:text-[#8C867B] block mb-1">
-                    Page Reference
+                    Document Page Reference
                   </span>
-                  <span className="font-mono text-xs font-bold text-[#23201C] dark:text-[#FAF8F5] flex items-center gap-1.5" title={citation.page_label && citation.page && citation.page_label !== String(citation.page) ? `PDF physical stream page ${citation.page}` : undefined}>
+                  <span
+                    className="font-mono text-xs font-bold text-[#23201C] dark:text-[#FAF8F5] flex items-center gap-1.5"
+                    title={citation.physical_page_number && String(citation.physical_page_number) !== String(displayPage) ? `PDF physical stream sheet ${citation.physical_page_number}` : undefined}
+                  >
                     <Hash className="w-3.5 h-3.5 text-terracotta-600 dark:text-terracotta-400 shrink-0" />
-                    {citation.page_label && citation.page && citation.page_label !== String(citation.page)
-                      ? `Page ${citation.page_label} (PDF p. ${citation.page})`
-                      : (citation.page !== undefined ? `Page ${citation.page}` : 'Full Document')}
+                    {displayPage !== undefined ? `Page ${displayPage}` : 'Full Document'}
                   </span>
                 </div>
 
@@ -185,28 +191,42 @@ export function CitationDrawer({
                 <div className="p-4 rounded-2xl bg-[#FAF8F5] dark:bg-[#1E1D1A] border border-[#E0D8CA] dark:border-[#2E2C27] space-y-2.5 shadow-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-[#4A453D] dark:text-[#C5BEB2] flex items-center gap-1.5">
-                      <span>🖼️ Original Document Visual Asset</span>
+                      <ImageIcon className="w-4 h-4 text-terracotta-600" />
+                      <span>Original Document Visual Asset</span>
                     </span>
-                    <a
-                      href={citation.image_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-terracotta-600 dark:text-terracotta-400 hover:underline flex items-center gap-1 font-mono font-medium"
-                    >
-                      Open Full Res <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsZoomed(true)}
+                        className="text-[11px] text-[#736D62] hover:text-[#23201C] dark:text-[#9A9385] dark:hover:text-[#FAF8F5] flex items-center gap-1 font-mono"
+                      >
+                        <ZoomIn className="w-3 h-3" /> Zoom
+                      </button>
+                      <a
+                        href={citation.image_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-terracotta-600 dark:text-terracotta-400 hover:underline flex items-center gap-1 font-mono font-medium"
+                      >
+                        Full Res <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   </div>
 
-                  <div className="rounded-xl overflow-hidden border border-[#E5E0D8] dark:border-[#33302A] bg-[#111] max-h-72 flex items-center justify-center">
+                  <div
+                    onClick={() => setIsZoomed(true)}
+                    className="group relative rounded-xl overflow-hidden border border-[#E5E0D8] dark:border-[#33302A] bg-[#111] max-h-72 flex items-center justify-center cursor-zoom-in"
+                  >
                     <img
                       src={citation.image_url}
                       alt={citation.heading || 'Original Document Diagram'}
-                      className="max-h-72 w-auto object-contain hover:scale-105 transition-transform cursor-zoom-in"
-                      onClick={() => window.open(citation.image_url!, '_blank')}
+                      className="max-h-72 w-auto object-contain group-hover:scale-102 transition-transform"
                     />
+                    <div className="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/60 text-white text-[10px] font-mono opacity-0 group-hover:opacity-100 transition-opacity">
+                      Click to expand
+                    </div>
                   </div>
                   <p className="text-[10px] font-mono text-[#8C867B] dark:text-[#736E65]">
-                    Original high-resolution asset extracted directly from PDF (zero quality loss).
+                    Original high-resolution visual evidence extracted directly from PDF Page {displayPage ?? ''}.
                   </p>
                 </div>
               )}
@@ -251,7 +271,7 @@ export function CitationDrawer({
               <div className="p-3.5 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                 <p className="leading-relaxed text-[11px]">
-                  This extract is grounded directly in the verified policy repository. It was retrieved via Dense Vector + BM25 search and validated by BGE Cross-Encoder reranking.
+                  This extract is grounded directly in the verified document repository. It was retrieved via Dense Vector + BM25 search and validated by BGE Cross-Encoder reranking.
                 </p>
               </div>
             </div>
@@ -266,6 +286,32 @@ export function CitationDrawer({
               </button>
             </div>
           </motion.aside>
+
+          {/* Full Screen Image Zoom Modal */}
+          {isZoomed && citation.image_url && (
+            <div
+              onClick={() => setIsZoomed(false)}
+              className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+            >
+              <div className="relative max-w-5xl max-h-[90vh] flex flex-col items-center">
+                <img
+                  src={citation.image_url}
+                  alt={citation.heading || 'Full Resolution Diagram'}
+                  className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div className="mt-3 text-white text-xs font-mono flex items-center gap-4">
+                  <span>Page {displayPage ?? ''} · {citation.heading ?? 'Visual Asset'}</span>
+                  <button
+                    onClick={() => setIsZoomed(false)}
+                    className="px-3 py-1 rounded bg-white/20 hover:bg-white/30 text-white transition-colors"
+                  >
+                    Close Zoom
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </AnimatePresence>

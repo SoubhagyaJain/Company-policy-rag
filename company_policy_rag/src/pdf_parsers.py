@@ -92,7 +92,7 @@ def _detect_block_types(text: str) -> list[dict[str, str | int]]:
 
 
 def _load_with_pypdf(file_path: Path, base_metadata: dict) -> list[Document]:
-    """Per-page Documents with optional PyMuPDF block hints."""
+    """Per-page Documents with optional PyMuPDF block hints and canonical page identity."""
     reader = PDFReader()
     page_docs = reader.load_data(file=file_path)
     enriched: list[Document] = []
@@ -106,24 +106,32 @@ def _load_with_pypdf(file_path: Path, base_metadata: dict) -> list[Document]:
         fitz_doc = None
         use_fitz = False
 
+    # Extract all page texts
+    pages_text: list[tuple[int, str]] = []
     for idx, page_doc in enumerate(page_docs):
-        page_label = page_doc.metadata.get("page_label") or page_doc.metadata.get("page_number")
-        page_number = _parse_page_number(page_label)
         text = page_doc.text or ""
-
-        block_types: list[str] = []
         if use_fitz and fitz_doc is not None and idx < len(fitz_doc):
             page_text = fitz_doc[idx].get_text("text")
             if page_text.strip():
                 text = page_text
+        pages_text.append((idx + 1, text))
 
+    from backend.ingestion.page_detector import PrintedPageDetector
+    page_identities = PrintedPageDetector.resolve_document_pages(pages_text)
+
+    for idx, (phys_page, text) in enumerate(pages_text):
+        page_id = page_identities[idx]
+        block_types: list[str] = []
         for block in _detect_block_types(text):
             block_types.append(str(block["block_type"]))
 
         meta = {
             **base_metadata,
-            "page_number": page_number,
-            "page_label": str(page_label) if page_label else None,
+            "page_number": page_id.physical_page_number,
+            "physical_page_number": page_id.physical_page_number,
+            "internal_page_index": page_id.internal_page_index,
+            "display_page_number": page_id.display_page_number,
+            "page_label": page_id.page_label,
             "parser": "pypdf",
             "block_types": ",".join(block_types) if block_types else "text",
         }

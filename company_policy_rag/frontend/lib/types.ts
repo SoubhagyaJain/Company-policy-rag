@@ -1,15 +1,27 @@
 export interface Citation {
   id: string;
+  source_index?: number;
   document_id?: string;
+  document_name?: string;
   title: string;
   source: string;
   chunk_text: string;
+  snippet?: string;
   score: number;
+  relevance_score?: number;
   page?: number;
+  page_number?: number;
+  physical_page_number?: number;
+  display_page_number?: string | number | null;
   page_label?: string;
   internal_page_index?: number;
   heading?: string;
+  section_title?: string | null;
+  section_path?: string | null;
   category?: string;
+  evidence_type?: string;
+  visual_asset_id?: string | null;
+  visual_status?: string | null;
   url?: string;
   image_url?: string | null;
   image_assets?: any[];
@@ -81,6 +93,15 @@ export interface QueryTrace {
   rerank_scores?: number[];
   sources_used?: string[];
   anchor_section?: string | null;
+  page_identity?: string | null;
+  text_candidates?: number;
+  visual_candidates?: number;
+  final_text_evidence?: number;
+  final_visual_evidence?: number;
+  visual_asset_status?: string | null;
+  vision_status?: string | null;
+  evidence_status?: string | null;
+  grounding_status?: string | null;
   evidence_text_count?: number;
   evidence_code_count?: number;
   evidence_diagram_count?: number;
@@ -95,6 +116,9 @@ export interface QueryTrace {
   safe_context_preview?: string | null;
 }
 
+export * from '../types/thinking';
+import { ThinkingEvent, ReasoningSummary, ThinkingDetailLevel } from '../types/thinking';
+
 export interface ChatMessageData {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -102,6 +126,9 @@ export interface ChatMessageData {
   timestamp: string;
   citations?: Citation[];
   trace?: QueryTrace;
+  thinking_events?: ThinkingEvent[];
+  reasoning_summary?: ReasoningSummary;
+  thinking_detail_level?: ThinkingDetailLevel;
   isStreaming?: boolean;
   error?: string;
 }

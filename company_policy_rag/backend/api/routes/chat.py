@@ -28,14 +28,17 @@ def post_chat(
     try:
         return chat_service.execute_query(request)
     except ValueError as val_err:
+        logger.exception("ValueError in post_chat: %s", val_err)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(val_err),
         )
+
     except Exception as exc:
+        logger.exception("Unhandled error in post_chat: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing chat query: {exc!s}",
+            detail="Error processing chat query.",
         )
 
 
@@ -64,8 +67,9 @@ async def post_chat_stream(
             logger.info("SSE connection aborted by client.")
             cancel_token.set()
         except Exception as exc:
-            logger.warning("Error during SSE stream: %s", exc)
-            yield f"event: error\ndata: {json.dumps({'detail': str(exc), 'status': 500})}\n\n"
+            request_id = getattr(request.state, "request_id", None)
+            logger.exception("Error during SSE stream request_id=%s: %s", request_id, exc)
+            yield f"event: error\ndata: {json.dumps({'detail': 'Unable to complete the streamed response.', 'status': 500, 'request_id': request_id})}\n\n"
 
     headers = {
         "Cache-Control": "no-cache, no-transform",

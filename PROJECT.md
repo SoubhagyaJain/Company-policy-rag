@@ -1,130 +1,135 @@
-# Project: Qwen 2.5 Coder 7B Fine-Tuning, GGUF Export, Ollama Registration & System-Wide Integration
+# Project: Production-Grade Thinking & Conversation-Aware Follow-Up System
 
 ## Architecture
-The system integrates an end-to-end parameter-efficient fine-tuning (PEFT/LoRA/QLoRA) and deployment pipeline into the existing FastAPI + ChromaDB + Ollama + Next.js RAG platform:
+The system delivers an enterprise-grade multi-turn RAG conversation and safe thinking experience for `company_policy_rag`.
 
-1. **Fine-Tuning Engine (`company_policy_rag/src/finetuning/`)**:
-   - `dataset_loader.py`: Multi-format dataset ingestion (Alpaca, ShareGPT, JSONL prompt-response pairs), normalization to ChatML schema, and deterministic validation splitting.
-   - `trainer.py`: LoRA/QLoRA training orchestrator using Hugging Face `transformers`, `peft` (`LoraConfig`), and `trl` (`SFTTrainer`) with 4-bit NF4 quantization, completion-only loss masking, and step-level loss/perplexity metrics logging.
-   - `merger.py`: High-performance LoRA adapter weight merger (`peft` `merge_and_unload`) exporting 16-bit standalone weights and tokenizer configurations.
-   - `gguf_exporter.py`: GGUF conversion and quantization engine supporting `Q4_K_M`, `Q8_0`, and `FP16` with multi-tier fallback for local/Windows environments.
-   - `modelfile_generator.py`: Automated Ollama `Modelfile` generator configured with ChatML template, stop tokens (`<|im_end|>`, `<|endoftext|>`), parameters (`num_ctx 8192`, `temperature 0.1`), and enterprise policy system prompt.
-   - `ollama_registrar.py`: Direct local Ollama storage registration via CLI (`ollama create`) and REST API (`POST /api/create`).
-
-2. **CLI & Workflow Entrypoints (`company_policy_rag/scripts/`)**:
-   - `finetune_qwen_coder.py`: CLI for dataset validation, fine-tuning configuration, metrics logging, and adapter export.
-   - `export_and_register_ollama.py`: CLI for merging LoRA weights, GGUF export, Modelfile generation, and registering the model into Ollama.
-   - `run_finetune_pipeline.py`: Unified end-to-end pipeline runner executing training -> merge -> GGUF -> Modelfile -> Ollama registration in a single command.
-
-3. **System-Wide Default Configuration (`company_policy_rag/`)**:
-   - `src/config.py`: Centralized Pydantic settings with `llm_model: str = "qwen2.5-coder-7b-policy"` (alias `OLLAMA_LLM_MODEL`), `metadata_extractor_model`, and `eval_llm_model`.
-   - `backend/api/routes/models.py`, `backend/models/api_dto.py`, `backend/dependencies.py`: API default active model and dynamic Ollama model routing.
-   - `.env`, `.env.example`, `docker-compose.yml`: Environment variables configuring default model `qwen2.5-coder-7b-policy`.
-   - `frontend/components/ChatWindow.tsx`, `frontend/lib/api-client.ts`: UI model selection defaults.
-
-4. **Automated Verification Suite (`company_policy_rag/tests/`)**:
-   - `tests/unit/test_finetuning_dataset.py`: Unit tests for multi-format dataset loading, normalization, and validation splitting.
-   - `tests/unit/test_finetuning_trainer.py`: Unit tests for LoRA trainer, loss masking, metrics logging, and smoke-run execution.
-   - `tests/unit/test_export_merge_modelfile.py`: Unit tests for adapter merge, Modelfile generation, stop tokens, and GGUF exporter.
-   - `tests/unit/test_ollama_registration.py`: Unit tests for Ollama registration utility.
-   - `tests/e2e/test_finetuned_rag_e2e.py`: End-to-end integration test verifying live RAG chat generation, routing, self-reflection, and non-regression with the fine-tuned model.
+```
+[User / Client]
+  │
+  ▼
+[FastAPI Endpoints: /api/chat, /api/chat/stream]
+  │
+  ├── [ChatService & ConversationStateManager]
+  │     ├── Multi-turn session history
+  │     └── ConversationEvidenceContext (verified chunks, citations, visual assets)
+  │
+  ├── [ConversationResolver & FollowUpResolver] (Phases 2 & 4)
+  │     ├── Layer 1: Deterministic conversational cues
+  │     ├── Layer 2: Turn structure analysis
+  │     ├── Layer 3: Entity/topic extraction & subject resolution
+  │     └── AnswerMode & ExpansionPlan determination
+  │
+  ├── [ThinkingStateMachine] (Phases 6, 7, 8, 13, 14)
+  │     ├── Deterministic stage lifecycle (received → follow_up → retrieval → evidence → visual → plan → stream)
+  │     ├── Safe summaries (zero hidden reasoning, zero extra LLM calls)
+  │     └── Real-time SSE event emission (event: thinking, event: token, event: citation, event: complete)
+  │
+  ├── [Hybrid Retrieval & Expansion Engine] (Phases 3, 10, 14)
+  │     ├── Dense Vector + BM25 + Cross-Encoder Reranker
+  │     ├── Conversation consistency & downgrade protection (ConversationConsistencyGuard)
+  │     ├── Page & Section expansion around previous evidence
+  │     └── Multimodal ImageAssetManager & VisionCacheManager (code screenshots, diagrams)
+  │
+  ├── [Grounded LLM Generator] (Phase 12)
+  │     └── Grounded prompt with Rules A-F (Continuity, Expansion, No False Absence, Code fidelity)
+  │
+  └── [Frontend UI & Streamlit] (Phase 11)
+        ├── Next.js & Aether: ThinkingPanel, ThinkingStep, useThinkingStream, types/thinking.ts
+        └── Streamlit: st.status live progress & history expander
+```
 
 ---
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | F1.1 Multi-format Dataset Loader | Support Alpaca, ShareGPT, and JSONL prompt-response pairs with auto-detection | M1 | ORIGINAL_REQUEST §R1 |
-| 2 | F1.2 Validation Split & Hygiene | Deterministic train/validation splitting with seed control, format validation, length checks | M1 | ORIGINAL_REQUEST §R1 |
-| 3 | F1.3 LoRA/QLoRA PEFT Architecture | 4-bit NF4 QLoRA, 8-bit LoRA, FP16 LoRA targeting all 7 linear projections (`q/k/v/o/gate/up/down_proj`) | M1 | ORIGINAL_REQUEST §R1 |
-| 4 | F1.4 Training Execution & Metrics | Completion-only loss masking, step logging, eval loss, stable perplexity calculation, artifacts export | M1 | ORIGINAL_REQUEST §R1 |
-| 5 | F2.1 LoRA Adapter Weight Merging | Merge LoRA adapter weights with base Qwen 2.5 Coder 7B into standalone FP16 weights | M2 | ORIGINAL_REQUEST §R2 |
-| 6 | F2.2 GGUF Conversion & Quantization | Export model to GGUF format supporting Q4_K_M, Q8_0, and FP16 with local fallback ladder | M2 | ORIGINAL_REQUEST §R2 |
-| 7 | F2.3 Ollama Modelfile Generation | Generate optimized Modelfile with ChatML template, stop tokens, system prompt, and parameters | M2 | ORIGINAL_REQUEST §R2 |
-| 8 | F2.4 Ollama Registration Utility | Register fine-tuned GGUF directly into local Ollama storage via CLI/API | M2 | ORIGINAL_REQUEST §R2 |
-| 9 | F3.1 Environment & Config Defaults | Update `.env`, `.env.example`, `docker-compose.yml`, `config.py` default to `qwen2.5-coder-7b-policy` | M3 | ORIGINAL_REQUEST §R3 |
-| 10 | F3.2 Backend Dynamic Model Integration | Update `backend/api/routes/models.py`, `api_dto.py`, `dependencies.py` for fine-tuned default model | M3 | ORIGINAL_REQUEST §R3 |
-| 11 | F3.3 Frontend Model Defaults | Update `ChatWindow.tsx`, `api-client.ts` to default model selection to fine-tuned Qwen 2.5 Coder | M3 | ORIGINAL_REQUEST §R3 |
-| 12 | F4.1 Dataset Validation Test Suite | Unit tests for Alpaca, ShareGPT, JSONL loader, splitting, schema validation | M4 / E2E | ORIGINAL_REQUEST §R4 |
-| 13 | F4.2 Smoke-Test Training Execution | Automated test verifying training execution, metrics computation, and adapter output | M4 / E2E | ORIGINAL_REQUEST §R4 |
-| 14 | F4.3 Merge, GGUF & Modelfile Tests | Automated tests verifying weight merger, GGUF export validation, Modelfile syntax & stop tokens | M4 / E2E | ORIGINAL_REQUEST §R4 |
-| 15 | F4.4 Ollama Registration Verification | Automated test verifying Ollama model creation and local tag registration | M4 / E2E | ORIGINAL_REQUEST §R4 |
-| 16 | F4.5 End-to-End RAG API Validation | E2E test verifying RAG query execution, streaming, routing, verification with fine-tuned model | M4 / E2E | ORIGINAL_REQUEST §R4 |
+| 1 | Architecture Audit & Mapping | Map complete request lifecycle and verify integration points | Survey (Done) | Phase 1 |
+| 2 | FollowUpResolver & Resolution Model | Generic detection of follow-ups ("tell me about it in detail", "explain this code", etc.) | M1 | Phase 2 |
+| 3 | ConversationEvidenceContext | Cross-turn evidence preservation, chunk/citation reuse, window expansion | M1 | Phase 3 |
+| 4 | AnswerMode & ExpansionPolicy | Explicit answer modes (DETAILED, CODE_EXPLANATION, etc.) and non-shrinking expansion policy | M1 | Phase 4 |
+| 5 | ConversationConsistencyGuard | Monotonic downgrade protection preventing "I could not find this information" contradictions | M1 | Phase 5 |
+| 6 | Generation Prompt Hardening | Rules A-F for grounded generation in system prompt | M1 | Phase 12 |
+| 7 | ThinkingEvent Data Model & State Machine | ThinkingStage, ThinkingStatus, ThinkingDetailLevel, ThinkingEvent, ThinkingStateMachine | M2 | Phase 6 |
+| 8 | Safe Deterministic Summaries | Milestone summaries generated deterministically without exposing CoT or adding LLM latency | M2 | Phase 7 |
+| 9 | SSE Streaming Extension | Strict event ordering (thinking -> token -> citation -> complete), backward compatibility | M2 | Phase 8 |
+| 10 | Performance Tracking | Zero added LLM latency, timing measurements across all stages | M2 | Phase 13 |
+| 11 | Graceful Failure Degradation | Dense->BM25 fallback, reranker bypass, vision timeout handling, ambiguity handling | M2 | Phase 14 |
+| 12 | RAGTrace ReasoningSummary | Safe structured reasoning metadata added to RAGTrace for telemetry | M3 | Phase 9 |
+| 13 | Multimodal Integration | Code screenshot reuse, diagram context expansion, vision timeout resilience | M3 | Phase 10 |
+| 14 | Premium Frontend Thinking UI | ThinkingPanel, ThinkingStep, useThinkingStream in Next.js and Aether, accessibility, themes | M4 | Phase 11 |
+| 15 | Streamlit Thinking UI | Live st.status milestone tracking and turn history reasoning expanders in Streamlit | M4 | Phase 11 |
+| 16 | 20-Scenario E2E Test Suite | Comprehensive opaque-box test suite across Tiers 1-4 covering all required scenarios | E2E Track | Phase 15 |
+| 17 | Adversarial Hardening (Tier 5) | White-box challenger verification and gap closure | M5 | Phase 15 |
+| 18 | Multi-Turn E2E Verification & Final Report | Live multi-turn evaluation ("What is implementation code..." -> "tell me about it in detail") | M5 | Phase 16 |
 
 ---
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| E2E | E2E Testing Track | Requirement-driven opaque-box test suite (Tiers 1-4) & `TEST_READY.md` | none | IN_PROGRESS |
-| 1 | M1: Fine-Tuning Pipeline | Dataset loader, LoRA/QLoRA trainer, metrics logger, CLI `finetune_qwen_coder.py` | none | IN_PROGRESS |
-| 2 | M2: Model Merging, GGUF Export & Ollama Registration | Weight merger, GGUF quantization exporter, Modelfile generator, Ollama registrar, CLI `export_and_register_ollama.py` | M1 | PLANNED |
-| 3 | M3: System Integration & Defaults | Configuration files (.env, config.py, docker-compose.yml), backend routes, frontend defaults | M2 | PLANNED |
-| 4 | M4: Automated Verification & Final E2E Validation | Pass 100% E2E test suite (Tiers 1-4), smoke-test validation, and adversarial coverage hardening (Tier 5) | M3, E2E | PLANNED |
+| E2E | E2E Testing Track | Test harness & 20-scenario suite (Tiers 1-4), TEST_INFRA.md, TEST_READY.md | Survey | READY |
+| M1 | Core Conversation & Evidence Continuity | FollowUpResolver, ConversationEvidenceContext, AnswerMode, ExpansionPlan, ConsistencyGuard, Rules A-F | Survey | DONE |
+| M2 | Safe Thinking State Machine & SSE Streaming | ThinkingEvent, ThinkingStateMachine, SSE stream emission, degradation paths, performance tracking | M1 | DONE |
+| M3 | Multimodal & RAG Trace Integration | Code screenshot reuse, diagram expansion, vision degradation resilience, ReasoningSummary in RAGTrace | M1, M2 | DONE |
+| M4 | Premium Frontend & Streamlit UI | ThinkingPanel, ThinkingStep, useThinkingStream, types/thinking.ts, Streamlit st.status | M2, M3 | DONE |
+| M5 | 100% E2E Test Pass & Adversarial Hardening | Pass all 20 scenarios, Tier 5 adversarial hardening, multi-turn E2E verification, final report | E2E, M1, M2, M3, M4 | IN_PROGRESS |
 
 ---
 
 ## Interface Contracts
 
-### 1. `DatasetLoader` (`company_policy_rag/src/finetuning/dataset_loader.py`)
-- `load_dataset_from_file(file_path: str, val_split: float = 0.1, seed: int = 42) -> Tuple[Dataset, Dataset]`
-- `normalize_record(record: dict) -> List[Dict[str, str]]`: Returns `[{"role": "system"|"user"|"assistant", "content": "..."}]`.
-- Supported formats: Alpaca (`instruction`, `input`, `output`), ShareGPT (`conversations`/`messages`), JSONL (`prompt`/`response` or `messages`).
+### M1 ↔ M2: FollowUpResolution & ConversationEvidenceContext
+- `FollowUpResolution`:
+  - `is_follow_up: bool`
+  - `confidence: float`
+  - `resolved_query: str`
+  - `primary_subject: Optional[str]`
+  - `referenced_answer_id: Optional[str]`
+  - `answer_mode: AnswerMode`
+  - `expansion_requested: bool`
+  - `requested_detail_level: ThinkingDetailLevel`
+  - `preserve_previous_evidence: bool`
+  - `evidence_continuity_ids: list[str]`
+  - `ambiguity_detected: bool`
+- `ConversationEvidenceContext`:
+  - `session_id: str`
+  - `turn_id: str`
+  - `verified_chunks: list[RetrievedChunk]`
+  - `verified_citations: list[Citation]`
+  - `visual_asset_ids: list[str]`
+  - `evidence_status: EvidenceStatus`
+  - `answer_mode: AnswerMode`
+- `ThinkingStateMachine.record_stage(stage: ThinkingStage, status: ThinkingStatus, ...)` consumes resolution and evidence context to construct deterministic summaries.
 
-### 2. `QwenLoRATrainer` (`company_policy_rag/src/finetuning/trainer.py`)
-- `train_lora(config: FineTuneConfig) -> TrainingOutput`
-- `FineTuneConfig`: `model_name_or_path: str`, `dataset_path: str`, `output_dir: str`, `lora_r: int = 16`, `lora_alpha: int = 32`, `lora_dropout: float = 0.05`, `use_qlora: bool = True`, `batch_size: int = 2`, `gradient_accumulation_steps: int = 4`, `learning_rate: float = 2e-4`, `num_train_epochs: int = 3`, `max_seq_length: int = 2048`, `val_split: float = 0.1`, `smoke_test: bool = False`.
-- Output: Adapter directory containing `adapter_model.safetensors`, `adapter_config.json`, `training_history.json`, `metrics_summary.json`.
-
-### 3. `ModelMerger` (`company_policy_rag/src/finetuning/merger.py`)
-- `merge_lora_weights(base_model_path: str, adapter_path: str, output_dir: str, device: str = "cpu") -> str`
-- Output: Standalone merged HuggingFace model directory with full model weights and tokenizer files.
-
-### 4. `GGUFExporter` & `ModelfileGenerator` (`company_policy_rag/src/finetuning/`)
-- `convert_to_gguf(model_dir: str, output_file: str, quantization: str = "Q4_K_M") -> str`
-- `generate_modelfile(gguf_path: str, output_path: str, system_prompt: Optional[str] = None, num_ctx: int = 8192, temperature: float = 0.1) -> str`
-- Stop tokens: `<|im_end|>`, `<|endoftext|>`.
-
-### 5. `OllamaRegistrar` (`company_policy_rag/src/finetuning/ollama_registrar.py`)
-- `register_model_in_ollama(model_name: str, modelfile_path: str, ollama_url: str = "http://localhost:11434") -> bool`
+### M2 ↔ M4: SSE Protocol
+- `event: thinking` -> `data: {"id": str, "query_id": str, "stage": str, "status": str, "title": str, "summary": str, "details": Optional[dict], "duration_ms": Optional[float]}`
+- `event: token` / `event: chunk` -> `data: {"content": str}`
+- `event: citation` -> `data: {"citation": dict}`
+- `event: trace` -> `data: {"trace": dict}`
+- `event: complete` / `event: done` -> `data: {"turn_id": str, "reasoning_summary": dict, ...}`
 
 ---
 
 ## Code Layout
-```
-company_policy_rag/
-├── src/
-│   ├── config.py                               # System settings (default LLM model: qwen2.5-coder-7b-policy)
-│   ├── ollama_client.py                        # Ollama client & model probe/preload utilities
-│   ├── generation.py                           # LLM generation with ChatML formatting & verification
-│   └── finetuning/                             # [NEW] Fine-tuning & deployment package
-│       ├── __init__.py
-│       ├── dataset_loader.py                   # Multi-format dataset ingestion & validation splitting
-│       ├── trainer.py                          # LoRA/QLoRA trainer & perplexity metrics logger
-│       ├── merger.py                           # LoRA adapter weight merger
-│       ├── gguf_exporter.py                    # GGUF converter & quantization utility
-│       ├── modelfile_generator.py              # Ollama Modelfile generator
-│       └── ollama_registrar.py                 # Ollama model registration utility
-├── scripts/
-│   ├── finetune_qwen_coder.py                  # CLI entrypoint for fine-tuning
-│   ├── export_and_register_ollama.py           # CLI entrypoint for merge, GGUF export, & Ollama register
-│   └── run_finetune_pipeline.py                # Unified end-to-end pipeline runner
-├── backend/
-│   ├── api/routes/models.py                    # Dynamic model selection endpoints
-│   ├── models/api_dto.py                       # API data transfer objects & model defaults
-│   └── dependencies.py                         # FastAPI dependency injection
-├── frontend/
-│   ├── components/ChatWindow.tsx               # UI default model selector
-│   └── lib/api-client.ts                       # Frontend API client
-├── tests/
-│   ├── unit/
-│   │   ├── test_finetuning_dataset.py          # Unit tests for dataset loader & splitting
-│   │   ├── test_finetuning_trainer.py          # Unit tests for trainer & metrics logging
-│   │   ├── test_export_merge_modelfile.py      # Unit tests for merger, GGUF exporter, Modelfile
-│   │   └── test_ollama_registration.py         # Unit tests for Ollama registrar
-│   └── e2e/
-│       └── test_finetuned_rag_e2e.py           # End-to-end integration test
-├── .env.example
-├── docker-compose.yml
-└── pyproject.toml
-```
+- Backend Models:
+  - `backend/models/conversation.py` (FollowUpResolution, ConversationEvidenceContext, AnswerMode, ExpansionPlan)
+  - `backend/models/rag.py` (ThinkingStage, ThinkingStatus, ThinkingDetailLevel, ThinkingEvent, ReasoningSummary, RAGTrace)
+- Backend RAG Engine:
+  - `backend/rag/conversation_resolver.py` (FollowUpResolver)
+  - `backend/rag/consistency_guard.py` (ConversationConsistencyGuard)
+  - `backend/rag/thinking.py` (ThinkingStateMachine, safe deterministic generators)
+  - `backend/rag/pipeline.py` (Grounded system prompt Rules A-F, streaming query integration, evidence expansion)
+  - `backend/services/chat_service.py` (SSE event generator, session evidence context manager)
+- Backend Vision:
+  - `backend/vision/image_asset_manager.py`, `backend/vision/vision_service.py` (Multi-turn screenshot/diagram reuse, cached visual extractions)
+- Frontend (Next.js & Aether):
+  - `frontend/types/thinking.ts` & `frontend/aether/src/types/thinking.ts`
+  - `frontend/hooks/useThinkingStream.ts` & `frontend/aether/src/hooks/useThinkingStream.ts`
+  - `frontend/components/ThinkingPanel.tsx`, `ThinkingStep.tsx` & `frontend/aether/src/components/ThinkingPanel.tsx`, `ThinkingStep.tsx`
+  - `frontend/lib/api-client.ts` & `frontend/aether/src/api/client.ts`
+- Streamlit UI:
+  - `app/ui/components/chat.py`
+- Tests:
+  - `tests/test_thinking_conversation_scenarios.py` (20-scenario suite)
+  - `tests/test_evidence_continuity.py`
+  - `tests/test_thinking_events_and_degradation.py`

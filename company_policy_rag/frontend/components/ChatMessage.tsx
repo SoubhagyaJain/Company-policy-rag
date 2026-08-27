@@ -22,9 +22,10 @@ import {
   Zap,
   Tag,
 } from 'lucide-react';
-import { ChatMessageData, Citation, QueryTrace } from '../lib/types';
+import { ChatMessageData, Citation, QueryTrace, ThinkingDetailLevel } from '../lib/types';
 import { CitationCard } from './CitationCard';
 import { CodeBlock } from './CodeBlock';
+import { ThinkingPanel } from './ThinkingPanel';
 import { formatLatency, cn } from '../lib/utils';
 
 interface ChatMessageProps {
@@ -142,6 +143,18 @@ function VerificationDimensionBar({
 export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
   const [showTrace, setShowTrace] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [detailLevel, setDetailLevel] = useState<ThinkingDetailLevel>(
+    message.thinking_detail_level || 'standard'
+  );
+  const [thinkingExpanded, setThinkingExpanded] = useState<boolean>(Boolean(message.isStreaming));
+
+  React.useEffect(() => {
+    if (message.isStreaming) {
+      setThinkingExpanded(true);
+    } else if (message.content) {
+      setThinkingExpanded(false);
+    }
+  }, [message.isStreaming]);
 
   const isUser = message.role === 'user';
 
@@ -184,7 +197,7 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
                 <Sparkles className="w-3.5 h-3.5" />
               </div>
               <span className="font-medium text-charcoal dark:text-cream-200 tracking-tight text-xs">
-                Policy Assistant
+                Nexus AI
               </span>
               <span className="text-[10px] font-mono opacity-60">
                 {new Date(message.timestamp).toLocaleTimeString([], {
@@ -210,6 +223,19 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
               </div>
             )}
           </div>
+
+          {/* Milestone 4: Premium Thinking / Reasoning Panel */}
+          {((message.thinking_events && message.thinking_events.length > 0) || message.isStreaming) && (
+            <ThinkingPanel
+              events={message.thinking_events || []}
+              isStreaming={message.isStreaming}
+              isExpanded={thinkingExpanded}
+              onToggleExpanded={() => setThinkingExpanded((prev) => !prev)}
+              detailLevel={detailLevel}
+              onDetailLevelChange={setDetailLevel}
+              reasoningSummary={message.reasoning_summary}
+            />
+          )}
 
           {/* Collapsible Thinking / RAG Reasoning Banner (Claude style) */}
           {message.trace && (

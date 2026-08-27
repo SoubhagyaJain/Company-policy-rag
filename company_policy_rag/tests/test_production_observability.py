@@ -145,3 +145,83 @@ def test_conversational_bypass_semantics():
     assert trace["retrieved_candidate_count"] == 0
     assert trace["faithfulness_checked"] is False
     assert trace["verification_score"] is None
+
+
+def test_telemetry_delete_trace_and_clear_endpoints():
+    app = create_app()
+    client = TestClient(app)
+
+    # 1. Record a trace via chat or direct service injection
+    from backend.api.dependencies import get_telemetry_service
+    ts = app.dependency_overrides.get(get_telemetry_service, get_telemetry_service())
+
+    trace = QueryTraceRecord(
+        trace_id="tr_to_delete_999",
+        request_id="req_to_delete_999",
+        conversation_id="sess_del",
+        document_id="doc_del",
+        original_query="Test query to delete",
+        query_type="factual",
+        candidate_count=2,
+        execution_time_ms=120.0,
+        prompt_tokens=50,
+        completion_tokens=25,
+        total_tokens=75,
+        generation_model="qwen2.5:7b",
+    )
+    ts.record_query_trace_record(trace)
+    import time
+    time.sleep(0.1)
+
+    # Verify trace exists
+    res = client.get("/api/admin/observability/queries/tr_to_delete_999")
+    assert res.status_code == 200
+
+    # 2. Delete single trace via DELETE endpoint
+    del_res = client.delete("/api/admin/observability/queries/tr_to_delete_999")
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "success"
+
+    # Verify trace is gone
+    res2 = client.get("/api/admin/observability/queries/tr_to_delete_999")
+    assert res2.status_code == 404
+
+    # 3. Test clear endpoints (both POST and DELETE)
+    ts.record_query_trace_record(trace)
+    time.sleep(0.1)
+
+    clear_post = client.post("/api/admin/observability/clear")
+    assert clear_post.status_code == 200
+    assert clear_post.json()["status"] == "success"
+
+    clear_del = client.delete("/api/admin/observability/clear")
+    assert clear_del.status_code == 200
+    assert clear_del.json()["status"] == "success"
+
+
+def test_telemetry_all_time_ranges():
+    """Verify all required telemetry time ranges (5m, 15m, 1h, 6h, 24h, 7d, Live, 3s) work smoothly."""
+    app = create_app()
+    client = TestClient(app)
+
+    time_ranges = ["5m", "15m", "1h", "6h", "24h", "7d", "Live", "3s"]
+    for tr in time_ranges:
+        res = client.get(f"/api/admin/observability?time_range={tr}")
+        assert res.status_code == 200, f"Failed for time range {tr}"
+        data = res.json()
+        assert "health" in data
+        assert "query_metrics" in data
+        assert "latency_breakdown" in data
+        assert "retrieval_quality" in data
+        assert "grounding" in data
+        assert "models" in data
+        assert "time_series" in data
+
+        # Also verify queries endpoint with each time range
+        q_res = client.get(f"/api/admin/observability/queries?time_range={tr}")
+        assert q_res.status_code == 200, f"Failed queries for time range {tr}"
+        q_data = q_res.json()
+        assert "traces" in q_data
+        assert "total_count" in q_data
+
+

@@ -60,6 +60,8 @@ def apply_complete_assistant_turn(
             "role": "assistant",
             "content": turn.answer,
             "citations": turn.citations,
+            "thinking_events": turn.thinking_events,
+            "reasoning_summary": turn.reasoning_summary,
             "timing": turn.timing,
             "grounding_mode": turn.grounding_mode,
             "low_confidence": turn.low_confidence,
@@ -75,6 +77,62 @@ def queue_user_prompt(prompt: str) -> None:
 
 def complete_assistant_turn(turn: AgentTurnResult, *, user_prompt: str) -> None:
     apply_complete_assistant_turn(st.session_state, turn, user_prompt=user_prompt)
+
+
+def render_thinking_history(
+    thinking_events: list[dict[str, Any]],
+    reasoning_summary: dict[str, Any] | None = None,
+    detail_level: str = "standard",
+) -> None:
+    """Render collapsible reasoning expander for past turns in chat history."""
+    if detail_level == "off" or not thinking_events:
+        return
+
+    total_ms = 0.0
+    if reasoning_summary and isinstance(reasoning_summary, dict):
+        total_ms = float(reasoning_summary.get("total_duration_ms") or 0.0)
+    if total_ms <= 0.0:
+        total_ms = sum(float(e.get("duration_ms") or 0.0) for e in thinking_events)
+
+    duration_str = f" for {total_ms / 1000:.1f}s" if total_ms > 0 else ""
+    header = f"💭 Thought{duration_str}"
+
+    with st.expander(header, expanded=False):
+        for ev in thinking_events:
+            stage = ev.get("stage", "")
+            status = ev.get("status", "completed")
+            title = ev.get("title", stage.replace("_", " ").title())
+            summary = ev.get("summary", "")
+            dur = float(ev.get("duration_ms") or 0.0)
+            details = ev.get("details") or {}
+
+            dur_str = f" `{dur:.0f}ms`" if dur > 0 and detail_level == "detailed" else ""
+
+            if status == "warning" or stage == "degraded":
+                st.markdown(f"**⚠ {title}**{dur_str}")
+                if summary:
+                    st.caption(f"_{summary}_")
+            elif status == "skipped":
+                st.markdown(
+                    f"<span style='color: var(--text-muted); font-size: 0.85rem;'>⏭ {title}</span>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(f"**✓ {title}**{dur_str}")
+                if summary:
+                    st.caption(summary)
+                if detail_level == "detailed" and details:
+                    safe_meta = []
+                    if "candidate_count" in details:
+                        safe_meta.append(f"candidates: {details['candidate_count']}")
+                    if "source_count" in details:
+                        safe_meta.append(f"sources: {details['source_count']}")
+                    if "active_topic" in details and details["active_topic"]:
+                        safe_meta.append(f"topic: {details['active_topic']}")
+                    if "evidence_status" in details:
+                        safe_meta.append(f"evidence: {details['evidence_status']}")
+                    if safe_meta:
+                        st.caption(" · ".join(safe_meta))
 
 
 def render_welcome() -> None:
@@ -110,14 +168,23 @@ def render_suggested_prompts() -> None:
 
 
 def _render_assistant_extras(msg: dict[str, Any]) -> None:
+    detail_level = st.session_state.get("thinking_detail_level", "standard")
+    thinking_events = msg.get("thinking_events") or []
+    reasoning_summary = msg.get("reasoning_summary")
     citations = msg.get("citations") or []
+
+    if thinking_events and detail_level != "off":
+        render_thinking_history(thinking_events, reasoning_summary, detail_level=detail_level)
+
     if settings.show_citations and citations:
         render_sources_compact(citations)
+
     render_trust_panel(
         timing=msg.get("timing"),
         citations=citations,
         answer=msg.get("content", ""),
         grounding_mode=msg.get("grounding_mode"),
+        reasoning_summary=reasoning_summary,
         expanded=bool(msg.get("low_confidence")),
     )
 
@@ -139,12 +206,50 @@ def _run_turn(prompt: str, agent, memory) -> AgentTurnResult:
 
 
 def process_pending_turn(prompt: str, agent, memory) -> None:
-    """Generate assistant reply for the queued user prompt."""
+    """Generate assistant reply for the queued user prompt with live st.status milestone tracking."""
+    detail_level = st.session_state.get("thinking_detail_level", "standard")
+    show_thinking = (detail_level != "off")
+
     with st.chat_message("assistant"):
-        placeholder = st.empty()
-        placeholder.markdown(TYPING_INDICATOR_HTML, unsafe_allow_html=True)
+        if show_thinking:
+            status_box = st.status("Reasoning over document corpus...", expanded=True)
+            status_box.write("🔍 Resolving conversation context & follow-up intent...")
+        else:
+            status_box = None
+
         try:
             turn = _run_turn(prompt, agent, memory)
+            if status_box:
+                if turn.thinking_events:
+                    for ev in turn.thinking_events:
+                        stg = ev.get("stage", "")
+                        stt = ev.get("status", "completed")
+                        ttl = ev.get("title", stg.replace("_", " ").title())
+                        smm = ev.get("summary", "")
+                        if stt == "warning" or stg == "degraded":
+                            status_box.markdown(f"**⚠ {ttl}** — {smm}")
+                        elif stt == "skipped":
+                            status_box.markdown(
+                                f"<span style='color: var(--text-muted);'>⏭ {ttl}</span>",
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            status_box.markdown(f"**✓ {ttl}**" + (f": {smm}" if smm else ""))
+                else:
+                    status_box.write(f"✓ Retrieved verified sources ({len(turn.citations)} citations)")
+                    status_box.write(f"✓ Mode: {turn.grounding_mode.title()} grounding")
+
+                total_ms = 0.0
+                if turn.reasoning_summary and isinstance(turn.reasoning_summary, dict):
+                    total_ms = float(turn.reasoning_summary.get("total_duration_ms") or 0.0)
+                if total_ms <= 0.0 and turn.timing:
+                    total_ms = float(turn.timing.get("e2e_ms") or turn.timing.get("total_latency_ms") or 0.0)
+                dur_s = total_ms / 1000.0 if total_ms > 0 else 0.5
+                status_box.update(
+                    label=f"Thought for {dur_s:.1f}s",
+                    state="complete",
+                    expanded=False,
+                )
         except Exception as exc:
             turn = AgentTurnResult(
                 answer=f"Sorry, something went wrong: {exc}",
@@ -153,8 +258,11 @@ def process_pending_turn(prompt: str, agent, memory) -> None:
                 grounding_mode=resolve_grounding_mode(),
                 low_confidence=False,
             )
-        placeholder.empty()
+            if status_box:
+                status_box.update(label="Thinking error", state="error", expanded=False)
+
         st.write_stream(stream_answer_chunks(turn.answer))
+
         if turn.low_confidence or LOW_CONFIDENCE_MESSAGE in turn.answer:
             st.caption("⚠ Review cited sources — answer could not be fully verified.")
         if settings.show_citations and turn.citations:
@@ -164,6 +272,7 @@ def process_pending_turn(prompt: str, agent, memory) -> None:
             citations=turn.citations,
             answer=turn.answer,
             grounding_mode=turn.grounding_mode,
+            reasoning_summary=turn.reasoning_summary,
             expanded=turn.low_confidence,
         )
 

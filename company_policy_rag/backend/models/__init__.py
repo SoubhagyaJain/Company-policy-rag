@@ -14,6 +14,8 @@ from backend.models.rag import (
     ScoredChunk,
 )
 
+from backend.models.page_identity import PageIdentity
+
 __all__ = [
     "Chunk",
     "ChunkMetadata",
@@ -25,6 +27,7 @@ __all__ = [
     "DocumentType",
     "IngestionRequest",
     "IngestionResult",
+    "PageIdentity",
     "QueryRewriteResult",
     "RAGResponse",
     "RAGTrace",

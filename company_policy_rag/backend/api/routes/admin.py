@@ -8,6 +8,7 @@ from backend.api.dependencies import get_document_service, get_telemetry_service
 from backend.models.api_dto import (
     ObservabilityMetrics,
     TraceDetailResponse,
+    TraceSummary,
 )
 from backend.models.telemetry_models import (
     ErrorIncident,
@@ -152,12 +153,29 @@ def get_error_incidents(
 
 
 @router.post("/api/admin/observability/clear")
+@router.delete("/api/admin/observability/clear")
 def clear_observability_telemetry(
     telemetry_service: TelemetryService = Depends(get_telemetry_service),
 ):
     """Purge in-memory and persistent telemetry databases."""
     telemetry_service.clear()
     return {"status": "success", "message": "Telemetry database cleared successfully."}
+
+
+@router.delete("/api/admin/observability/queries/{identifier}")
+@router.delete("/api/admin/observability/traces/{identifier}")
+def delete_query_trace_endpoint(
+    identifier: str,
+    telemetry_service: TelemetryService = Depends(get_telemetry_service),
+):
+    """Delete a single query execution trace by trace_id or request_id."""
+    deleted = telemetry_service.delete_trace(identifier)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Query trace with identifier '{identifier}' not found.",
+        )
+    return {"status": "success", "deleted": deleted, "identifier": identifier}
 
 
 # ── Backward Compatibility Endpoints ─────────────────────────
@@ -176,6 +194,30 @@ def get_legacy_query_traces(
         "traces": [t.model_dump() for t in traces],
         "total_count": metrics.total_queries,
     }
+
+
+@router.delete("/api/admin/traces")
+def clear_legacy_traces(
+    telemetry_service: TelemetryService = Depends(get_telemetry_service),
+):
+    """Legacy clear traces endpoint."""
+    telemetry_service.clear()
+    return {"status": "success", "message": "All traces deleted successfully."}
+
+
+@router.delete("/api/admin/traces/{trace_id}")
+def delete_legacy_trace(
+    trace_id: str,
+    telemetry_service: TelemetryService = Depends(get_telemetry_service),
+):
+    """Legacy delete single trace endpoint."""
+    deleted = telemetry_service.delete_trace(trace_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Execution trace with ID '{trace_id}' not found.",
+        )
+    return {"status": "success", "deleted": deleted, "trace_id": trace_id}
 
 
 @router.get("/api/admin/traces/{trace_id}", response_model=TraceDetailResponse)

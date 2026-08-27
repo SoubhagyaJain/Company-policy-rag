@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BookOpen, ExternalLink, Hash, Award } from 'lucide-react';
+import { BookOpen, ExternalLink, Hash, Award, Image as ImageIcon, Code, Table as TableIcon } from 'lucide-react';
 import { Citation } from '../lib/types';
 import { formatScore, cn } from '../lib/utils';
 
@@ -24,16 +24,20 @@ export function CitationCard({
     return 'bg-cream-200 text-charcoal-muted border-sand-border';
   };
 
+  const displayPage = citation.display_page_number ?? citation.page_label ?? citation.page;
+  const isVisual = citation.evidence_type === 'DIAGRAM_ARCHITECTURE' || citation.evidence_type === 'CODE_SCREENSHOT' || citation.evidence_type === 'TABLE_DATA' || Boolean(citation.image_url);
+
   if (compact) {
     return (
       <button
         onClick={() => onClick(citation)}
-        title={`View Source: ${citation.title}`}
+        title={`View Source: ${citation.title} (Page ${displayPage ?? ''})`}
         className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-md bg-terracotta-500/10 dark:bg-terracotta-500/20 text-terracotta-700 dark:text-terracotta-400 border border-terracotta-500/30 text-[11px] font-mono hover:bg-terracotta-500/20 transition-colors"
       >
         <BookOpen className="w-3 h-3 shrink-0" />
-        <span className="font-semibold">[{index + 1}]</span>
+        <span className="font-semibold">[{citation.source_index ?? index + 1}]</span>
         <span className="truncate max-w-[120px] hidden sm:inline">{citation.title}</span>
+        {displayPage && <span className="text-[10px] opacity-75">p.{displayPage}</span>}
       </button>
     );
   }
@@ -46,7 +50,7 @@ export function CitationCard({
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-5 h-5 rounded-md bg-terracotta-600/10 text-terracotta-700 dark:text-terracotta-400 font-mono text-[11px] font-bold flex items-center justify-center shrink-0">
-            {index + 1}
+            {citation.source_index ?? index + 1}
           </span>
           <h4 className="text-xs font-semibold text-charcoal dark:text-cream-100 truncate group-hover:text-terracotta-600 transition-colors">
             {citation.title}
@@ -71,16 +75,25 @@ export function CitationCard({
 
       <div className="flex items-center justify-between text-[10px] text-charcoal-muted dark:text-cream-500 border-t border-sand-border/40 dark:border-sand-darkBorder/40 pt-1.5">
         <div className="flex items-center gap-2">
-          {citation.page !== undefined && (
-            <span className="flex items-center gap-0.5 font-mono" title={citation.page_label && citation.page_label !== String(citation.page) ? `PDF physical stream page ${citation.page}` : undefined}>
-              <Hash className="w-2.5 h-2.5" /> {citation.page_label && citation.page_label !== String(citation.page) ? `Page ${citation.page_label} (PDF p. ${citation.page})` : `Page ${citation.page}`}
+          {displayPage !== undefined && (
+            <span
+              className="flex items-center gap-0.5 font-mono font-medium text-charcoal/90 dark:text-cream-200"
+              title={citation.physical_page_number && String(citation.physical_page_number) !== String(displayPage) ? `PDF physical sheet ${citation.physical_page_number}` : undefined}
+            >
+              <Hash className="w-2.5 h-2.5 text-terracotta-500" /> Page {String(displayPage)}
             </span>
           )}
-          {citation.image_url && (
-            <span className="px-1 py-0.2 rounded bg-terracotta-500/15 text-terracotta-600 dark:text-terracotta-400 font-mono text-[9px] font-semibold">
-              🖼️ Visual Asset
+          {isVisual ? (
+            <span className="px-1.5 py-0.5 rounded bg-terracotta-500/15 text-terracotta-600 dark:text-terracotta-400 font-mono text-[9px] font-semibold flex items-center gap-0.5">
+              <ImageIcon className="w-2.5 h-2.5" />
+              {citation.evidence_type === 'CODE_SCREENSHOT' ? 'Code Visual' : citation.evidence_type === 'TABLE_DATA' ? 'Table' : 'Diagram'}
             </span>
-          )}
+          ) : citation.evidence_type === 'CODE' ? (
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-mono text-[9px] font-semibold flex items-center gap-0.5">
+              <Code className="w-2.5 h-2.5" />
+              Code
+            </span>
+          ) : null}
           {citation.heading && (
             <span className="truncate max-w-[140px] font-medium text-charcoal/80 dark:text-cream-300">
               § {citation.heading}

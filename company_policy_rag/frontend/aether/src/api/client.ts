@@ -1,3 +1,9 @@
+import type {
+  ThinkingEvent,
+  ThinkingDetailLevel,
+  ReasoningSummary,
+} from "../types/thinking";
+
 export type CorpusScope = "all" | "policy" | "guidebook";
 export type GroundingMode = "balanced" | "strict";
 
@@ -18,6 +24,8 @@ export interface ChatMessage {
   content: string;
   citations?: Array<Record<string, unknown>>;
   thinking?: string;
+  thinking_events?: ThinkingEvent[];
+  reasoning_summary?: ReasoningSummary | null;
   retrieval_trace?: RetrievalTrace | null;
   timing?: Record<string, number> | null;
   message_id?: string;
@@ -55,6 +63,8 @@ export interface ChatResponse {
   timing?: Record<string, number>;
   low_confidence: boolean;
   thinking?: string;
+  thinking_events?: ThinkingEvent[];
+  reasoning_summary?: ReasoningSummary;
   retrieval_trace?: RetrievalTrace;
   message_id?: string;
 }
@@ -62,6 +72,8 @@ export interface ChatResponse {
 export interface StreamDonePayload {
   answer: string;
   thinking?: string;
+  thinking_events?: ThinkingEvent[];
+  reasoning_summary?: ReasoningSummary;
   citations: Array<Record<string, unknown>>;
   timing?: Record<string, number>;
   retrieval_trace?: RetrievalTrace;
@@ -73,6 +85,7 @@ export interface StreamDonePayload {
 export interface StreamHandlers {
   onRetrievalDone?: (trace: RetrievalTrace) => void;
   onThinking?: (thinking: string) => void;
+  onThinkingEvent?: (event: ThinkingEvent) => void;
   onToken?: (token: string) => void;
   onDone?: (payload: StreamDonePayload) => void;
   onError?: (message: string) => void;
@@ -149,6 +162,7 @@ export async function sendChatStream(
     corpus_scope?: CorpusScope;
     llm_model?: string | null;
     grounding_mode?: GroundingMode;
+    thinking_detail_level?: ThinkingDetailLevel;
   },
   handlers: StreamHandlers,
   signal?: AbortSignal,
@@ -162,6 +176,7 @@ export async function sendChatStream(
       chat_mode: "direct",
       llm_model: opts.llm_model,
       grounding_mode: opts.grounding_mode,
+      thinking_detail_level: opts.thinking_detail_level ?? "standard",
     }),
     signal,
   });
@@ -193,7 +208,13 @@ export async function sendChatStream(
           /* ignore malformed */
         }
       } else if (event === "thinking") {
-        handlers.onThinking?.(data);
+        try {
+          const thinkingEv = JSON.parse(data) as ThinkingEvent;
+          handlers.onThinkingEvent?.(thinkingEv);
+          handlers.onThinking?.(thinkingEv.summary || data);
+        } catch {
+          handlers.onThinking?.(data);
+        }
       } else if (event === "chunk" || event === "token") {
         try {
           const payload = JSON.parse(data) as { content?: string };

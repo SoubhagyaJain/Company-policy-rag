@@ -182,12 +182,17 @@ class Settings(BaseSettings):
     vision_cache_dir: Path = Field(default=PROJECT_ROOT / "storage" / "vision_cache")
     images_storage_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
     vision_dpi: int = Field(default=150, alias="VISION_DPI")
-    vision_inference_max_dimension: int = Field(default=1024, alias="VISION_INFERENCE_MAX_DIMENSION")
+    vision_inference_max_dimension: int = Field(default=768, alias="VISION_INFERENCE_MAX_DIMENSION")
+    vision_num_ctx: int = Field(default=4096, alias="VISION_NUM_CTX")
+    # Retrieval needs concise factual descriptions, not long-form visual prose.
+    # This protects the query-time budget on partly CPU-offloaded local models.
+    vision_num_predict: int = Field(default=384, alias="VISION_NUM_PREDICT")
     vision_max_ingestion_retries: int = Field(default=0, alias="VISION_MAX_INGESTION_RETRIES")
-    vision_max_lazy_retries: int = Field(default=1, alias="VISION_MAX_LAZY_RETRIES")
-    vision_timeout_seconds: float = Field(default=40.0, alias="VISION_TIMEOUT_SECONDS")
+    vision_max_lazy_retries: int = Field(default=0, alias="VISION_MAX_LAZY_RETRIES")
+    vision_timeout_seconds: float = Field(default=35.0, alias="VISION_TIMEOUT_SECONDS")
     enable_lazy_vision_fallback: bool = Field(default=True, alias="ENABLE_LAZY_VISION_FALLBACK")
-    vision_request_timeout: float = Field(default=40.0, alias="VISION_REQUEST_TIMEOUT")
+    vision_request_timeout: float = Field(default=35.0, alias="VISION_REQUEST_TIMEOUT")
+    vision_query_budget_seconds: float = Field(default=45.0, alias="VISION_QUERY_BUDGET_SECONDS")
 
     @property
     def VISION_MODEL(self) -> str:

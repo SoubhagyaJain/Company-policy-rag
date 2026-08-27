@@ -446,16 +446,17 @@ class TelemetryDB:
 
     def _parse_time_range(self, time_range: str) -> str:
         now = datetime.now(UTC)
-        unit = time_range[-1].lower() if time_range else "h"
-        val_str = time_range[:-1] if len(time_range) > 1 and time_range[:-1].isdigit() else "24"
-        val = int(val_str)
-
-        if unit == "m":
-            delta = timedelta(minutes=val)
-        elif unit == "h":
-            delta = timedelta(hours=val)
-        elif unit == "d":
-            delta = timedelta(days=val)
+        tr = (time_range or "24h").strip().lower()
+        if tr in ("live", "3s"):
+            delta = timedelta(seconds=3)
+        elif tr.endswith("s") and tr[:-1].isdigit():
+            delta = timedelta(seconds=int(tr[:-1]))
+        elif tr.endswith("m") and tr[:-1].isdigit():
+            delta = timedelta(minutes=int(tr[:-1]))
+        elif tr.endswith("h") and tr[:-1].isdigit():
+            delta = timedelta(hours=int(tr[:-1]))
+        elif tr.endswith("d") and tr[:-1].isdigit():
+            delta = timedelta(days=int(tr[:-1]))
         else:
             delta = timedelta(hours=24)
 
@@ -473,7 +474,7 @@ class TelemetryDB:
         vision: str | None = None,
         cache: str | None = None,
         has_error: bool | None = None,
-        limit: int = 50,
+        limit: int | None = 50,
         offset: int = 0,
     ) -> tuple[list[QueryTraceRecord], int]:
         cutoff_iso = self._parse_time_range(time_range)
@@ -531,9 +532,12 @@ class TelemetryDB:
                 SELECT raw_trace_json FROM query_traces
                 WHERE {where_clause}
                 ORDER BY timestamp DESC
-                LIMIT ? OFFSET ?
             """
-            cur = conn.execute(query_sql, tuple(params + [limit, offset]))
+            query_params = list(params)
+            if limit is not None:
+                query_sql += " LIMIT ? OFFSET ?"
+                query_params.extend([limit, offset])
+            cur = conn.execute(query_sql, tuple(query_params))
             rows = cur.fetchall()
 
             traces: list[QueryTraceRecord] = []
@@ -775,7 +779,7 @@ class TelemetryDB:
         finally:
             conn.close()
 
-    def compute_aggregates(self, time_range: str = "24h") -> dict[str, Any]:
+    def compute_aggregates(self, time_range: str = "24h", document_id: str | None = None) -> dict[str, Any]:
         cutoff_iso = self._parse_time_range(time_range)
         conn = self._get_connection()
         try:
@@ -826,25 +830,40 @@ class TelemetryDB:
                 p99_lat = round(all_lats[min(n - 1, int(n * 0.99))], 2)
 
             # Vision specific metrics
+            vis_conditions = ["timestamp >= ?"]
+            vis_params: list[Any] = [cutoff_iso]
+            if document_id:
+                vis_conditions.append("document_id = ?")
+                vis_params.append(document_id)
+            vis_where = " AND ".join(vis_conditions)
             vis_cur = conn.execute(
-                """
+                f"""
                 SELECT
                     COUNT(*) as reqs,
                     SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) as succ,
                     SUM(CASE WHEN status = 'TIMEOUT' THEN 1 ELSE 0 END) as tout,
                     SUM(CASE WHEN status = 'CACHE_HIT' THEN 1 ELSE 0 END) as chit,
+                    SUM(CASE WHEN status NOT IN ('SUCCESS', 'CACHE_HIT') THEN 1 ELSE 0 END) as failures,
+                    COUNT(DISTINCT CASE
+                        WHEN page_number IS NOT NULL
+                            THEN COALESCE(document_id, '') || ':' || CAST(page_number AS TEXT)
+                        ELSE id
+                    END) as detected_pages,
+                    SUM(CASE WHEN LOWER(visual_type) LIKE '%diagram%' OR LOWER(visual_type) LIKE '%architecture%' THEN 1 ELSE 0 END) as diagrams,
+                    SUM(CASE WHEN LOWER(visual_type) LIKE '%code%' OR LOWER(visual_type) LIKE '%screenshot%' THEN 1 ELSE 0 END) as code_screenshots,
+                    SUM(CASE WHEN LOWER(visual_type) LIKE '%table%' THEN 1 ELSE 0 END) as tables,
                     AVG(duration_ms) as avg_lat
                 FROM vision_events
-                WHERE timestamp >= ?
+                WHERE {vis_where}
                 """,
-                (cutoff_iso,),
+                tuple(vis_params),
             )
             vis_row = vis_cur.fetchone()
 
             # Vision percentiles
             vis_lat_cur = conn.execute(
-                "SELECT duration_ms FROM vision_events WHERE timestamp >= ? ORDER BY duration_ms ASC",
-                (cutoff_iso,),
+                f"SELECT duration_ms FROM vision_events WHERE {vis_where} ORDER BY duration_ms ASC",
+                tuple(vis_params),
             )
             vis_lats = [r[0] for r in vis_lat_cur.fetchall()]
             vis_p95 = round(vis_lats[min(len(vis_lats) - 1, int(len(vis_lats) * 0.95))], 2) if vis_lats else None
@@ -856,6 +875,7 @@ class TelemetryDB:
                     COUNT(DISTINCT session_id) as act_sess,
                     COUNT(*) as total_mem_events,
                     SUM(CASE WHEN resolution_status = 'SUCCESS' THEN 1 ELSE 0 END) as succ_res,
+                    SUM(CASE WHEN referent_found IS NOT NULL AND TRIM(referent_found) != '' THEN 1 ELSE 0 END) as hit_count,
                     AVG(latency_ms) as avg_mem_lat
                 FROM memory_events
                 WHERE timestamp >= ?
@@ -879,17 +899,23 @@ class TelemetryDB:
                 "error_rate": round(row["err_count"] / max(1, row["total_queries"]), 4) if row["total_queries"] else 0.0,
                 "avg_candidates": round(row["avg_candidates"], 1) if row["avg_candidates"] is not None else 0.0,
                 "avg_final_chunks": round(row["avg_final_chunks"], 1) if row["avg_final_chunks"] is not None else 0.0,
-                "avg_verification_score": round(row["avg_ver_score"], 4) if row["avg_ver_score"] is not None else 1.0,
-                "hit_rate": round(row["hit_count"] / max(1, row["ret_req_count"]), 4) if row["ret_req_count"] else 1.0,
+                "avg_verification_score": round(row["avg_ver_score"], 4) if row["avg_ver_score"] is not None else 0.0,
+                "hit_rate": round(row["hit_count"] / max(1, row["ret_req_count"]), 4) if row["ret_req_count"] else 0.0,
                 "vision_reqs": vis_row["reqs"] or 0,
                 "vision_success": vis_row["succ"] or 0,
                 "vision_timeouts": vis_row["tout"] or 0,
                 "vision_cache_hits": vis_row["chit"] or 0,
+                "vision_failures": vis_row["failures"] or 0,
+                "visual_pages_detected": vis_row["detected_pages"] or 0,
+                "vision_diagrams": vis_row["diagrams"] or 0,
+                "vision_code_screenshots": vis_row["code_screenshots"] or 0,
+                "vision_tables": vis_row["tables"] or 0,
                 "vision_avg_lat": round(vis_row["avg_lat"], 2) if vis_row["avg_lat"] is not None else None,
                 "vision_p95_lat": vis_p95,
                 "active_sessions": mem_row["act_sess"] or 0,
                 "memory_events_count": mem_row["total_mem_events"] or 0,
-                "memory_resolution_rate": round(mem_row["succ_res"] / max(1, mem_row["total_mem_events"]), 4) if mem_row["total_mem_events"] else 1.0,
+                "memory_hit_rate": round(mem_row["hit_count"] / mem_row["total_mem_events"], 4) if mem_row["total_mem_events"] else None,
+                "memory_resolution_rate": round(mem_row["succ_res"] / mem_row["total_mem_events"], 4) if mem_row["total_mem_events"] else None,
                 "avg_memory_latency_ms": round(mem_row["avg_mem_lat"], 2) if mem_row["avg_mem_lat"] is not None else None,
             }
         finally:
@@ -945,7 +971,7 @@ class TelemetryDB:
                 c_toks = sum(r["completion_tokens"] for r in b_rows)
                 avg_chunks = round(sum(r["final_chunk_count"] for r in b_rows) / len(b_rows), 1)
                 scores = [r["verification_score"] for r in b_rows if r["verification_score"] is not None]
-                avg_rerank = round(sum(scores) / len(scores), 3) if scores else 0.95
+                avg_rerank = round(sum(scores) / len(scores), 3) if scores else 0.0
                 errs = sum(1 for r in b_rows if r["error"] is not None)
 
                 points.append(
@@ -965,6 +991,20 @@ class TelemetryDB:
             return points
         finally:
             conn.close()
+
+    def delete_query_trace(self, identifier: str) -> bool:
+        """Delete a single query trace by trace_id or request_id."""
+        with self._lock:
+            conn = self._get_connection()
+            try:
+                with conn:
+                    cursor = conn.execute(
+                        "DELETE FROM query_traces WHERE trace_id = ? OR request_id = ?;",
+                        (identifier, identifier),
+                    )
+                    return cursor.rowcount > 0
+            finally:
+                conn.close()
 
     def clear(self) -> None:
         """Purge all telemetry database records."""

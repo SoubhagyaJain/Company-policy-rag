@@ -21,11 +21,11 @@ const INITIAL_OBSERVABILITY: ObservabilityData = {
   similarity_avg: 0,
   rerank_avg: 0,
   health: {
-    status: 'ok',
+    status: 'degraded',
     redis: false,
-    vector_db: true,
-    models_loaded: true,
-    backend_version: 'FastAPI RAG',
+    vector_db: false,
+    models_loaded: false,
+    backend_version: 'Awaiting backend telemetry',
   },
   recent_traces: [],
 };
@@ -46,9 +46,11 @@ export function useObservability() {
   const [refreshIntervalMs, setRefreshIntervalMs] = useState<number>(3000);
 
   const filtersRef = useRef(filters);
+  const requestSequenceRef = useRef(0);
   filtersRef.current = filters;
 
   const fetchTelemetry = useCallback(async (isBackground = false) => {
+    const requestSequence = ++requestSequenceRef.current;
     if (!isBackground) {
       setLoading(true);
     } else {
@@ -57,54 +59,49 @@ export function useObservability() {
     setError(null);
 
     try {
-      const [summaryData, obsData] = await Promise.all([
-        apiClient.getObservabilitySummary(filtersRef.current).catch(() => null),
-        apiClient.getObservability().catch(() => null),
-      ]);
+      const summaryData = await apiClient.getObservabilitySummary(filtersRef.current);
+      if (requestSequence !== requestSequenceRef.current) return;
 
-      if (summaryData) {
-        setSummary(summaryData);
-      }
-      if (obsData) {
-        setData(obsData);
-      } else if (summaryData) {
-        setData({
-          total_queries: summaryData.query_metrics.total_queries ?? 0,
-          avg_latency_ms: summaryData.query_metrics.avg_latency_ms ?? 0,
-          avg_ttft_ms: summaryData.query_metrics.avg_ttft_ms ?? 0,
-          p95_latency_ms: summaryData.query_metrics.p95_latency_ms ?? 0,
-          prompt_tokens: summaryData.tokens.total_prompt_tokens ?? 0,
-          completion_tokens: summaryData.tokens.total_completion_tokens ?? 0,
-          total_tokens: summaryData.tokens.total_tokens ?? 0,
-          active_documents: summaryData.ingestion.documents_processed ?? 0,
-          indexed_chunks: summaryData.ingestion.chunks_indexed ?? 0,
-          similarity_avg: summaryData.retrieval_quality.avg_rerank_score ?? 0.95,
-          rerank_avg: summaryData.retrieval_quality.avg_rerank_score ?? 0.95,
-          health: {
-            status: summaryData.health.api === 'healthy' ? 'ok' : 'degraded',
-            redis: false,
-            vector_db: summaryData.health.vector_db === 'healthy',
-            models_loaded: summaryData.health.text_model === 'healthy',
-            backend_version: `Qwen2.5 / ${summaryData.health.active_model_text}`,
-          },
-          recent_traces: summaryData.recent_traces,
-        });
-      }
+      setSummary(summaryData);
+      setData({
+        total_queries: summaryData.query_metrics.total_queries ?? 0,
+        avg_latency_ms: summaryData.query_metrics.avg_latency_ms ?? 0,
+        avg_ttft_ms: summaryData.query_metrics.avg_ttft_ms ?? 0,
+        p95_latency_ms: summaryData.query_metrics.p95_latency_ms ?? 0,
+        prompt_tokens: summaryData.tokens.total_prompt_tokens ?? 0,
+        completion_tokens: summaryData.tokens.total_completion_tokens ?? 0,
+        total_tokens: summaryData.tokens.total_tokens ?? 0,
+        active_documents: summaryData.ingestion.documents_processed ?? 0,
+        indexed_chunks: summaryData.ingestion.chunks_indexed ?? 0,
+        similarity_avg: summaryData.retrieval_quality.avg_rerank_score ?? 0,
+        rerank_avg: summaryData.retrieval_quality.avg_rerank_score ?? 0,
+        health: {
+          status: summaryData.health.api === 'healthy' ? 'ok' : 'degraded',
+          redis: false,
+          vector_db: summaryData.health.vector_db === 'healthy',
+          models_loaded: summaryData.health.text_model === 'healthy',
+          backend_version: summaryData.health.active_model_text,
+        },
+        recent_traces: summaryData.recent_traces,
+      });
       setLastUpdated(new Date());
     } catch (e: any) {
+      if (requestSequence !== requestSequenceRef.current) return;
       console.warn('Observability telemetry fetch error:', e);
       setError(e.message || 'Failed to fetch observability telemetry');
     } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+      if (requestSequence === requestSequenceRef.current) {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, []);
 
   const updateFilters = useCallback((newFilters: Partial<TelemetryFilterOptions>) => {
+    const updated = { ...filtersRef.current, ...newFilters };
+    filtersRef.current = updated;
     setFilters((prev) => {
-      const updated = { ...prev, ...newFilters };
-      filtersRef.current = updated;
-      return updated;
+      return { ...prev, ...newFilters };
     });
     fetchTelemetry(false);
   }, [fetchTelemetry]);
@@ -130,9 +127,61 @@ export function useObservability() {
 
   const clearData = useCallback(async () => {
     setLoading(true);
-    await apiClient.clearTelemetry();
-    await fetchTelemetry(false);
+    setError(null);
+    try {
+      const cleared = await apiClient.clearTelemetry();
+      if (!cleared) {
+        throw new Error('The backend did not clear telemetry. No local data was changed.');
+      }
+      setData(INITIAL_OBSERVABILITY);
+      setSummary(null);
+      setSelectedTrace(null);
+      await fetchTelemetry(false);
+      return true;
+    } catch (err: any) {
+      setError(err?.message || 'Failed to clear telemetry');
+      return false;
+    } finally {
+      setLoading(false);
+    }
   }, [fetchTelemetry]);
+
+  const deleteSingleTrace = useCallback(async (traceId: string) => {
+    setError(null);
+    try {
+      const deleted = await apiClient.deleteTrace(traceId);
+      if (!deleted) {
+        throw new Error(`The backend did not delete trace ${traceId}.`);
+      }
+      setData((prev) => ({
+        ...prev,
+        recent_traces: prev.recent_traces.filter((t) => t.trace_id !== traceId && t.request_id !== traceId),
+        total_queries: Math.max(0, prev.total_queries - 1),
+      }));
+      setSummary((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recent_traces: prev.recent_traces.filter((t) => t.trace_id !== traceId && t.request_id !== traceId),
+          query_metrics: {
+            ...prev.query_metrics,
+            total_queries: Math.max(0, prev.query_metrics.total_queries - 1),
+          },
+        };
+      });
+      setSelectedTrace((curr) => {
+        if (curr && (curr.trace_id === traceId || curr.request_id === traceId)) {
+          return null;
+        }
+        return curr;
+      });
+      return true;
+    } catch (err: any) {
+      console.warn('Failed to delete trace:', err);
+      setError(err?.message || 'Failed to delete trace');
+      return false;
+    }
+  }, []);
 
   return {
     summary,
@@ -154,5 +203,6 @@ export function useObservability() {
     setRefreshIntervalMs,
     refreshMetrics: () => fetchTelemetry(false),
     clearTelemetry: clearData,
+    deleteTrace: deleteSingleTrace,
   };
 }

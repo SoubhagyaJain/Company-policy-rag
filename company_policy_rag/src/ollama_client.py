@@ -159,7 +159,9 @@ def execute_vision_completion(
 
     selected_model = (model_name or settings.vision_model).strip()
     url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/generate"
-    req_timeout = timeout or settings.vision_request_timeout
+    req_timeout = timeout or getattr(settings, "vision_request_timeout", 35.0)
+    num_ctx = getattr(settings, "vision_num_ctx", 4096)
+    num_predict = getattr(settings, "vision_num_predict", 1024)
 
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
     payload = {
@@ -170,6 +172,8 @@ def execute_vision_completion(
         "keep_alive": "15m",  # Keep model in VRAM during ingestion batch
         "options": {
             "temperature": 0.0,
+            "num_ctx": num_ctx,
+            "num_predict": num_predict,
         },
     }
 

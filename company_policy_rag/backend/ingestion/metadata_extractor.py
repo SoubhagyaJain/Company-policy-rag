@@ -519,3 +519,15 @@ class DocumentMetadataExtractor:
             extraction_method="heuristic",
             extra={},
         )
+
+    def flatten_for_chroma(self, extracted: ExtractedDocumentMetadata) -> dict[str, Any]:
+        """Convert extracted metadata into ChromaDB-compatible primitive dictionary."""
+        return {
+            "department": str(extracted.department or "General"),
+            "category": str(extracted.category or "general"),
+            "effective_date": str(extracted.effective_date or ""),
+            "policy_id": str(extracted.policy_id or ""),
+            "key_entities": ", ".join(extracted.key_entities) if isinstance(extracted.key_entities, list) else str(extracted.key_entities or ""),
+            "topic_tags": ", ".join(extracted.topic_tags) if isinstance(extracted.topic_tags, list) else str(extracted.topic_tags or ""),
+        }
+

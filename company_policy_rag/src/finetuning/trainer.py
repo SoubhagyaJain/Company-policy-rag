@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import yaml
@@ -28,7 +27,61 @@ from transformers import (
     TrainerCallback,
     TrainingArguments,
 )
-from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
+try:
+    from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
+except ImportError:
+    from trl import SFTTrainer
+
+    class DataCollatorForCompletionOnlyLM:
+        """Compatibility collator for TRL releases that removed the legacy helper."""
+
+        def __init__(
+            self,
+            response_template: str,
+            tokenizer: PreTrainedTokenizerBase,
+            mlm: bool = False,
+            **_: Any,
+        ) -> None:
+            if mlm:
+                raise ValueError("Completion-only causal language modeling does not support mlm=True")
+            self.tokenizer = tokenizer
+            self.response_template = response_template
+            self.response_template_ids = tokenizer.encode(response_template, add_special_tokens=False)
+            if not self.response_template_ids:
+                raise ValueError("response_template must tokenize to at least one token")
+
+        def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+            pad_id = self.tokenizer.pad_token_id
+            if pad_id is None:
+                pad_id = self.tokenizer.eos_token_id
+            if pad_id is None:
+                raise ValueError("Tokenizer must define pad_token_id or eos_token_id")
+
+            sequences = [list(feature["input_ids"]) for feature in features]
+            max_length = max((len(sequence) for sequence in sequences), default=0)
+            input_rows: List[List[int]] = []
+            attention_rows: List[List[int]] = []
+            label_rows: List[List[int]] = []
+
+            marker = self.response_template_ids
+            for sequence in sequences:
+                marker_starts = [
+                    index
+                    for index in range(0, len(sequence) - len(marker) + 1)
+                    if sequence[index : index + len(marker)] == marker
+                ]
+                completion_start = marker_starts[-1] + len(marker) if marker_starts else len(sequence)
+                padding = max_length - len(sequence)
+                input_rows.append(sequence + [int(pad_id)] * padding)
+                attention_rows.append([1] * len(sequence) + [0] * padding)
+                labels = [-100] * completion_start + sequence[completion_start:] + [-100] * padding
+                label_rows.append(labels)
+
+            return {
+                "input_ids": torch.tensor(input_rows, dtype=torch.long),
+                "attention_mask": torch.tensor(attention_rows, dtype=torch.long),
+                "labels": torch.tensor(label_rows, dtype=torch.long),
+            }
 
 # Import dataset loader
 try:

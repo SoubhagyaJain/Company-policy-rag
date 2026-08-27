@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
+from backend.ingestion.page_detector import PrintedPageDetector
 from backend.models.document import DocumentType, RawDocument
 from backend.models.logical_document import detect_continuation_signals
+from backend.models.page_identity import PageIdentity
 from backend.utils.logging import logger
 from backend.utils.section_tracker import SectionTracker
 from backend.vision.image_asset_manager import ImageAssetManager
@@ -16,7 +18,6 @@ from src.config import settings
 
 _CODE_PATTERN = re.compile(r"```|^\s*(def |class |import |function |const |let |var |Agent\(|Task\(|Crew\()", re.MULTILINE)
 _TABLE_PATTERN = re.compile(r"\|.*\|.*\||(?:\+[-+]+\+)|(?:\t+[^\t\n]+\t+)")
-_LONE_NUMBER_RE = re.compile(r"^\s*(\d{1,4})\s*$")
 
 
 class PDFLoader(BaseLoader):
@@ -39,30 +40,10 @@ class PDFLoader(BaseLoader):
 
     def _detect_printed_page_number(self, text: str, physical_page_num: int) -> str:
         """
-        Detect the human-visible printed page number from page footer/header.
-        Reconciles physical PDF index (e.g. 83) with printed document page number (e.g. 82).
+        Detect human-visible printed page number via PrintedPageDetector.
         """
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if not lines:
-            return str(physical_page_num)
-
-        # 1. Check bottom 3 lines (typical footer location)
-        for line in reversed(lines[-3:]):
-            m = _LONE_NUMBER_RE.match(line)
-            if m:
-                val = int(m.group(1))
-                if 1 <= val <= 9999:
-                    return str(val)
-
-        # 2. Check top 2 lines (header location)
-        for line in lines[:2]:
-            m = _LONE_NUMBER_RE.match(line)
-            if m:
-                val = int(m.group(1))
-                if 1 <= val <= 9999:
-                    return str(val)
-
-        return str(physical_page_num)
+        page_id = PrintedPageDetector.detect_single_page(text, physical_page_num)
+        return page_id.display_label
 
     def load(
         self,
@@ -80,13 +61,22 @@ class PDFLoader(BaseLoader):
         pages = fitz_pages if fitz_pages is not None else self._read_with_pypdf(file_path)
         total_pages = len(pages)
 
+        # 2. Sequence-Aware Printed Page Identity Resolution
+        page_identities = PrintedPageDetector.resolve_document_pages(pages)
+
         prev_continuation_cues: list[str] = []
         prev_section_ctx = None
 
         for idx, (page_num, text) in enumerate(pages, start=1):
-            internal_page_index = idx - 1  # 0-based
-            physical_page_num = idx  # 1-based physical
-            page_label = self._detect_printed_page_number(text, physical_page_num)
+            page_id = page_identities[idx - 1] if idx - 1 < len(page_identities) else PageIdentity.from_indices(
+                internal_page_index=idx - 1,
+                physical_page_number=idx,
+            )
+
+            internal_page_index = page_id.internal_page_index
+            physical_page_num = page_id.physical_page_number
+            display_page_number = page_id.display_page_number
+            page_label = page_id.page_label
 
             # Parse headings on this page
             page_found_new_heading = False
@@ -118,6 +108,9 @@ class PDFLoader(BaseLoader):
                 page_number=physical_page_num,
                 page_label=page_label,
                 document_id=doc_id,
+                display_page_number=display_page_number,
+                section_title=current_ctx.section_title,
+                section_path=current_ctx.section_path,
             )
             assets_dict = [asdict(a) for a in page_assets]
 
@@ -125,6 +118,7 @@ class PDFLoader(BaseLoader):
                 update={
                     "page_number": physical_page_num,
                     "internal_page_index": internal_page_index,
+                    "display_page_number": display_page_number,
                     "page_label": page_label,
                     "total_pages": total_pages,
                     "section_title": current_ctx.section_title,
@@ -141,7 +135,8 @@ class PDFLoader(BaseLoader):
                         "continuation_from_page": continuation_from_page,
                         "internal_page_index": internal_page_index,
                         "physical_page_number": physical_page_num,
-                        "display_page_number": page_label,
+                        "display_page_number": display_page_number,
+                        "page_label": page_label,
                     },
                 }
             )
@@ -161,6 +156,7 @@ class PDFLoader(BaseLoader):
                     continuation_cue=active_cue,
                     live_inference=False,  # Instant cache lookup during ingestion!
                     page_label=page_label,
+                    display_page_number=display_page_number,
                     internal_page_index=internal_page_index,
                 )
                 for vc in visual_chunks:
@@ -178,6 +174,8 @@ class PDFLoader(BaseLoader):
                                 "content_type": vc.content_type,
                                 "raw_code": vc.raw_code,
                                 "continuation_cue": active_cue,
+                                "display_page_number": display_page_number,
+                                "page_label": page_label,
                             },
                         }
                     )

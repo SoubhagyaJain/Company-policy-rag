@@ -30,6 +30,30 @@ def render_sidebar_controls() -> None:
         )
         apply_grounding_mode(grounding_choice)
 
+        # Thinking Detail Level (Milestone 4 requirement)
+        st.divider()
+        st.subheader("Thinking Experience")
+        thinking_levels = ["off", "compact", "standard", "detailed"]
+        thinking_labels = {
+            "off": "Off (No reasoning UI)",
+            "compact": "Compact (Core milestones)",
+            "standard": "Standard (All stages)",
+            "detailed": "Detailed (Metrics & durations)",
+        }
+        current_thk = st.session_state.get("thinking_detail_level", "standard")
+        thk_choice = st.radio(
+            "Reasoning detail",
+            options=thinking_levels,
+            format_func=lambda x: thinking_labels[x],
+            index=thinking_levels.index(current_thk) if current_thk in thinking_levels else 2,
+            help="Control the granularity of safe thinking milestones and duration displays.",
+        )
+        if thk_choice != st.session_state.get("thinking_detail_level"):
+            st.session_state.thinking_detail_level = thk_choice
+
+        # LLM Temperature
+        st.divider()
+        st.subheader("Model Parameters")
         settings.llm_temperature = st.slider(
             "LLM temperature",
             min_value=0.0,
@@ -38,6 +62,7 @@ def render_sidebar_controls() -> None:
             step=0.05,
         )
 
+        # Citations
         st.divider()
         st.subheader("Citations")
         settings.show_citations = st.toggle(
@@ -94,11 +119,8 @@ def render_sidebar_controls() -> None:
         st.divider()
         st.subheader("Session")
         if st.button("Clear chat history", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.pending_user_prompt = None
-            memory = st.session_state.get("memory")
-            if memory is not None:
-                memory.reset()
+            from app.ui.session import clear_chat_session
+            clear_chat_session()
             st.rerun()
 
         st.page_link("pages/2_Documents.py", label="Manage documents →", icon="📄")

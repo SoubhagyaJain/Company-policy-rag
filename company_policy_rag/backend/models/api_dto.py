@@ -11,20 +11,21 @@ from backend.models.rag import Citation, RAGTrace
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., description="User chat query (1-8000 chars)")
-    session_id: str | None = Field(default=None, description="Session ID for conversation history")
-    model: str | None = Field(default="qwen2.5:7b", description="Selected LLM model (optional, defaults to active)")
+    message: str = Field(..., max_length=8000, description="User chat query (1-8000 chars)")
+    session_id: str | None = Field(default=None, min_length=1, max_length=128, description="Session ID for conversation history")
+    model: str | None = Field(default="qwen2.5:7b", min_length=1, max_length=128, description="Selected LLM model (optional, defaults to active)")
     grounding_mode: str | None = Field(default="balanced", description="balanced | strict")
     corpus_scope: str | None = Field(default="all", description="all | policy | guidebook")
     chat_mode: str | None = Field(default="direct", description="direct | agent")
-    active_document_id: str | None = Field(default=None, description="ID of currently active / uploaded document")
-    active_document_name: str | None = Field(default=None, description="Filename / title of active document")
+    active_document_id: str | None = Field(default=None, max_length=128, description="ID of currently active / uploaded document")
+    active_document_name: str | None = Field(default=None, max_length=512, description="Filename / title of active document")
     selected_document_ids: list[str] | None = Field(default=None, description="Allowed document IDs for multi-doc comparison")
     document_scope: str | None = Field(default=None, description="Scope override: current_document | selected_documents | global")
     filters: dict[str, Any] | None = Field(default=None, description="Metadata filters")
     inferred_filters: dict[str, Any] | None = Field(default=None, description="Inferred metadata filters")
     enable_verification: bool | None = Field(default=None, description="Enable answer verification override")
     enable_routing: bool | None = Field(default=None, description="Enable query routing override")
+    thinking_detail_level: str | None = Field(default="standard", description="off | compact | standard | detailed")
     stream: bool = Field(default=False, description="Enable SSE streaming mode")
 
 
@@ -49,6 +50,8 @@ class ChatResponse(BaseModel):
     routing_confidence: float | None = None
     inferred_filters: dict[str, Any] = Field(default_factory=dict)
     verification: dict[str, Any] | None = None
+    reasoning_summary: dict[str, Any] | None = None
+    thinking_events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class IngestionStatus(str, Enum):

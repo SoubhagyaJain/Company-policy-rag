@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import threading
 import time
 from pathlib import Path
@@ -13,6 +14,44 @@ from backend.embeddings.embeddings import EmbeddingService
 from backend.models.rag import Citation
 from backend.utils.logging import logger
 from src.config import Settings, settings as default_settings
+
+
+_AUDIENCE_TERMS = {
+    "employee", "employees", "contractor", "contractors", "intern", "interns",
+    "manager", "managers", "director", "directors", "full-time", "part-time",
+    "exempt", "non-exempt", "temporary", "vendor", "vendors",
+}
+
+
+def _normalized_query(query: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+(?:[-.][a-z0-9]+)*", query.casefold()))
+
+
+def _critical_query_facts(query: str) -> tuple[frozenset[str], ...]:
+    """Extract facts whose mismatch makes two otherwise similar questions unsafe to share."""
+    lowered = query.casefold()
+    tokens = set(re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", lowered))
+    numbers = frozenset(re.findall(r"\b\d+(?:[.-]\d+)*\b", lowered))
+    audiences = frozenset(tokens.intersection(_AUDIENCE_TERMS))
+    quoted = frozenset(
+        value.strip().casefold()
+        for value in re.findall(r"['\"]([^'\"]{1,80})['\"]", query)
+        if value.strip()
+    )
+    negation = frozenset({"negated"}) if tokens.intersection({"not", "never", "without", "exclude", "excluding"}) else frozenset()
+    return numbers, audiences, quoted, negation
+
+
+def _queries_are_interchangeable(cached_query: str, incoming_query: str) -> bool:
+    if _normalized_query(cached_query) == _normalized_query(incoming_query):
+        return True
+    for cached_facts, incoming_facts in zip(
+        _critical_query_facts(cached_query),
+        _critical_query_facts(incoming_query),
+    ):
+        if (cached_facts or incoming_facts) and cached_facts != incoming_facts:
+            return False
+    return True
 
 
 class CachedResponse(BaseModel):
@@ -88,12 +127,30 @@ class SemanticCacheManager:
             )
             self._collection = None
 
+    def _resolve_kb_version(self, explicit_version: Optional[str]) -> Optional[str]:
+        if explicit_version is not None:
+            return explicit_version
+        version_fn = getattr(self.vector_store, "corpus_version", None)
+        if callable(version_fn):
+            try:
+                return str(version_fn())
+            except Exception as exc:
+                logger.warning("Failed to resolve corpus version for semantic cache: %s", exc)
+        return None
+
+    def _resolve_prompt_version(self, explicit_version: Optional[str]) -> str:
+        if explicit_version is not None:
+            return explicit_version
+        return str(getattr(self.settings, "response_prompt_version", "unknown"))
+
     def get(
         self,
         query: str,
         threshold: Optional[float] = None,
         kb_version: Optional[str] = None,
         model_name: Optional[str] = None,
+        prompt_version: Optional[str] = None,
+        cache_context: str = "",
     ) -> Optional[CachedResponse]:
         """
         Query cache for semantically matching answer.
@@ -110,6 +167,8 @@ class SemanticCacheManager:
                 return None
 
             query_clean = query.strip()
+            effective_kb_version = self._resolve_kb_version(kb_version)
+            effective_prompt_version = self._resolve_prompt_version(prompt_version)
             effective_threshold = (
                 threshold
                 if threshold is not None
@@ -124,10 +183,24 @@ class SemanticCacheManager:
             results = None
             with self._lock:
                 if self._collection is not None and self._collection.count() > 0:
+                    where_conditions: list[dict[str, Any]] = [
+                        {"prompt_version": {"$eq": effective_prompt_version}},
+                        {"cache_context": {"$eq": cache_context}},
+                    ]
+                    if effective_kb_version is not None:
+                        where_conditions.append({"kb_version": {"$eq": effective_kb_version}})
+                    if model_name is not None:
+                        where_conditions.append({"model": {"$eq": model_name}})
+                    where_clause: dict[str, Any] = (
+                        where_conditions[0]
+                        if len(where_conditions) == 1
+                        else {"$and": where_conditions}
+                    )
                     results = self._collection.query(
                         query_embeddings=[query_embedding],
                         n_results=1,
                         include=["documents", "metadatas", "distances"],
+                        where=where_clause,
                     )
 
                 if (
@@ -138,6 +211,7 @@ class SemanticCacheManager:
                 ):
                     raw_distance = float(results["distances"][0][0])
                     metadata = results["metadatas"][0][0] or {}
+                    cached_query = str((results.get("documents") or [[""]])[0][0] or "")
                     similarity = min(1.0, max(0.0, 1.0 - raw_distance))
                     latency_ms = (time.perf_counter() - start_time) * 1000.0
 
@@ -156,18 +230,30 @@ class SemanticCacheManager:
                             pass
                         return None
 
+                    if not _queries_are_interchangeable(cached_query, query_clean):
+                        logger.info("Semantic cache MISS: critical query entities differ from cached query")
+                        return None
+
                     cached_kb = metadata.get("kb_version") if "kb_version" in metadata else None
-                    if kb_version is not None and cached_kb != kb_version:
+                    if effective_kb_version is not None and cached_kb != effective_kb_version:
                         logger.info(
                             "Semantic cache MISS (kb_version mismatch): cached='%s', requested='%s'",
                             cached_kb,
-                            kb_version,
+                            effective_kb_version,
                         )
                         try:
                             from backend.api.dependencies import get_telemetry_service
                             get_telemetry_service().record_cache_event("Semantic Cache", "MISS", latency_ms, model_name=model_name)
                         except Exception:
                             pass
+                        return None
+
+                    if metadata.get("prompt_version", "") != effective_prompt_version:
+                        logger.info("Semantic cache MISS (prompt version mismatch)")
+                        return None
+
+                    if metadata.get("cache_context", "") != cache_context:
+                        logger.info("Semantic cache MISS (retrieval context mismatch)")
                         return None
 
                     cached_model = metadata.get("model") if "model" in metadata else None
@@ -222,6 +308,12 @@ class SemanticCacheManager:
                 best_score = -1.0
                 best_entry = None
                 for item in memory_snapshot:
+                    if item.get("prompt_version", "") != effective_prompt_version:
+                        continue
+                    if item.get("cache_context", "") != cache_context:
+                        continue
+                    if not _queries_are_interchangeable(str(item.get("query", "")), query_clean):
+                        continue
                     sim = cosine_similarity(query_embedding, item["embedding"])
                     if sim > best_score:
                         best_score = sim
@@ -230,11 +322,11 @@ class SemanticCacheManager:
                 latency_ms = (time.perf_counter() - start_time) * 1000.0
                 if best_entry and best_score >= effective_threshold:
                     cached_kb = best_entry.get("kb_version") if "kb_version" in best_entry else None
-                    if kb_version is not None and cached_kb != kb_version:
+                    if effective_kb_version is not None and cached_kb != effective_kb_version:
                         logger.info(
                             "Semantic cache MISS in memory (kb_version mismatch): cached='%s', requested='%s'",
                             cached_kb,
-                            kb_version,
+                            effective_kb_version,
                         )
                         return None
 
@@ -266,6 +358,8 @@ class SemanticCacheManager:
         citations: List[Citation] | List[dict],
         kb_version: Optional[str] = None,
         model_name: Optional[str] = None,
+        prompt_version: Optional[str] = None,
+        cache_context: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
@@ -304,12 +398,22 @@ class SemanticCacheManager:
                 return False
 
             query_clean = query.strip()
+            effective_kb_version = self._resolve_kb_version(kb_version)
+            effective_prompt_version = self._resolve_prompt_version(prompt_version)
             query_embedding = self.embedding_service.embed_text(query_clean)
             if not query_embedding:
                 logger.warning("Semantic cache put failed: embedding generation returned empty.")
                 return False
 
-            hash_str = query_clean.lower() + (f"|{model_name}" if model_name else "")
+            hash_str = "|".join(
+                [
+                    _normalized_query(query_clean),
+                    model_name or "",
+                    effective_kb_version or "",
+                    effective_prompt_version,
+                    cache_context,
+                ]
+            )
             entry_id = hashlib.sha256(hash_str.encode("utf-8")).hexdigest()
             citations_json = json.dumps([c.model_dump() for c in validated_citations])
             ts = time.time()
@@ -318,8 +422,10 @@ class SemanticCacheManager:
                 "answer": answer,
                 "citations_json": citations_json,
                 "timestamp": ts,
-                "kb_version": kb_version if kb_version is not None else "",
+                "kb_version": effective_kb_version if effective_kb_version is not None else "",
                 "model": model_name if model_name is not None else "",
+                "prompt_version": effective_prompt_version,
+                "cache_context": cache_context,
             }
 
             if metadata:
@@ -342,7 +448,10 @@ class SemanticCacheManager:
                     "citations": validated_citations,
                     "embedding": query_embedding,
                     "timestamp": ts,
-                    "kb_version": kb_version if kb_version is not None else "",
+                    "kb_version": effective_kb_version if effective_kb_version is not None else "",
+                    "model": model_name if model_name is not None else "",
+                    "prompt_version": effective_prompt_version,
+                    "cache_context": cache_context,
                 }
 
             logger.info("Successfully stored entry in semantic cache (id: %s)", entry_id[:8])

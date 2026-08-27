@@ -111,6 +111,7 @@ export const AdminView: React.FC = () => {
     setRefreshIntervalMs,
     refreshMetrics,
     clearTelemetry,
+    deleteTrace,
   } = useObservability();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'queries' | 'models' | 'caches' | 'ingestion' | 'errors'>('overview');
@@ -340,6 +341,18 @@ export const AdminView: React.FC = () => {
                           title="Toggle inline details"
                         >
                           {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Delete trace "${trace.original_query.slice(0, 35)}..."?`)) {
+                              deleteTrace(trace.trace_id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-colors"
+                          title="Delete trace"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
@@ -694,12 +707,13 @@ export const AdminView: React.FC = () => {
 
             {/* Clear Telemetry */}
             <button
-              onClick={() => {
-                if (window.confirm('Reset all captured in-memory and persistent telemetry traces?')) {
-                  clearTelemetry();
+              onClick={async () => {
+                if (window.confirm('Reset all captured in-memory and persistent telemetry traces and metrics?')) {
+                  await clearTelemetry();
                 }
               }}
-              className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-colors"
+              disabled={loading}
+              className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
               title="Purge telemetry database"
             >
               <Trash2 className="w-4 h-4" />
@@ -1083,6 +1097,21 @@ export const AdminView: React.FC = () => {
                     Click any query trace to inspect expanded details, or use the maximize button to open the full slide-over drawer.
                   </p>
                 </div>
+                {recentTraces.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('Delete all captured query execution traces?')) {
+                        await clearTelemetry();
+                      }
+                    }}
+                    disabled={loading}
+                    className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 shrink-0"
+                    title="Delete all traces"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Clear All Traces
+                  </button>
+                )}
               </div>
 
               {recentTraces.length === 0 ? (
@@ -1169,23 +1198,36 @@ export const AdminView: React.FC = () => {
                     <span className="text-lg font-bold font-mono text-charcoal dark:text-cream-100 mt-1 block">
                       {models?.vision_model.visual_pages_detected ?? 0} pages
                     </span>
+                    {Boolean(models?.vision_model.diagrams || models?.vision_model.code_screenshots || models?.vision_model.tables) && (
+                      <span className="text-[10px] text-charcoal-muted dark:text-cream-500 font-mono mt-0.5 block">
+                        {models?.vision_model.diagrams ?? 0} diag · {models?.vision_model.code_screenshots ?? 0} code · {models?.vision_model.tables ?? 0} tbl
+                      </span>
+                    )}
                   </div>
                   <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                     <span className="text-charcoal-muted dark:text-cream-400 block">Vision Cache Hit Rate</span>
                     <span className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                      {formatPercent(models?.vision_model.cache_hit_rate ?? 0.74)}
+                      {models?.vision_model.cache_hit_rate !== undefined ? formatPercent(models.vision_model.cache_hit_rate) : '0%'}
+                    </span>
+                    <span className="text-[10px] text-charcoal-muted dark:text-cream-500 font-mono mt-0.5 block">
+                      Persistent disk cache
                     </span>
                   </div>
                   <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                     <span className="text-charcoal-muted dark:text-cream-400 block">Vision Avg Latency</span>
                     <span className="text-lg font-bold font-mono text-purple-600 dark:text-purple-400 mt-1 block">
-                      {formatLatency(models?.vision_model.avg_latency_ms ?? 1450.0)}
+                      {models?.vision_model.avg_latency_ms && models.vision_model.avg_latency_ms > 0
+                        ? formatLatency(models.vision_model.avg_latency_ms)
+                        : 'Ready (0 ms)'}
                     </span>
                   </div>
                   <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                     <span className="text-charcoal-muted dark:text-cream-400 block">Timeout / Failure Rate</span>
                     <span className="text-lg font-bold font-mono text-charcoal dark:text-cream-100 mt-1 block">
                       {models?.vision_model.requests_count ? formatPercent(models.vision_model.failure_count / models.vision_model.requests_count) : '0%'}
+                    </span>
+                    <span className="text-[10px] text-charcoal-muted dark:text-cream-500 font-mono mt-0.5 block">
+                      {models?.vision_model.failure_count ?? 0} / {models?.vision_model.requests_count ?? 0} failed
                     </span>
                   </div>
                 </div>
@@ -1360,6 +1402,7 @@ export const AdminView: React.FC = () => {
         <QueryTraceDrawer
           trace={selectedTrace}
           onClose={() => setSelectedTrace(null)}
+          onDelete={deleteTrace}
         />
       </div>
     </div>

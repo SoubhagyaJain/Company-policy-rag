@@ -1,0 +1,506 @@
+{
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\__init__.py": {
+    "mtime": 1785899359.6489356,
+    "seen": 1787731154.6761115,
+    "ast_hash": "082780117113ee5c94a5107c54b2c2ca",
+    "semantic_hash": "082780117113ee5c94a5107c54b2c2ca"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\__init__.py": {
+    "mtime": 1785900928.2182825,
+    "seen": 1787731154.6761184,
+    "ast_hash": "38e809eb3a6d14c356c9aa5e60ba0e10",
+    "semantic_hash": "38e809eb3a6d14c356c9aa5e60ba0e10"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\dependencies.py": {
+    "mtime": 1787675421.8776703,
+    "seen": 1787731154.676121,
+    "ast_hash": "d5b79e5abaca024af75d41a9aeb2b56e",
+    "semantic_hash": "d5b79e5abaca024af75d41a9aeb2b56e"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\main.py": {
+    "mtime": 1787714385.7463565,
+    "seen": 1787731154.6761224,
+    "ast_hash": "5d7cbe0bd5809b08c8353a7aadd894f8",
+    "semantic_hash": "5d7cbe0bd5809b08c8353a7aadd894f8"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\routes\\__init__.py": {
+    "mtime": 1786179476.1771586,
+    "seen": 1787731154.6761234,
+    "ast_hash": "bd8ce513609f39f65ed1d02b8630dc37",
+    "semantic_hash": "bd8ce513609f39f65ed1d02b8630dc37"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\routes\\admin.py": {
+    "mtime": 1787666193.8325534,
+    "seen": 1787731154.6761246,
+    "ast_hash": "08b1f60ca9fd5935b482b845f1912ce1",
+    "semantic_hash": "08b1f60ca9fd5935b482b845f1912ce1"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\routes\\chat.py": {
+    "mtime": 1787676416.9385636,
+    "seen": 1787731154.676126,
+    "ast_hash": "d097601c70c7b4cd38922ec65027049f",
+    "semantic_hash": "d097601c70c7b4cd38922ec65027049f"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\routes\\documents.py": {
+    "mtime": 1787665331.7950141,
+    "seen": 1787731154.676127,
+    "ast_hash": "949cae7a79b46bf0403cb726a69ecefd",
+    "semantic_hash": "949cae7a79b46bf0403cb726a69ecefd"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\routes\\health.py": {
+    "mtime": 1786179476.1801538,
+    "seen": 1787731154.676128,
+    "ast_hash": "88ed2d931d2a00a5ae602bb79555100e",
+    "semantic_hash": "88ed2d931d2a00a5ae602bb79555100e"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\api\\routes\\models.py": {
+    "mtime": 1787647190.553456,
+    "seen": 1787731154.6761293,
+    "ast_hash": "ff8efb3691c4dbd6866ed04acf1bcf5e",
+    "semantic_hash": "ff8efb3691c4dbd6866ed04acf1bcf5e"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\embeddings\\__init__.py": {
+    "mtime": 1786179476.1811604,
+    "seen": 1787731154.6761303,
+    "ast_hash": "8bd548b675c841a6f65e2fd81f70d7d9",
+    "semantic_hash": "8bd548b675c841a6f65e2fd81f70d7d9"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\embeddings\\embeddings.py": {
+    "mtime": 1787629693.438421,
+    "seen": 1787731154.6761315,
+    "ast_hash": "2aab4a7cc6867e392737eac3528892f9",
+    "semantic_hash": "2aab4a7cc6867e392737eac3528892f9"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\embeddings\\vector_store.py": {
+    "mtime": 1787671090.4994147,
+    "seen": 1787731154.6761327,
+    "ast_hash": "04f4b3a00f7d32e1da4ee27118a2849c",
+    "semantic_hash": "04f4b3a00f7d32e1da4ee27118a2849c"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\__init__.py": {
+    "mtime": 1786179476.18316,
+    "seen": 1787731154.6761336,
+    "ast_hash": "0723055a99f744559b25fad47eb9d752",
+    "semantic_hash": "0723055a99f744559b25fad47eb9d752"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\__init__.py": {
+    "mtime": 1786179476.1841593,
+    "seen": 1787731154.6761346,
+    "ast_hash": "0e8ae967c6104217164eceb475731aea",
+    "semantic_hash": "0e8ae967c6104217164eceb475731aea"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\adaptive_chunker.py": {
+    "mtime": 1786179476.1841593,
+    "seen": 1787731154.6761358,
+    "ast_hash": "3836ec5a994a384084c1a8434151fe70",
+    "semantic_hash": "3836ec5a994a384084c1a8434151fe70"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\base.py": {
+    "mtime": 1787634360.2727292,
+    "seen": 1787731154.676137,
+    "ast_hash": "05846f0ecdb0707ece52e60157f206da",
+    "semantic_hash": "05846f0ecdb0707ece52e60157f206da"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\heading_aware.py": {
+    "mtime": 1786708468.6036706,
+    "seen": 1787731154.6761384,
+    "ast_hash": "814dc447e6ee602fad863f27d66ceab4",
+    "semantic_hash": "814dc447e6ee602fad863f27d66ceab4"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\markdown_aware.py": {
+    "mtime": 1786708468.604641,
+    "seen": 1787731154.6761396,
+    "ast_hash": "8444077aba01a9f7bcef03d90361ad03",
+    "semantic_hash": "8444077aba01a9f7bcef03d90361ad03"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\recursive.py": {
+    "mtime": 1786179476.1861577,
+    "seen": 1787731154.6761405,
+    "ast_hash": "89d836450823a2421dd5e49dbe87d018",
+    "semantic_hash": "89d836450823a2421dd5e49dbe87d018"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\semantic.py": {
+    "mtime": 1786708468.6056423,
+    "seen": 1787731154.6761417,
+    "ast_hash": "cd934ed2f0971382ced3d41c9f3933cb",
+    "semantic_hash": "cd934ed2f0971382ced3d41c9f3933cb"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\chunkers\\table_aware.py": {
+    "mtime": 1786708468.6056423,
+    "seen": 1787731154.6761427,
+    "ast_hash": "3c53fd1fad058f8728c1bd9bc12a6e66",
+    "semantic_hash": "3c53fd1fad058f8728c1bd9bc12a6e66"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\__init__.py": {
+    "mtime": 1786179476.1891625,
+    "seen": 1787731154.6761444,
+    "ast_hash": "575d53f08350a4509cfd963ade509e3a",
+    "semantic_hash": "575d53f08350a4509cfd963ade509e3a"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\base.py": {
+    "mtime": 1787647956.343284,
+    "seen": 1787731154.6761453,
+    "ast_hash": "23c1462af34d0a9ab5cae5296d4a4b4d",
+    "semantic_hash": "23c1462af34d0a9ab5cae5296d4a4b4d"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\csv.py": {
+    "mtime": 1786179476.1911585,
+    "seen": 1787731154.6761465,
+    "ast_hash": "72798d3d69f381c2de6e8ff0cd1ab1f2",
+    "semantic_hash": "72798d3d69f381c2de6e8ff0cd1ab1f2"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\docx.py": {
+    "mtime": 1786179476.1911585,
+    "seen": 1787731154.6761475,
+    "ast_hash": "e18ec39993e678bc61bac69497afd09b",
+    "semantic_hash": "e18ec39993e678bc61bac69497afd09b"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\html.py": {
+    "mtime": 1786179476.192159,
+    "seen": 1787731154.6761487,
+    "ast_hash": "c586e1ef0c2a885e7b3b00a967b3aff2",
+    "semantic_hash": "c586e1ef0c2a885e7b3b00a967b3aff2"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\json.py": {
+    "mtime": 1786708468.6066396,
+    "seen": 1787731154.6761498,
+    "ast_hash": "16638fdff7c4d395cf087b0e4cf452f2",
+    "semantic_hash": "16638fdff7c4d395cf087b0e4cf452f2"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\loader_factory.py": {
+    "mtime": 1786179476.1931581,
+    "seen": 1787731154.6761508,
+    "ast_hash": "60fa23491f55b2f4c60a271e81e37e6d",
+    "semantic_hash": "60fa23491f55b2f4c60a271e81e37e6d"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\markdown.py": {
+    "mtime": 1786179476.1931581,
+    "seen": 1787731154.6761518,
+    "ast_hash": "3ec5f4e5611e8408178cb4bb2d17964f",
+    "semantic_hash": "3ec5f4e5611e8408178cb4bb2d17964f"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\pdf.py": {
+    "mtime": 1787665199.8029866,
+    "seen": 1787731154.6761532,
+    "ast_hash": "14926711753b0788a4cedd6450cdd04d",
+    "semantic_hash": "14926711753b0788a4cedd6450cdd04d"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\loaders\\txt.py": {
+    "mtime": 1786179476.1941578,
+    "seen": 1787731154.6761541,
+    "ast_hash": "64f03a90c8f468ad6134a9636364bd8d",
+    "semantic_hash": "64f03a90c8f468ad6134a9636364bd8d"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\metadata_extractor.py": {
+    "mtime": 1787713288.3344605,
+    "seen": 1787731154.676155,
+    "ast_hash": "49ed5c75db9b6600421e5217b525386c",
+    "semantic_hash": "49ed5c75db9b6600421e5217b525386c"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\ingestion\\page_detector.py": {
+    "mtime": 1787665142.897997,
+    "seen": 1787731154.6761565,
+    "ast_hash": "e38c51330820b3f869d1833e87c2d444",
+    "semantic_hash": "e38c51330820b3f869d1833e87c2d444"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\__init__.py": {
+    "mtime": 1787665133.3276794,
+    "seen": 1787731154.6761577,
+    "ast_hash": "f552ea1d0325009d48e4d5cd32863dff",
+    "semantic_hash": "f552ea1d0325009d48e4d5cd32863dff"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\api_dto.py": {
+    "mtime": 1787710575.7024806,
+    "seen": 1787731154.6761587,
+    "ast_hash": "46f9a537f0e7ceb77062dbc175aa2cec",
+    "semantic_hash": "46f9a537f0e7ceb77062dbc175aa2cec"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\chunk.py": {
+    "mtime": 1787671014.8972807,
+    "seen": 1787731154.6761599,
+    "ast_hash": "7c89e98eaa383aa1145d57b9659e6e60",
+    "semantic_hash": "7c89e98eaa383aa1145d57b9659e6e60"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\conversation.py": {
+    "mtime": 1787711810.8998883,
+    "seen": 1787731154.6761608,
+    "ast_hash": "b26e4e40f56a9a1d8491e699f5a6798a",
+    "semantic_hash": "b26e4e40f56a9a1d8491e699f5a6798a"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\document.py": {
+    "mtime": 1787665149.2096958,
+    "seen": 1787731154.6761618,
+    "ast_hash": "94102a8925cc68ad71a1848748e15eb2",
+    "semantic_hash": "94102a8925cc68ad71a1848748e15eb2"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\ingestion.py": {
+    "mtime": 1786179476.1996815,
+    "seen": 1787731154.676163,
+    "ast_hash": "ca4673903c0442beba19927197fc366d",
+    "semantic_hash": "ca4673903c0442beba19927197fc366d"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\logical_document.py": {
+    "mtime": 1787646482.070559,
+    "seen": 1787731154.6761642,
+    "ast_hash": "08a2372f34bb8c8fbf09b0c183b8a30b",
+    "semantic_hash": "08a2372f34bb8c8fbf09b0c183b8a30b"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\page_identity.py": {
+    "mtime": 1787665128.4832008,
+    "seen": 1787731154.6761649,
+    "ast_hash": "8662dcaf28f52a1c77b9088585edf590",
+    "semantic_hash": "8662dcaf28f52a1c77b9088585edf590"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\rag.py": {
+    "mtime": 1787712548.1559434,
+    "seen": 1787731154.6761658,
+    "ast_hash": "af4461dfabea16519e200af07dfb3bcd",
+    "semantic_hash": "af4461dfabea16519e200af07dfb3bcd"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\models\\telemetry_models.py": {
+    "mtime": 1787652454.3749094,
+    "seen": 1787731154.6761727,
+    "ast_hash": "c90158fd314813c5f03496146c9b7ca5",
+    "semantic_hash": "c90158fd314813c5f03496146c9b7ca5"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\__init__.py": {
+    "mtime": 1786722106.763989,
+    "seen": 1787731154.676174,
+    "ast_hash": "be5787683b2f7a815233f76d8c134b93",
+    "semantic_hash": "be5787683b2f7a815233f76d8c134b93"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\citations.py": {
+    "mtime": 1787669772.293767,
+    "seen": 1787731154.6761746,
+    "ast_hash": "8fd6a6769ba05e7b6602a1cbb29c91eb",
+    "semantic_hash": "8fd6a6769ba05e7b6602a1cbb29c91eb"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\consistency_guard.py": {
+    "mtime": 1787713294.1754649,
+    "seen": 1787731154.6761758,
+    "ast_hash": "472abb445c04af27c143a87af51ab7a0",
+    "semantic_hash": "472abb445c04af27c143a87af51ab7a0"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\context_compression.py": {
+    "mtime": 1787665506.7671013,
+    "seen": 1787731154.6761773,
+    "ast_hash": "c4dc6a8902224b92ceeb478f358fe441",
+    "semantic_hash": "c4dc6a8902224b92ceeb478f358fe441"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\conversation_resolver.py": {
+    "mtime": 1787710079.0293553,
+    "seen": 1787731154.6761782,
+    "ast_hash": "b7357dffcbf1df8c5d8e15a148f5a0ae",
+    "semantic_hash": "b7357dffcbf1df8c5d8e15a148f5a0ae"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\evidence_gate.py": {
+    "mtime": 1787722657.8269038,
+    "seen": 1787731154.6762176,
+    "ast_hash": "e992e0a8e0b052790dfd8bfa260fb960",
+    "semantic_hash": "e992e0a8e0b052790dfd8bfa260fb960"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\filter_extractor.py": {
+    "mtime": 1786723261.0742037,
+    "seen": 1787731154.6762235,
+    "ast_hash": "c46f07bc0a7c9728f6c8da9b4ce9608b",
+    "semantic_hash": "c46f07bc0a7c9728f6c8da9b4ce9608b"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\multi_query.py": {
+    "mtime": 1786179476.2036858,
+    "seen": 1787731154.676225,
+    "ast_hash": "d4f175fd040c4bbd53dc4b1a2ee08720",
+    "semantic_hash": "d4f175fd040c4bbd53dc4b1a2ee08720"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\pipeline.py": {
+    "mtime": 1787722755.4213955,
+    "seen": 1787731154.6762266,
+    "ast_hash": "64c6b9ef84b48ca031712c257cbbe38d",
+    "semantic_hash": "64c6b9ef84b48ca031712c257cbbe38d"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\query_rewrite.py": {
+    "mtime": 1786721213.764863,
+    "seen": 1787731154.6762278,
+    "ast_hash": "9be042fe0dc88f01e7e0b73152bcf9a2",
+    "semantic_hash": "9be042fe0dc88f01e7e0b73152bcf9a2"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\query_router.py": {
+    "mtime": 1787646560.9895513,
+    "seen": 1787731154.6762292,
+    "ast_hash": "4452bf7ac2a1c479cbcbc85adf1b43bd",
+    "semantic_hash": "4452bf7ac2a1c479cbcbc85adf1b43bd"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\retry_engine.py": {
+    "mtime": 1786722095.4195943,
+    "seen": 1787731154.6762304,
+    "ast_hash": "3ae7af664167178fbbcb29fb1b1716e3",
+    "semantic_hash": "3ae7af664167178fbbcb29fb1b1716e3"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\scope_resolver.py": {
+    "mtime": 1787633263.397863,
+    "seen": 1787731154.6762316,
+    "ast_hash": "2024e77dee3fcdb68a1e68b4b14c24b2",
+    "semantic_hash": "2024e77dee3fcdb68a1e68b4b14c24b2"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\semantic_cache.py": {
+    "mtime": 1787652607.3941715,
+    "seen": 1787731154.6762333,
+    "ast_hash": "ebae03fdd8d96a827e6c54dfa741e761",
+    "semantic_hash": "ebae03fdd8d96a827e6c54dfa741e761"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\thinking.py": {
+    "mtime": 1787711866.7423444,
+    "seen": 1787731154.6762345,
+    "ast_hash": "05ff7d4f6edfabf71953f76c584c8067",
+    "semantic_hash": "05ff7d4f6edfabf71953f76c584c8067"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\rag\\verifier.py": {
+    "mtime": 1787679066.101199,
+    "seen": 1787731154.6762357,
+    "ast_hash": "9bcdbc94fc067f09900336bd21651c55",
+    "semantic_hash": "9bcdbc94fc067f09900336bd21651c55"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\retrieval\\__init__.py": {
+    "mtime": 1786179476.2056844,
+    "seen": 1787731154.6762373,
+    "ast_hash": "7e941a2eaa1ae65f618a04cfe0d3072d",
+    "semantic_hash": "7e941a2eaa1ae65f618a04cfe0d3072d"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\retrieval\\bm25.py": {
+    "mtime": 1786723247.1622872,
+    "seen": 1787731154.6762385,
+    "ast_hash": "691d8e4e59e1c21a82113767e5c3ce28",
+    "semantic_hash": "691d8e4e59e1c21a82113767e5c3ce28"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\retrieval\\hybrid.py": {
+    "mtime": 1786721218.584411,
+    "seen": 1787731154.6762397,
+    "ast_hash": "2597edd4c1be017d8d4dc9211f158eec",
+    "semantic_hash": "2597edd4c1be017d8d4dc9211f158eec"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\retrieval\\reranker.py": {
+    "mtime": 1787626291.734712,
+    "seen": 1787731154.6762412,
+    "ast_hash": "05265382a83a793b0a795d856b28899f",
+    "semantic_hash": "05265382a83a793b0a795d856b28899f"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\retrieval\\retrieval_cache.py": {
+    "mtime": 1787629700.0307364,
+    "seen": 1787731154.6762424,
+    "ast_hash": "fc9fc215b4e2747944f8c11a3612c39c",
+    "semantic_hash": "fc9fc215b4e2747944f8c11a3612c39c"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\retrieval\\vector.py": {
+    "mtime": 1786708468.6116414,
+    "seen": 1787731154.6762438,
+    "ast_hash": "cc8313f61ac0b4f4324af76fc2d7421f",
+    "semantic_hash": "cc8313f61ac0b4f4324af76fc2d7421f"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\services\\__init__.py": {
+    "mtime": 1785900906.7569447,
+    "seen": 1787731154.676245,
+    "ast_hash": "c397105fe2e43e6d5a348a85cae0b71e",
+    "semantic_hash": "c397105fe2e43e6d5a348a85cae0b71e"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\services\\chat_service.py": {
+    "mtime": 1787713313.2466383,
+    "seen": 1787731154.6762466,
+    "ast_hash": "9fa05d6ed5977fe15adf1bc5c4193e85",
+    "semantic_hash": "9fa05d6ed5977fe15adf1bc5c4193e85"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\services\\document_service.py": {
+    "mtime": 1787652618.5587783,
+    "seen": 1787731154.6762478,
+    "ast_hash": "a1235da2b0684795c23425900f735e8c",
+    "semantic_hash": "a1235da2b0684795c23425900f735e8c"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\services\\telemetry_db.py": {
+    "mtime": 1787677851.5743065,
+    "seen": 1787731154.676249,
+    "ast_hash": "cafda875b63d0e7dbd7e8ce6be9996fe",
+    "semantic_hash": "cafda875b63d0e7dbd7e8ce6be9996fe"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\services\\telemetry_service.py": {
+    "mtime": 1787677858.3965025,
+    "seen": 1787731154.6762505,
+    "ast_hash": "53647f6c72b04550fc01dc9635533538",
+    "semantic_hash": "53647f6c72b04550fc01dc9635533538"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\tasks\\__init__.py": {
+    "mtime": 1786708468.6126404,
+    "seen": 1787731154.6762516,
+    "ast_hash": "e6f9b4efaafcf5ce40e86d1c2be5e44c",
+    "semantic_hash": "e6f9b4efaafcf5ce40e86d1c2be5e44c"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\tasks\\celery_app.py": {
+    "mtime": 1786708468.6126404,
+    "seen": 1787731154.676253,
+    "ast_hash": "6685ea03cd65b7c27a01b0c8bc2a47c2",
+    "semantic_hash": "6685ea03cd65b7c27a01b0c8bc2a47c2"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\utils\\__init__.py": {
+    "mtime": 1786179476.211699,
+    "seen": 1787731154.6762547,
+    "ast_hash": "12499820f626907be9806d7c02b2aa25",
+    "semantic_hash": "12499820f626907be9806d7c02b2aa25"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\utils\\cache.py": {
+    "mtime": 1786179476.2126875,
+    "seen": 1787731154.6762562,
+    "ast_hash": "87ff47c94089bb333fcb31615b0e1af0",
+    "semantic_hash": "87ff47c94089bb333fcb31615b0e1af0"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\utils\\hashing.py": {
+    "mtime": 1785899368.4349704,
+    "seen": 1787731154.6762576,
+    "ast_hash": "2888b66589300d9798a32386fbc7dd15",
+    "semantic_hash": "2888b66589300d9798a32386fbc7dd15"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\utils\\logging.py": {
+    "mtime": 1786179476.2136862,
+    "seen": 1787731154.676259,
+    "ast_hash": "c6cea730637ff36b50973d495d51b705",
+    "semantic_hash": "c6cea730637ff36b50973d495d51b705"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\utils\\redis_cache.py": {
+    "mtime": 1786179476.2136862,
+    "seen": 1787731154.6762602,
+    "ast_hash": "a7ef7bdd61cff1eebae0183f1a7eb06b",
+    "semantic_hash": "a7ef7bdd61cff1eebae0183f1a7eb06b"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\utils\\redis_client.py": {
+    "mtime": 1786708468.6136403,
+    "seen": 1787731154.6762614,
+    "ast_hash": "3ff8d7a6d3a6bcdd5f08d41dfea607c0",
+    "semantic_hash": "3ff8d7a6d3a6bcdd5f08d41dfea607c0"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\utils\\section_tracker.py": {
+    "mtime": 1786708468.6146426,
+    "seen": 1787731154.6762629,
+    "ast_hash": "2bf422b2169856a989145db367c91b35",
+    "semantic_hash": "2bf422b2169856a989145db367c91b35"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\vision\\__init__.py": {
+    "mtime": 1787634312.170147,
+    "seen": 1787731154.676264,
+    "ast_hash": "ee7cf5f39c4bb3ff2d05d78e0f8fa486",
+    "semantic_hash": "ee7cf5f39c4bb3ff2d05d78e0f8fa486"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\vision\\image_asset_manager.py": {
+    "mtime": 1787712556.3065064,
+    "seen": 1787731154.6762652,
+    "ast_hash": "1752978d8827e1e0b18133147e84c494",
+    "semantic_hash": "1752978d8827e1e0b18133147e84c494"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\vision\\vision_cache.py": {
+    "mtime": 1787650310.014028,
+    "seen": 1787731154.6762664,
+    "ast_hash": "9e0201e1865a73c89897f9538db13030",
+    "semantic_hash": "9e0201e1865a73c89897f9538db13030"
+  },
+  "C:\\Users\\jains\\OneDrive\\Desktop\\Rag-chatbot\\company_policy_rag\\backend\\vision\\vision_service.py": {
+    "mtime": 1787722675.4120271,
+    "seen": 1787731154.6762679,
+    "ast_hash": "83c3a8b6264ae8883fd2ec65ab1a773e",
+    "semantic_hash": "83c3a8b6264ae8883fd2ec65ab1a773e"
+  }
+}
