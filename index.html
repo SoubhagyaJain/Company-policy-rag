@@ -3,14 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Enterprise Policy RAG — 100 Technical Interview Defense Playbook</title>
+  <meta name="description" content="An interactive engineering case study and interview-defense playbook for a local-first, evidence-aware enterprise Policy RAG system.">
+  <meta name="theme-color" content="#090B0D">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23090B0D'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23FF7547'/%3E%3C/svg%3E">
+  <title>Enterprise Policy RAG — Engineering Case Study &amp; Interview Defense</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script defer src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 </head>
 <body class="dark-theme">
+
+<a class="skip-link" href="#main-content">Skip to project case study</a>
 
 <!-- ═══ AMBIENT LUXURY NOISE OVERLAY ═══ -->
 <div class="ambient-grain" aria-hidden="true"></div>
@@ -32,19 +38,13 @@
       </div>
     </a>
 
-    <nav class="navbar-links">
+    <nav class="navbar-links" aria-label="Primary navigation">
       <a href="#hero" class="nav-link">Overview</a>
       <a href="#architecture" class="nav-link">Architecture</a>
-      <a href="#key-implementation" class="nav-link nav-link--highlight">Key Implementation</a>
-      <a href="#simulator" class="nav-link nav-link--simulator"><span class="simulator-sparkle">✨</span> Simulator</a>
-      <a href="#execution" class="nav-link">Execution</a>
-      <a href="#dataflow" class="nav-link">Data Flow</a>
-      <a href="#components" class="nav-link">Components</a>
-      <a href="#decisions" class="nav-link">Decisions</a>
-      <a href="#failures" class="nav-link">Failures</a>
+      <a href="#interview-kit" class="nav-link">Interview Kit</a>
+      <a href="#simulator" class="nav-link nav-link--simulator"><i data-lucide="sparkles" aria-hidden="true"></i> Simulator</a>
+      <a href="#key-implementation" class="nav-link">Build notes</a>
       <a href="#interview" class="nav-link nav-link--highlight">100 Q&A</a>
-      <a href="#scale" class="nav-link">Scale</a>
-      <a href="#revision" class="nav-link">Revision</a>
     </nav>
 
     <div class="navbar-actions">
@@ -55,13 +55,13 @@
       </button>
 
       <button class="audio-toggle-btn" id="audioToggle" aria-label="Toggle UI Sound Effects" title="Toggle audio feedback">
-        <span class="audio-icon sound-on">🔊</span>
-        <span class="audio-icon sound-off" style="display:none">🔇</span>
+        <i class="audio-icon sound-on" data-lucide="volume-2" aria-hidden="true"></i>
+        <i class="audio-icon sound-off" data-lucide="volume-x" aria-hidden="true" style="display:none"></i>
       </button>
 
       <button class="theme-toggle-btn" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
-        <span class="theme-icon sun-icon">☀️</span>
-        <span class="theme-icon moon-icon">🌙</span>
+        <i class="theme-icon sun-icon" data-lucide="sun" aria-hidden="true"></i>
+        <i class="theme-icon moon-icon" data-lucide="moon" aria-hidden="true"></i>
       </button>
 
       <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation menu">
@@ -80,6 +80,7 @@
     </div>
     <a href="#hero" class="mobile-nav-link">Overview</a>
     <a href="#architecture" class="mobile-nav-link">Architecture</a>
+    <a href="#interview-kit" class="mobile-nav-link mobile-nav-link--highlight">Interview Defense Kit</a>
     <a href="#key-implementation" class="mobile-nav-link mobile-nav-link--highlight">⚡ Key Implementation &amp; Code</a>
     <a href="#simulator" class="mobile-nav-link mobile-nav-link--simulator">✨ Interactive Simulator</a>
     <a href="#execution" class="mobile-nav-link">Execution Path</a>
@@ -99,6 +100,7 @@
 <!-- ═══ SIDE NAVIGATION ═══ -->
 <nav class="nav-sidebar">
   <div class="nav-dot" data-target="hero" data-label="Overview"></div>
+  <div class="nav-dot" data-target="interview-kit" data-label="Interview Kit"></div>
   <div class="nav-dot" data-target="architecture" data-label="Architecture"></div>
   <div class="nav-dot" data-target="key-implementation" data-label="Key Implementation"></div>
   <div class="nav-dot" data-target="simulator" data-label="Simulator"></div>
@@ -115,54 +117,80 @@
   <div class="nav-dot" data-target="revision" data-label="Revision"></div>
 </nav>
 
-<div class="page-wrapper">
+<main class="page-wrapper" id="main-content">
 
 <!-- ═══════════════════════════════════════════════════════════
      SECTION 01 — HERO: THE PROJECT IN 30 SECONDS
      ═══════════════════════════════════════════════════════════ -->
 <section class="hero section" id="hero">
-  <!-- Interactive Three.js 3D Vector Embedding Sphere -->
-  <div class="hero-3d-wrapper" id="hero3dWrapper">
-    <canvas id="heroCanvas3d"></canvas>
-    <div class="hero-3d-hint">
-      <span class="hero-3d-hint-dot"></span> Interactive 3D Embedding Cluster (Rotate / Drag)
+  <div class="hero-stage">
+    <div class="hero-content">
+      <div class="hero-status-pill">
+        <span class="status-indicator"></span>
+        <span class="status-text">Code-backed case study / local-first deployment</span>
+      </div>
+
+      <p class="hero-overline">Evidence infrastructure for high-stakes answers</p>
+
+      <h1 class="hero-title">
+        Enterprise Policy <span class="hero-title-accent">RAG</span>
+      </h1>
+
+      <p class="hero-statement">Answers with evidence, not confidence.</p>
+      <p class="hero-thesis">
+        A conversation-aware retrieval system that fuses semantic and lexical search, cross-encodes the best evidence, expands visual and page context, and checks response quality before delivery.
+      </p>
+
+      <div class="hero-actions">
+        <a href="#simulator" class="hero-btn hero-btn--primary">
+          <i data-lucide="play" aria-hidden="true"></i>
+          <span>Run live query</span>
+        </a>
+        <button class="hero-btn hero-btn--secondary cmdk-trigger">
+          <i data-lucide="search" aria-hidden="true"></i>
+          <span>Search the defense</span>
+          <kbd class="hero-btn-kbd">⌘K</kbd>
+        </button>
+      </div>
+
+      <div class="hero-proof-row" aria-label="System capabilities">
+        <span><i data-lucide="shield-check" aria-hidden="true"></i> Evidence gated</span>
+        <span><i data-lucide="cpu" aria-hidden="true"></i> Local inference</span>
+        <span><i data-lucide="activity" aria-hidden="true"></i> Structured SSE trace</span>
+      </div>
+    </div>
+
+    <!-- Interactive Three.js system pipeline -->
+    <div class="hero-3d-wrapper" id="hero3dWrapper">
+      <div class="hero-visual-header">
+        <span>Query-to-evidence pipeline</span>
+        <span class="hero-visual-live"><span></span> interactive</span>
+      </div>
+      <canvas id="heroCanvas3d" tabindex="0" aria-label="Interactive three-dimensional RAG pipeline. Move the pointer or use the stage buttons to inspect system components."></canvas>
+      <div class="hero-stage-detail" id="heroStageDetail" aria-live="polite">
+        <span class="hero-stage-detail-kicker">01 / request</span>
+        <strong>Query + conversation</strong>
+        <small>Resolve follow-ups before retrieval.</small>
+      </div>
+      <div class="hero-3d-hint">
+        <i data-lucide="mouse-pointer-2" aria-hidden="true"></i>
+        <span>Point at a stage</span>
+      </div>
+      <div class="hero-visual-footer">
+        <span>Dense + BM25 → RRF</span>
+        <span>Evidence gate → grounded output</span>
+      </div>
+      <div class="hero-stage-switcher" aria-label="Inspect pipeline stage">
+        <button type="button" data-pipeline-stage="query" class="active">Query</button>
+        <button type="button" data-pipeline-stage="retrieve">Retrieve</button>
+        <button type="button" data-pipeline-stage="rank">Rank</button>
+        <button type="button" data-pipeline-stage="verify">Verify</button>
+      </div>
     </div>
   </div>
 
-  <div class="hero-content">
-    <div class="hero-status-pill">
-      <span class="status-indicator"></span>
-      <span class="status-text">Production System Architecture • Zero-Hallucination 4D Verifier</span>
-    </div>
-
-    <h1 class="hero-title">
-      Enterprise Policy<br>
-      <span class="hero-title-gradient">RAG AI Assistant</span>
-    </h1>
-
-    <p class="hero-thesis">
-      A production-grade, local-first Retrieval-Augmented Generation platform engineered to eliminate LLM hallucinations on high-stakes corporate compliance policies through hybrid retrieval (Dense + BM25 via RRF), GPU cross-encoder reranking, and an autonomous 4-dimensional self-reflection loop.
-    </p>
-
-    <!-- Hero CTA Buttons -->
-    <div class="hero-actions">
-      <a href="#simulator" class="hero-btn hero-btn--primary">
-        <span class="hero-btn-icon">⚡</span>
-        <span>Run Query Simulator</span>
-      </a>
-      <button class="hero-btn hero-btn--secondary cmdk-trigger">
-        <span class="hero-btn-icon">🔍</span>
-        <span>Search 100 Q&A</span>
-        <kbd class="hero-btn-kbd">⌘K</kbd>
-      </button>
-      <a href="#interview" class="hero-btn hero-btn--ghost">
-        <span>Browse All Modules</span>
-        <span class="hero-btn-arrow">→</span>
-      </a>
-    </div>
-
-    <!-- Live Animated Metrics Grid -->
-    <div class="hero-stats-grid">
+  <!-- Live Animated Metrics Grid -->
+  <div class="hero-stats-grid">
       <div class="hero-stat-card">
         <div class="hero-stat-number" data-count="100">100</div>
         <div class="hero-stat-label">Defense Q&As</div>
@@ -174,9 +202,9 @@
         <div class="hero-stat-sub">2,000 tok Context</div>
       </div>
       <div class="hero-stat-card">
-        <div class="hero-stat-number" data-count="250" data-prefix="<" data-suffix="ms">&lt;250ms</div>
-        <div class="hero-stat-label">TTFT Latency</div>
-        <div class="hero-stat-sub">Real-Time SSE Stream</div>
+        <div class="hero-stat-number" data-count="17">17</div>
+        <div class="hero-stat-label">Thinking States</div>
+        <div class="hero-stat-sub">Typed SSE Lifecycle</div>
       </div>
       <div class="hero-stat-card">
         <div class="hero-stat-number" data-count="4" data-suffix="D">4D</div>
@@ -184,9 +212,9 @@
         <div class="hero-stat-sub">0.70 Quality Floor</div>
       </div>
       <div class="hero-stat-card">
-        <div class="hero-stat-number" data-count="95.7" data-suffix="%" data-decimals="1">95.7%</div>
-        <div class="hero-stat-label">Faithfulness Score</div>
-        <div class="hero-stat-sub">Zero Hallucination</div>
+        <div class="hero-stat-number" data-count="2">2</div>
+        <div class="hero-stat-label">Maximum Retries</div>
+        <div class="hero-stat-sub">Then Degrade Safely</div>
       </div>
     </div>
 
@@ -196,7 +224,7 @@
         <div class="depth-layer-time">10 Seconds — The Recruiter Pitch</div>
         <div class="depth-layer-label">What is this?</div>
         <div class="depth-layer-content">
-          <p>I built a production-ready RAG assistant for enterprise compliance policies that combines hybrid search, cross-encoder reranking, and an autonomous self-reflection loop to guarantee zero-hallucination answers with verified source citations.</p>
+          <p>I built a local-first policy assistant that improves answer trust with hybrid retrieval, cross-encoder reranking, evidence-aware generation, and source-linked responses. The key engineering idea is simple: fluent text is not enough—the pipeline must preserve and expose the evidence behind it.</p>
         </div>
       </div>
 
@@ -204,7 +232,7 @@
         <div class="depth-layer-time">30 Seconds — Technical Architecture</div>
         <div class="depth-layer-label">How does it work?</div>
         <div class="depth-layer-content">
-          <p>A local-first enterprise Policy RAG system built on FastAPI, ChromaDB, and Ollama. It uses hierarchical child-parent chunking, dense + BM25 hybrid retrieval merged via Reciprocal Rank Fusion, and a CUDA-accelerated BGE cross-encoder reranker. An Agentic layer classifies query intent, infers metadata filters, and runs a 4-dimensional self-reflection verification engine that autonomously retries failed generations up to two cycles. Includes a full QLoRA fine-tuning and GGUF export pipeline for local Qwen 2.5 model deployment.</p>
+          <p>The request enters FastAPI, where conversation context and query intent shape retrieval. Dense and BM25 results are fused with Reciprocal Rank Fusion, then a configurable BGE cross-encoder reranks candidates. Child chunks provide retrieval precision while 2,000-token parents restore context. An evidence gate, grounded prompt, citation builder, and four-dimensional verifier handle quality; failed checks can retry twice before a transparent degraded response.</p>
         </div>
       </div>
 
@@ -215,11 +243,77 @@
           <p>The system addresses the fundamental failure modes of standard RAG on complex policy and legal texts: semantic drift, loss of clause context, and subtle numerical hallucinations.</p>
           <p style="margin-top:0.75rem">On the <strong>ingestion</strong> side, documents undergo format-specific parsing and section-aware hierarchical chunking — storing 480-token child nodes in ChromaDB and linking them to 2,000-token parent contexts in an indexed docstore, with automated ISO date and department metadata extraction.</p>
           <p style="margin-top:0.75rem">At <strong>query time</strong>, an intelligent regex router classifies queries into five intent categories, dynamically tuning retrieval hyperparameters. After passing a cosine-similarity semantic cache (≥ 0.95), the query is rewritten for conversational context and metadata filters are inferred. We execute parallel dense vector search and BM25 lexical search, fusing them via Reciprocal Rank Fusion (k=60).</p>
-          <p style="margin-top:0.75rem">The top 30 candidates pass to a GPU-accelerated <code>bge-reranker-large</code> cross-encoder, filtered using an adaptive relative score threshold, and expanded to their parent context. The generated response passes through a <strong>4D Self-Reflection Verifier</strong> measuring Faithfulness (35%), Completeness (30%), Citation Validity (20%), and Coherence (15%). Below the 0.70 composite threshold, an autonomous retry engine adjusts retrieval breadth and re-prompts the LLM.</p>
+          <p style="margin-top:0.75rem">The configured candidate pool passes through a device-aware BGE cross-encoder, relative-score filtering, and parent expansion. The generated response then passes through a <strong>4D Self-Reflection Verifier</strong> measuring faithfulness, completeness, citation validity, and coherence. Below the 0.70 composite threshold, the retry engine can broaden retrieval and re-prompt up to two times.</p>
           <p style="margin-top:0.75rem">The system supports sub-second TTFT via Server-Sent Events, client disconnect cancellation, and features a full <strong>PEFT QLoRA fine-tuning engine</strong> targeting all 7 linear projection layers of Qwen 2.5 Coder 7B, exporting directly to quantized GGUF for Ollama serving.</p>
         </div>
       </div>
     </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     INTERVIEW DEFENSE COCKPIT
+     ═══════════════════════════════════════════════════════════ -->
+<section class="section interview-kit" id="interview-kit">
+  <div class="section-number">01B</div>
+  <div class="section-eyebrow">Interview Defense Cockpit</div>
+  <h2 class="section-title">Explain the system like its engineer.</h2>
+  <p class="section-subtitle">A compact speaking framework that separates architecture facts, engineering judgment, and benchmark claims.</p>
+
+  <div class="defense-cockpit">
+    <article class="defense-story-card">
+      <div class="defense-card-topline">
+        <span class="defense-card-index">90-second answer</span>
+        <button type="button" class="copy-defense-btn" data-copy-target="defenseStory"><i data-lucide="copy" aria-hidden="true"></i> Copy pitch</button>
+      </div>
+      <div id="defenseStory" class="defense-story">
+        <p><strong>Problem.</strong> Policy answers fail when semantic retrieval misses exact identifiers, fixed chunks split clauses, or generation invents unsupported details.</p>
+        <p><strong>System.</strong> I built a FastAPI + Next.js local-first RAG pipeline using ChromaDB, BM25, RRF, configurable cross-encoder reranking, parent-context expansion, Ollama generation, citations, and an evidence-quality loop.</p>
+        <p><strong>Hard part.</strong> Multi-turn questions must preserve previously verified evidence without silently weakening the answer, while visual pages, missing models, and client disconnects need explicit degradation paths.</p>
+        <p><strong>Validation.</strong> I defend behavior with contract and adversarial tests, typed trace events, and thresholded gates. Latency or accuracy numbers are claims only when tied to a named dataset, hardware profile, and reproducible run.</p>
+      </div>
+    </article>
+
+    <article class="defense-principles-card">
+      <div class="defense-card-topline">
+        <span class="defense-card-index">Four invariants</span>
+        <span class="evidence-badge">code-backed</span>
+      </div>
+      <div class="invariant-list">
+        <div><span>01</span><p><strong>Evidence before prose.</strong> Retrieval and sufficiency checks determine whether the system may answer.</p></div>
+        <div><span>02</span><p><strong>Continuity without drift.</strong> Follow-ups can reuse verified chunks and expand nearby pages.</p></div>
+        <div><span>03</span><p><strong>Degradation is a feature.</strong> Dense, reranker, vision, and generation failures have visible fallback states.</p></div>
+        <div><span>04</span><p><strong>Observability is part of correctness.</strong> Typed events and traces show what evidence and path produced the answer.</p></div>
+      </div>
+    </article>
+
+    <article class="defense-truth-card">
+      <div class="defense-card-topline">
+        <span class="defense-card-index">Source-of-truth profile</span>
+        <span class="truth-pulse">say this exactly</span>
+      </div>
+      <div class="truth-grid">
+        <div><span>Default chunking</span><strong>480 child → 2,000 parent</strong></div>
+        <div><span>Hybrid fusion</span><strong>RRF k = 60</strong></div>
+        <div><span>Candidate pool</span><strong>15 before reranking</strong></div>
+        <div><span>Verifier</span><strong>0.70 composite / 2 retries</strong></div>
+      </div>
+      <p class="truth-note"><strong>Interview-safe language:</strong> call this a production-oriented, locally deployable architecture. Call a number “measured” only when you can show the evaluation command, dataset, model configuration, and hardware.</p>
+    </article>
+
+    <article class="defense-route-card">
+      <div class="defense-card-topline">
+        <span class="defense-card-index">Choose the interviewer’s angle</span>
+        <span class="route-hint">jump to evidence</span>
+      </div>
+      <div class="defense-route-grid">
+        <a href="#architecture"><i data-lucide="workflow" aria-hidden="true"></i><span><strong>System design</strong><small>boundaries, flow, bottlenecks</small></span></a>
+        <a href="#key-implementation"><i data-lucide="code-2" aria-hidden="true"></i><span><strong>Implementation</strong><small>algorithms and code contracts</small></span></a>
+        <a href="#testing"><i data-lucide="flask-conical" aria-hidden="true"></i><span><strong>ML evaluation</strong><small>metrics, tests, claim hygiene</small></span></a>
+        <a href="#failures"><i data-lucide="triangle-alert" aria-hidden="true"></i><span><strong>Failure modes</strong><small>fallbacks and degradation</small></span></a>
+        <a href="#scale"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i><span><strong>Scale</strong><small>queues, storage, GPU serving</small></span></a>
+        <a href="#interview"><i data-lucide="messages-square" aria-hidden="true"></i><span><strong>Deep follow-ups</strong><small>100 searchable answers</small></span></a>
+      </div>
+    </article>
   </div>
 </section>
 
@@ -230,12 +324,170 @@
   <div class="section-number">02</div>
   <div class="section-eyebrow">System Architecture &amp; Subsystems</div>
   <h2 class="section-title">The Complete System Architecture</h2>
-  <p class="section-subtitle">A high-throughput, hallucination-resistant, multimodal RAG architecture operating with sub-second TTFT, cross-encoder reranking, and persistent write-behind telemetry.</p>
+  <p class="section-subtitle">A conversation-aware, multimodal evidence system where every request moves through explicit recall, precision, trust, and delivery boundaries.</p>
 
-  <span class="annotation">Start here →</span>
+  <div class="architecture-signals" aria-label="Architecture principles">
+    <span><i data-lucide="shield-check" aria-hidden="true"></i> Evidence first</span>
+    <span><i data-lucide="git-branch" aria-hidden="true"></i> Explicit fallbacks</span>
+    <span><i data-lucide="radio-tower" aria-hidden="true"></i> Observable by design</span>
+    <span><i data-lucide="server" aria-hidden="true"></i> Local model plane</span>
+  </div>
+
+  <!-- Interactive Architecture Atlas -->
+  <div class="architecture-atlas" id="architectureAtlas" data-arch-view="runtime">
+    <div class="arch-atlas-toolbar">
+      <div class="arch-window-title">
+        <span class="arch-window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>policy-rag / request-topology</span>
+      </div>
+      <div class="arch-view-switcher" aria-label="Architecture view">
+        <button type="button" class="active" data-arch-view="runtime">Runtime path</button>
+        <button type="button" data-arch-view="trust">Trust controls</button>
+        <button type="button" data-arch-view="failure">Failure mesh</button>
+      </div>
+      <span class="arch-live-state"><i></i> inspectable</span>
+    </div>
+
+    <div class="arch-atlas-layout">
+      <div class="arch-system-map">
+        <div class="arch-mobile-swipe" aria-hidden="true">Swipe map to explore →</div>
+        <div class="arch-map-grid" aria-label="Interactive end-to-end RAG architecture map">
+          <div class="arch-lane-label arch-lane-label--edge"><span>01</span> Experience edge</div>
+          <div class="arch-lane-label arch-lane-label--control"><span>02</span> Control plane</div>
+          <div class="arch-lane-label arch-lane-label--recall"><span>03</span> Recall plane</div>
+          <div class="arch-lane-label arch-lane-label--trust"><span>04</span> Trust plane</div>
+
+          <button type="button" class="arch-map-node arch-map-node--client" data-node="client" data-tags="runtime" data-index="01" data-title="Next.js conversation client" data-body="Captures the query, active document scope, model selection, and session identity; renders structured thinking, tokens, citations, and completion events." data-contract="POST /api/chat/stream → typed SSE events">
+            <span class="arch-map-icon"><i data-lucide="monitor-up" aria-hidden="true"></i></span>
+            <span class="arch-map-copy"><small>Experience</small><strong>Next.js Client</strong><em>query · session · model</em></span>
+            <span class="arch-map-port">SSE</span>
+          </button>
+
+          <div class="arch-connector arch-connector--c1" aria-hidden="true"><i></i></div>
+
+          <button type="button" class="arch-map-node arch-map-node--gateway active" data-node="gateway" data-tags="runtime failure" data-index="02" data-title="FastAPI gateway + ChatService" data-body="Validates the request, creates trace and cancellation state, restores the conversation, selects the model proxy, and coordinates the streaming lifecycle." data-contract="Request ID + cancellation token + deterministic event order">
+            <span class="arch-map-icon"><i data-lucide="waypoints" aria-hidden="true"></i></span>
+            <span class="arch-map-copy"><small>Orchestrator</small><strong>FastAPI + ChatService</strong><em>validate · coordinate · stream</em></span>
+            <span class="arch-map-port">ASGI</span>
+          </button>
+
+          <div class="arch-control-cluster">
+            <span class="arch-cluster-title">Conversation intelligence</span>
+            <button type="button" class="arch-map-node arch-map-node--compact" data-node="memory" data-tags="runtime trust" data-index="03" data-title="Conversation resolver" data-body="Resolves follow-up intent and referents, chooses an answer mode, and preserves the IDs of previously verified evidence so later turns do not silently lose context." data-contract="FollowUpResolution + ConversationEvidenceContext">
+              <span class="arch-map-icon"><i data-lucide="messages-square" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Continuity</small><strong>Conversation Resolver</strong><em>subject · answer mode · reuse</em></span>
+            </button>
+            <button type="button" class="arch-map-node arch-map-node--compact" data-node="router" data-tags="runtime failure" data-index="04" data-title="Query router" data-body="Classifies intent and chooses a retrieval strategy. Conversational turns can bypass retrieval; factual turns continue through cache and evidence acquisition." data-contract="Intent → retrieval strategy or direct synthesis">
+              <span class="arch-map-icon"><i data-lucide="route" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Intent</small><strong>Query Router</strong><em>route · tune · bypass</em></span>
+            </button>
+            <button type="button" class="arch-map-node arch-map-node--compact" data-node="cache" data-tags="runtime failure" data-index="05" data-title="Semantic cache" data-body="Looks for a sufficiently similar verified response in a dedicated ChromaDB collection. A hit avoids retrieval and generation while preserving the streaming response contract." data-contract="Cosine threshold 0.95 · cache miss falls through">
+              <span class="arch-map-icon"><i data-lucide="database-zap" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Fast path</small><strong>Semantic Cache</strong><em>reuse · stream · trace</em></span>
+            </button>
+          </div>
+
+          <div class="arch-flow-rail arch-flow-rail--control" aria-hidden="true"><i></i><i></i><i></i></div>
+
+          <button type="button" class="arch-map-node arch-map-node--rewrite" data-node="rewrite" data-tags="runtime trust" data-index="06" data-title="Rewrite + scope resolver" data-body="Turns ambiguous follow-ups into searchable queries, infers confidence-gated metadata constraints, and relaxes filters when they produce no evidence." data-contract="Resolved query + safe metadata filter + document scope">
+            <span class="arch-map-icon"><i data-lucide="scan-search" aria-hidden="true"></i></span>
+            <span class="arch-map-copy"><small>Query shaping</small><strong>Rewrite + Scope</strong><em>referents · filters · isolation</em></span>
+          </button>
+
+          <div class="arch-retrieval-cluster">
+            <span class="arch-cluster-title">Parallel retrieval</span>
+            <button type="button" class="arch-map-node arch-map-node--dense" data-node="dense" data-tags="runtime failure" data-index="07A" data-title="Dense semantic retrieval" data-body="Embeds the rewritten query and searches ChromaDB HNSW for semantically related child chunks, preserving metadata needed for later expansion and citations." data-contract="BAAI/bge-small-en-v1.5 · cosine · child chunks">
+              <span class="arch-map-icon"><i data-lucide="orbit" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Meaning</small><strong>Dense / HNSW</strong><em>semantic recall</em></span>
+            </button>
+            <button type="button" class="arch-map-node arch-map-node--bm25" data-node="bm25" data-tags="runtime failure" data-index="07B" data-title="BM25 lexical retrieval" data-body="Retrieves exact identifiers, acronyms, monetary values, and policy terminology that embedding similarity can underweight." data-contract="Sparse inverted index · exact-term recall">
+              <span class="arch-map-icon"><i data-lucide="text-search" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Terms</small><strong>BM25 / Lexical</strong><em>exact-match recall</em></span>
+            </button>
+            <div class="arch-branch-flow" aria-hidden="true"><i></i><i></i></div>
+            <button type="button" class="arch-map-node arch-map-node--fusion" data-node="rrf" data-tags="runtime trust" data-index="08" data-title="Reciprocal Rank Fusion" data-body="Merges dense and sparse rankings without pretending their raw score distributions are comparable. This gives one candidate pool for precision scoring." data-contract="RRF score Σ 1 / (60 + rank)">
+              <span class="arch-map-icon"><i data-lucide="merge" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Rank fusion</small><strong>RRF · k=60</strong><em>15 candidate default</em></span>
+            </button>
+          </div>
+
+          <div class="arch-connector arch-connector--c2" aria-hidden="true"><i></i></div>
+
+          <div class="arch-evidence-cluster">
+            <span class="arch-cluster-title">Evidence assembly</span>
+            <button type="button" class="arch-map-node arch-map-node--compact" data-node="rerank" data-tags="runtime trust failure" data-index="09" data-title="Cross-encoder reranking" data-body="Jointly scores query–chunk pairs, keeps the strongest evidence with a relative-score floor, and supports CPU/base or accelerated deployment profiles." data-contract="Top 4 default · ratio 0.50 · minimum 3">
+              <span class="arch-map-icon"><i data-lucide="list-filter" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Precision</small><strong>BGE Reranker</strong><em>joint attention · score floor</em></span>
+            </button>
+            <button type="button" class="arch-map-node arch-map-node--compact" data-node="context" data-tags="runtime trust" data-index="10" data-title="Parent and page expansion" data-body="Uses small child chunks for retrieval precision, then restores parent sections and adjacent pages so the generator sees complete clauses and surrounding structure." data-contract="480-token child → 2,000-token parent">
+              <span class="arch-map-icon"><i data-lucide="panels-top-left" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Context</small><strong>Parent Expansion</strong><em>section · page · continuity</em></span>
+            </button>
+            <button type="button" class="arch-map-node arch-map-node--compact" data-node="vision" data-tags="runtime failure" data-index="11" data-title="Vision evidence fallback" data-body="When text evidence is incomplete, the vision path inspects cached page imagery for diagrams, screenshots, tables, and code while preserving a timeout-based degraded path." data-contract="SHA-256 visual cache · qwen2.5vl:7b optional">
+              <span class="arch-map-icon"><i data-lucide="scan-eye" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Multimodal</small><strong>Vision Fallback</strong><em>diagram · table · code</em></span>
+            </button>
+          </div>
+
+          <div class="arch-flow-rail arch-flow-rail--evidence" aria-hidden="true"><i></i><i></i><i></i></div>
+
+          <button type="button" class="arch-map-node arch-map-node--gate" data-node="gate" data-tags="runtime trust failure" data-index="12" data-title="Evidence sufficiency gate" data-body="Decides whether retrieved text and visual context are sufficient for the requested answer mode. Insufficient evidence produces expansion, fallback, or abstention—not invented certainty." data-contract="EvidenceStatus → continue, expand, degrade, or abstain">
+            <span class="arch-map-icon"><i data-lucide="shield-check" aria-hidden="true"></i></span>
+            <span class="arch-map-copy"><small>Hard boundary</small><strong>Evidence Gate</strong><em>prove before generation</em></span>
+          </button>
+
+          <div class="arch-trust-cluster">
+            <span class="arch-cluster-title">Grounded response loop</span>
+            <button type="button" class="arch-map-node arch-map-node--generate" data-node="generate" data-tags="runtime trust failure" data-index="13" data-title="Grounded Ollama generation" data-body="Builds a source-indexed prompt and streams a local model response. Answer modes control depth while grounding rules prevent false absence and require code fidelity." data-contract="qwen2.5:7b · Rules A–F · cancellation-aware stream">
+              <span class="arch-map-icon"><i data-lucide="sparkles" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Synthesis</small><strong>Grounded LLM</strong><em>local · source-indexed · streaming</em></span>
+            </button>
+            <button type="button" class="arch-map-node arch-map-node--verify" data-node="verify" data-tags="runtime trust failure" data-index="14" data-title="4D verification + retry" data-body="Scores faithfulness, completeness, citation validity, and coherence. A failed composite gate can adjust retrieval and regenerate twice before returning the best transparent degraded result." data-contract="Composite ≥ 0.70 · maximum 2 retries">
+              <span class="arch-map-icon"><i data-lucide="badge-check" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Quality loop</small><strong>4D Verifier</strong><em>score · retry · degrade</em></span>
+              <span class="arch-retry-loop" aria-hidden="true">↻ 2×</span>
+            </button>
+            <button type="button" class="arch-map-node arch-map-node--response" data-node="response" data-tags="runtime trust" data-index="15" data-title="Citations + typed SSE response" data-body="Returns tokens, source objects, trace metadata, and a deterministic completion event so the user can inspect both the answer and how it was produced." data-contract="thinking → token → citation → trace → complete">
+              <span class="arch-map-icon"><i data-lucide="send" aria-hidden="true"></i></span>
+              <span class="arch-map-copy"><small>Delivery</small><strong>Answer + Evidence</strong><em>citations · trace · status</em></span>
+            </button>
+            <div class="arch-trust-flow" aria-hidden="true"><i></i><i></i></div>
+          </div>
+
+          <div class="arch-platform-rail">
+            <span class="arch-platform-label">Platform plane</span>
+            <button type="button" class="arch-platform-chip" data-node="models" data-tags="runtime failure" data-index="P1" data-title="Local model runtime" data-body="Ollama owns local text and optional vision model lifecycles. Model choice is request-scoped through a proxy to avoid cross-request mutation." data-contract="Ollama daemon · per-request model isolation"><i data-lucide="cpu" aria-hidden="true"></i> Ollama runtime</button>
+            <button type="button" class="arch-platform-chip" data-node="stores" data-tags="runtime failure" data-index="P2" data-title="Evidence stores" data-body="ChromaDB stores vectors and semantic cache entries; BM25 stores lexical statistics; the document and vision stores preserve expanded source context." data-contract="ChromaDB + BM25 + docstore + vision cache"><i data-lucide="database" aria-hidden="true"></i> Evidence stores</button>
+            <button type="button" class="arch-platform-chip" data-node="telemetry" data-tags="runtime trust failure" data-index="P3" data-title="Write-behind observability" data-body="A background telemetry path records stage timing, evidence decisions, cache state, model selection, and degraded stages without blocking the response path." data-contract="RAGTrace + SQLite WAL + subsystem health"><i data-lucide="activity" aria-hidden="true"></i> Trace + telemetry</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="arch-inspector" aria-live="polite">
+        <div class="arch-inspector-header">
+          <span id="archInspectorIndex">02 / ORCHESTRATOR</span>
+          <i data-lucide="scan-line" aria-hidden="true"></i>
+        </div>
+        <h3 id="archInspectorTitle">FastAPI gateway + ChatService</h3>
+        <p id="archInspectorBody">Validates the request, creates trace and cancellation state, restores the conversation, selects the model proxy, and coordinates the streaming lifecycle.</p>
+        <div class="arch-inspector-contract">
+          <span>Engineering contract</span>
+          <strong id="archInspectorContract">Request ID + cancellation token + deterministic event order</strong>
+        </div>
+        <div class="arch-inspector-prompt">
+          <span>Interview lens</span>
+          <p id="archInspectorPrompt">Explain the boundary, the invariant it protects, and what happens when its dependency fails.</p>
+        </div>
+        <div class="arch-inspector-footer">
+          <span><i></i> click any component</span>
+          <span>15 runtime stages</span>
+        </div>
+      </aside>
+    </div>
+  </div>
 
   <!-- End-to-End Interactive Pipeline Flow -->
-  <div class="arch-container">
+  <div class="arch-container arch-container--legacy" hidden aria-hidden="true">
     <div class="arch-flow">
       <div class="arch-node arch-node--primary">
         <div class="arch-node-title">🌐 User Client (Next.js 16 + React 19)</div>
@@ -306,9 +558,9 @@
       <div class="arch-merge-label">↓ Reciprocal Rank Fusion (k=60) ↓</div>
 
       <div class="arch-node" style="border-color:var(--accent-core)">
-        <div class="arch-node-title">🎯 CUDA Cross-Encoder Reranker (bge-reranker-large)</div>
-        <div class="arch-node-desc">Deep 24-layer cross-attention + Adaptive Relative Score Threshold Filter</div>
-        <div class="arch-node-detail">Scores each (query, chunk) candidate on GPU. Drops chunks with score &lt; top_score × 0.45. Selects top N surviving high-precision chunks (~85ms latency).</div>
+        <div class="arch-node-title">🎯 Configurable BGE Cross-Encoder Reranker</div>
+        <div class="arch-node-desc">Base/CPU code default · Large/GPU deployment option · Relative score filter</div>
+        <div class="arch-node-detail">Jointly scores each (query, chunk) pair. The active code defaults to a 15-candidate pool, keeps the top 4, and enforces a 0.50 relative-score ratio with at least 3 survivors. Model, device, and latency remain environment-dependent.</div>
       </div>
 
       <div class="arch-arrow">
@@ -335,7 +587,7 @@
       </div>
 
       <div class="arch-node">
-        <div class="arch-node-title">🤖 Grounded LLM Generation (qwen2.5:7b · GPU)</div>
+        <div class="arch-node-title">🤖 Grounded Local LLM Generation (qwen2.5:7b via Ollama)</div>
         <div class="arch-node-desc">Grounded prompt synthesis · Real-time SSE token emission</div>
         <div class="arch-node-detail">Injects [Source N] structured context. Enforces strict abstention if sources lack proof. Streams tokens directly to the client via SSE.</div>
       </div>
@@ -357,7 +609,7 @@
 
       <div class="arch-node" style="border-color:var(--accent-emerald)">
         <div class="arch-node-title">📊 Persistent SQLite Write-Behind Telemetry Engine</div>
-        <div class="arch-node-desc">Zero-latency background queue · SQLite WAL mode · 6 Time-Window Buckets</div>
+        <div class="arch-node-desc">Non-blocking write-behind queue · SQLite WAL mode · 6 time-window buckets</div>
         <div class="arch-node-detail">Async worker flushes traces to disk. Powers full-screen admin telemetry dashboard, waterfall latency graphs, and 10-subsystem health probes.</div>
       </div>
 
@@ -368,115 +620,115 @@
 
       <div class="arch-node arch-node--primary">
         <div class="arch-node-title">✅ Verified RAGResponse + Citations + Full Trace Telemetry</div>
-        <div class="arch-node-desc">Sub-second TTFT · Fully grounded citations · Zero hallucinations</div>
+        <div class="arch-node-desc">Streaming-first delivery · Source-linked citations · Explicit degraded states</div>
       </div>
     </div>
   </div>
 
-  <!-- 10-Subsystem Live Topology Matrix -->
+  <!-- 10-Subsystem Operational Dependency Matrix -->
   <div style="margin-top:var(--space-3xl)">
-    <div class="section-eyebrow">Subsystem Health Matrix</div>
-    <h3 class="section-title" style="font-size:var(--text-2xl)">10 Core Global Subsystems</h3>
-    <p class="section-subtitle">Real-time health probes monitored continuously with circuit breakers and fallback policies.</p>
+    <div class="section-eyebrow">Operational Dependency Matrix</div>
+    <h3 class="section-title" style="font-size:var(--text-2xl)">The 10 systems that keep one answer alive.</h3>
+    <p class="section-subtitle">A dependency view of responsibilities, runtime expectations, and degraded behavior. Status labels describe observability coverage—not a live production health claim.</p>
 
     <div class="subsystems-grid">
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">⚡ API Gateway</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">FastAPI ASGI server handling HTTP/2, SSE streaming, and request routing.</div>
-        <div class="subsystem-sla">Latency SLA: &lt; 5ms</div>
+        <div class="subsystem-sla">Signal: request + stream lifecycle</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">🤖 Ollama Daemon</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">Local LLM serving daemon managing GPU memory allocation and model lifecycles.</div>
-        <div class="subsystem-sla">Keep-Alive: 15m</div>
+        <div class="subsystem-sla">Lifecycle: configurable keep-alive</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">🔍 ChromaDB Vector</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">HNSW indexed vector store storing 384-dim chunk embeddings and metadata.</div>
-        <div class="subsystem-sla">Query SLA: &lt; 25ms</div>
+        <div class="subsystem-sla">Signal: query timing + result count</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">📝 BM25 Lexical</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">In-memory sparse inverted index for exact keyword, policy ID, and term matching.</div>
-        <div class="subsystem-sla">Search SLA: &lt; 8ms</div>
+        <div class="subsystem-sla">Fallback: survives dense failure</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">🧠 Embedding Model</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">BAAI/bge-small-en-v1.5 generating 384-dimensional dense semantic vectors.</div>
-        <div class="subsystem-sla">Embed SLA: &lt; 20ms</div>
+        <div class="subsystem-sla">Signal: model + vector dimension</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">💬 Text Model</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">qwen2.5:7b dedicated text generation engine with streaming token synthesis.</div>
-        <div class="subsystem-sla">TTFT SLA: &lt; 1,200ms</div>
+        <div class="subsystem-sla">Signal: TTFT + completion status</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">👁️ Vision VLM</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status subsystem-status--optional"><span class="subsystem-status--dot"></span> ON DEMAND</span>
         </div>
         <div class="subsystem-desc">qwen2.5vl:7b multimodal engine for code screenshot, diagram, and table OCR.</div>
-        <div class="subsystem-sla">Lazy Fallback: Active</div>
+        <div class="subsystem-sla">Fallback: timeout → text-only evidence</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">💾 Semantic Cache</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">ChromaDB semantic response cache with cosine similarity threshold ≥ 0.95.</div>
-        <div class="subsystem-sla">Hit Latency: &lt; 80ms</div>
+        <div class="subsystem-sla">Contract: cosine threshold ≥ 0.95</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">🖼️ Vision Cache</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">SHA-256 content-addressed visual document cache in storage/vision_cache/.</div>
-        <div class="subsystem-sla">Cache Hit: &lt; 1ms</div>
+        <div class="subsystem-sla">Identity: SHA-256 content address</div>
       </div>
 
       <div class="subsystem-card">
         <div class="subsystem-header">
           <span class="subsystem-title">📊 Telemetry DB</span>
-          <span class="subsystem-status"><span class="subsystem-status--dot"></span> HEALTHY</span>
+          <span class="subsystem-status"><span class="subsystem-status--dot"></span> OBSERVED</span>
         </div>
         <div class="subsystem-desc">SQLite WAL write-behind engine with background worker and time-window aggregations.</div>
-        <div class="subsystem-sla">Queue Overhead: 0.0ms</div>
+        <div class="subsystem-sla">Path: non-blocking write-behind</div>
       </div>
     </div>
   </div>
 
   <!-- 16-Stage Waterfall Latency Matrix -->
   <div style="margin-top:var(--space-3xl)">
-    <div class="section-eyebrow">End-to-End Pipeline SLA</div>
-    <h3 class="section-title" style="font-size:var(--text-2xl)">16-Stage Latency Waterfall</h3>
-    <p class="section-subtitle">Every pipeline stage is tracked with microsecond timestamps and emitted in telemetry traces.</p>
+    <div class="section-eyebrow">Illustrative Trace Profile</div>
+    <h3 class="section-title" style="font-size:var(--text-2xl)">Follow latency through the request.</h3>
+    <p class="section-subtitle">The trace records stage-level timings; the values below are an illustrative local profile, not a universal SLA. Quote them in an interview only with the matching dataset, hardware, and model configuration.</p>
 
     <div class="waterfall-matrix">
       <div class="waterfall-stage-row">
@@ -1646,7 +1898,7 @@ BM25 Index: {"vacation": [chk_a1b2c3, chk_d4e5f6, ...]}</div>
       <div class="decision-title" style="font-size:var(--text-xl)">Edge cases are handled safely</div>
       <div class="decision-flow" style="font-size:var(--text-sm);color:var(--text-secondary)">
         <p>✓ Empty query → 400 Bad Request (not an unhandled 500 crash)</p>
-        <p>✓ Zero retrieved chunks → Returns grounded abstention message with zero hallucination</p>
+        <p>✓ Zero retrieved chunks → Returns an explicit abstention instead of generating unsupported policy claims</p>
         <p>✓ 100MB file upload → validated against MAX_FILE_SIZE_BYTES before processing</p>
         <p>✓ Unicode/CJK text → processed without character encoding errors</p>
         <p>✓ Negative rerank scores → min_keep=1 prevents completely empty context</p>
@@ -1693,7 +1945,7 @@ BM25 Index: {"vacation": [chk_a1b2c3, chk_d4e5f6, ...]}</div>
         <div class="failure-step"><div class="failure-step-label">Normal</div><div class="failure-step-text">Pipeline calls <code>req_llm.complete(prompt)</code></div></div>
         <div class="failure-step"><div class="failure-step-label">Detection</div><div class="failure-step-text">Connection refused or timeout exception caught in <code>pipeline.py</code></div></div>
         <div class="failure-step"><div class="failure-step-label">Recovery</div><div class="failure-step-text"><code>_fallback_synthesis()</code> activates — extracts first 2 sentences from each retrieved chunk with [Source N] tags.</div></div>
-        <div class="failure-step"><div class="failure-step-label">Outcome</div><div class="failure-step-text"><span class="failure-handled">Handled</span> — Returns 100% grounded deterministic answer from retrieved chunks. Zero hallucination risk.</div></div>
+        <div class="failure-step"><div class="failure-step-label">Outcome</div><div class="failure-step-text"><span class="failure-handled">Handled</span> — Returns a deterministic extractive response with source labels, reducing generation risk while keeping parser and citation correctness observable.</div></div>
       </div>
     </div>
 
@@ -1740,6 +1992,14 @@ BM25 Index: {"vacation": [chk_a1b2c3, chk_d4e5f6, ...]}</div>
   <p class="section-subtitle">Comprehensive, battle-tested answers covering every layer of the architecture, algorithms, failure modes, and code references. Filter by module or search keywords.</p>
 
   <span class="annotation--warning annotation">Click any question to reveal Short Answer + Deep Technical Answer + Actual Codebase Snippet.</span>
+
+  <div class="claim-hygiene" role="note" aria-label="Interview claim hygiene">
+    <i data-lucide="badge-check" aria-hidden="true"></i>
+    <div>
+      <strong>Defend the active code, then discuss the optimized profile.</strong>
+      <p>The code defaults to a 15-candidate pool and a configurable BGE reranker; CPU/base and GPU/large are deployment profiles, not universal facts. Treat latency, recall, VRAM, and quality percentages below as benchmark examples unless you can reproduce them on a named dataset, model build, and hardware configuration.</p>
+    </div>
+  </div>
 
   <!-- Interactive Explorer Toolbar -->
   <div class="qa-controls mt-2xl">
@@ -1801,11 +2061,11 @@ BM25 Index: {"vacation": [chk_a1b2c3, chk_d4e5f6, ...]}</div>
         <div class="answer-content">
           <div class="answer-section">
             <div class="answer-label">30-Second Verbal Answer (The Interview Pitch)</div>
-            <div class="answer-text">The query hits POST /api/chat/stream, where ChatService retrieves session history from TTLCache. QueryRouter classifies intent (~0.5ms). Semantic cache probes ChromaDB (cosine &gt;= 0.95). On miss, query rewrite resolves pronouns and metadata filters are inferred. Parallel dense vector + BM25 search execute and fuse via RRF (k=60). Top 30 chunks are scored by bge-reranker-large on CUDA with relative threshold filtering, then expanded to parent documents. Ollama generates grounded tokens while 4D Verifier evaluates composite quality. If composite &lt; 0.70, RetryEngine re-executes. Verified tokens stream via SSE.</div>
+            <div class="answer-text">The query hits <code>POST /api/chat/stream</code>, where conversation state resolves follow-up context and QueryRouter selects a retrieval strategy. The semantic cache probes ChromaDB at a configured 0.95 threshold. On a miss, dense vector and BM25 search run and fuse with RRF (k=60). A configurable BGE cross-encoder reranks the candidate pool—15 by current code default—before parent/page expansion, evidence checks, grounded Ollama generation, citation building, and typed SSE delivery. A response below the 0.70 composite gate can retry up to two times before degrading explicitly.</div>
           </div>
           <div class="answer-section">
             <div class="answer-label">Deep Technical Answer (Architecture, Formulas & Tradeoffs)</div>
-            <div class="answer-text" style="line-height:1.8">1. Entry: FastAPI validates Pydantic ChatRequest at `backend/api/routes/chat.py` with an asyncio.Event cancel token.<br>2. Session: ChatService retrieves conversation history from thread-safe TTLCache (1000 sessions, 24h TTL).<br>3. Intent: QueryRouter runs compiled regex to classify into 5 categories, returning dynamic RetrievalStrategy hyperparameters.<br>4. Cache: SemanticCacheManager embeds query, probes ChromaDB semantic_cache. Cosine >= 0.95 exits early with simulated streaming.<br>5. Rewrite & Filter: QueryRewriter resolves pronouns; FilterExtractor extracts department and policy tags.<br>6. Hybrid Retrieval: ChromaDB HNSW (bge-small-en-v1.5) + BM25 retrieve candidates, merged via Reciprocal Rank Fusion: Score(d) = Σ 1/(60+rank).<br>7. Rerank: CrossEncoderReranker (bge-reranker-large) re-scores top 30 chunks; RelativeScoreThreshold drops items below top_score * 0.45.<br>8. Expand: ContextCompressor swaps 480-token children for 2000-token parent documents from docstore.<br>9. Synthesize & Verify: Ollama streams tokens with GROUNDED_SYSTEM_PROMPT. SelfReflectionVerifier computes 4D score (35% Faithfulness, 30% Completeness, 20% Citation, 15% Coherence). If score < 0.70, RetryEngine refines retrieval and re-prompts.<br>10. Delivery: EventSource response streams to client; background thread writes answer to semantic cache.</div>
+            <div class="answer-text" style="line-height:1.8">1. Entry: FastAPI validates the request and creates cancellation-aware stream state.<br>2. Conversation: ChatService and the resolver recover session evidence, subject references, and requested answer mode.<br>3. Intent: QueryRouter selects a retrieval strategy; direct conversational turns may bypass retrieval.<br>4. Cache: SemanticCacheManager probes its ChromaDB collection at the configured 0.95 similarity threshold.<br>5. Rewrite &amp; Filter: Query rewriting resolves referents while metadata filters remain confidence-gated and relax on empty results.<br>6. Hybrid Retrieval: ChromaDB dense search and BM25 retrieve candidates, merged with Score(d) = Σ 1/(60 + rank).<br>7. Rerank: the configured BGE cross-encoder reranks 15 candidates by code default and applies relative-score filtering.<br>8. Expand: 480-token children can expand to 2,000-token parent/page context, including visual evidence when required.<br>9. Generate &amp; Check: Ollama receives grounded context; evidence and 4D quality checks can trigger up to two retries.<br>10. Deliver: typed thinking, token, citation, trace, and completion events stream to the client while telemetry persists asynchronously.</div>
           </div>
           <div class="answer-section" style="margin-top:var(--space-md);padding-top:var(--space-sm);border-top:1px dashed var(--border-light)">
             <div class="answer-label" style="color:var(--text-muted)">Code References & Implementation Details</div>
@@ -2242,7 +2502,7 @@ async def stream_chat(
           </div>
           <div class="answer-section">
             <div class="answer-label">Deep Technical Answer (Architecture, Formulas & Tradeoffs)</div>
-            <div class="answer-text" style="line-height:1.8">In `backend/rag/pipeline.py`, Ollama calls are wrapped in `try/except (httpx.ConnectError, httpx.TimeoutException, Exception)`. When triggered, `_fallback_synthesis()` takes over: it extracts the most salient sentences (first 2 sentences of each verified reranked chunk), structures them into bullet points, appends source citations `[Source N]`, and returns a guaranteed 100% factually grounded answer with a system warning in `RAGTrace`. This guarantees that system outages never cause complete request failures or unhandled 500 errors.</div>
+            <div class="answer-text" style="line-height:1.8">In <code>backend/rag/pipeline.py</code>, generation failures enter a deterministic extractive fallback: selected sentences from retrieved chunks are structured with <code>[Source N]</code> labels and the degraded path is recorded in the trace. This removes free-form generation from that path, but it does not make correctness automatic—the retrieval set, sentence selection, citation mapping, and HTTP error handling remain testable failure surfaces.</div>
           </div>
           <div class="answer-section" style="margin-top:var(--space-md);padding-top:var(--space-sm);border-top:1px dashed var(--border-light)">
             <div class="answer-label" style="color:var(--text-muted)">Code References & Implementation Details</div>
@@ -4451,7 +4711,7 @@ OLLAMA_MAX_TOKENS: int = 1024</code></pre>
           </div>
           <div class="answer-section">
             <div class="answer-label">Deep Technical Answer (Architecture, Formulas & Tradeoffs)</div>
-            <div class="answer-text" style="line-height:1.8">Without the hard gate, fluent hallucinations with bogus citations could achieve 0.7725 composite score. The rule `passed = composite >= 0.70 and faithfulness >= 0.65` guarantees zero tolerance for hallucinations.</div>
+            <div class="answer-text" style="line-height:1.8">Without independent hard gates, a strong coherence score could hide a weak evidence score inside the weighted composite. Requiring both the composite threshold and minimum faithfulness/citation conditions prevents one dimension from compensating for unsupported claims; it reduces risk but must still be validated against adversarial examples.</div>
           </div>
           <div class="answer-section" style="margin-top:var(--space-md);padding-top:var(--space-sm);border-top:1px dashed var(--border-light)">
             <div class="answer-label" style="color:var(--text-muted)">Code References & Implementation Details</div>
@@ -6166,7 +6426,7 @@ def process_document_task(self, file_s3_key: str, metadata: dict):
           <div class="revision-flow-item"><span class="revision-flow-arrow">→</span> Problem: Naive RAG hallucinates on compliance policies</div>
           <div class="revision-flow-item"><span class="revision-flow-arrow">→</span> Solution: Hybrid retrieval + Cross-encoder + 4D Verification</div>
           <div class="revision-flow-item"><span class="revision-flow-arrow">→</span> How: Dense+BM25 → RRF → Rerank → Parent Expand → Verify → Retry</div>
-          <div class="revision-flow-item"><span class="revision-flow-arrow">→</span> Result: Zero-hallucination grounded answers with source citations</div>
+          <div class="revision-flow-item"><span class="revision-flow-arrow">→</span> Result: Hallucination-resistant answers with source-linked evidence and explicit abstention</div>
         </div>
       </div>
 
@@ -6247,7 +6507,7 @@ def process_document_task(self, file_s3_key: str, metadata: dict):
   </div>
 </section>
 
-</div><!-- .page-wrapper -->
+</main><!-- .page-wrapper -->
 
 <!-- ═══ LUXURY FLOATING HUD DOCK ═══ -->
 <aside class="floating-hud" aria-label="Quick Actions Dock">

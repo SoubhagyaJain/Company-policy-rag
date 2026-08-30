@@ -277,7 +277,7 @@ def test_challenger_vision_timeout_graceful_degradation():
     # Mock VisionService to simulate timeout / failure
     mock_vision = MagicMock()
     mock_vision.is_enabled = True
-    mock_vision.vision_model = "qwen2.5vl:7b"
+    mock_vision.vision_model = "Qwen3-VL-2B-Instruct"
     mock_vision.is_available.return_value = (True, "Ready")
     mock_asset_mgr = MagicMock()
     # ImageAsset exists on disk for page 55

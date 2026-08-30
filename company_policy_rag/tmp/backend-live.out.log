@@ -1,0 +1,175 @@
+2026-08-30 07:51:48 | INFO     | backend | ==========================================================
+2026-08-30 07:51:48 | INFO     | backend |   STARTING RAG SYSTEM PRELOADING & MODEL WARM-UP          
+2026-08-30 07:51:48 | INFO     | backend | ==========================================================
+2026-08-30 07:51:49 | INFO     | backend | ChromaVectorStore initialized collection 'company_policy' at storage\chroma
+2026-08-30 07:51:49 | INFO     | backend | Restored 1 documents into the document registry.
+2026-08-30 07:51:49 | INFO     | backend | SemanticCacheManager initialized collection 'semantic_cache' at storage\chroma
+2026-08-30 07:52:31 | INFO     | backend | Loading embedding model BAAI/bge-small-en-v1.5
+2026-08-30 07:52:37 | INFO     | backend | [1/4] Embedding model loaded & warmed up in 47.39s
+2026-08-30 07:52:37 | INFO     | backend | Loading CrossEncoder reranker model BAAI/bge-reranker-base on device cpu
+2026-08-30 07:52:43 | INFO     | backend | [2/4] CrossEncoder reranker loaded & warmed up in 6.21s
+2026-08-30 07:52:49 | INFO     | backend | Preloaded Ollama model 'qwen2.5:7b' via keep_alive=-1
+2026-08-30 07:52:52 | INFO     | backend | [3/4] Ollama LLM 'qwen2.5:7b' preloaded & warmed up in 9.07s
+2026-08-30 07:52:52 | INFO     | backend | [4/5] Vector Store (403 chunks) & BM25 (0 chunks) ready in 0.00s
+2026-08-30 07:52:52 | INFO     | backend | [5/5] Vision Model 'Qwen3-VL-2B-Instruct': READY (HF Vision model Qwen3-VL-2B-Instruct is available (lazy load).) in 0.00s
+2026-08-30 07:52:52 | INFO     | backend | ==========================================================
+2026-08-30 07:52:52 | INFO     | backend |   ALL RAG MODELS READY IN 63.51s — ZERO COLD START READY!  
+2026-08-30 07:52:52 | INFO     | backend | ==========================================================
+2026-08-30 07:52:52 | INFO     | backend | [HTTP] request_id=req_cffa0d484b42 GET /health -> 404 (28.65ms)
+INFO:     127.0.0.1:51515 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:52 | INFO     | backend | [HTTP] request_id=req_c7e8d97e73a1 GET /health -> 404 (0.37ms)
+INFO:     127.0.0.1:51516 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:53 | INFO     | backend | [HTTP] request_id=req_c047cd5a8c88 GET /health -> 404 (0.39ms)
+INFO:     127.0.0.1:51517 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:53 | INFO     | backend | [HTTP] request_id=req_4810b1ac7a7e GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51518 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:53 | INFO     | backend | [HTTP] request_id=req_86f62257a0ac GET /health -> 404 (0.77ms)
+INFO:     127.0.0.1:51519 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:54 | INFO     | backend | [HTTP] request_id=req_4901629fba1a GET /health -> 404 (0.29ms)
+INFO:     127.0.0.1:51520 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:54 | INFO     | backend | [HTTP] request_id=req_3c8d87db2af8 GET /health -> 404 (0.31ms)
+INFO:     127.0.0.1:51521 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:54 | INFO     | backend | [HTTP] request_id=req_06b4fbc9ff04 GET /health -> 404 (0.35ms)
+INFO:     127.0.0.1:51522 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:55 | INFO     | backend | [HTTP] request_id=req_823ae7eeb687 GET /health -> 404 (0.31ms)
+INFO:     127.0.0.1:51523 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:55 | INFO     | backend | [HTTP] request_id=req_cf74d45dc4ea GET /health -> 404 (0.27ms)
+INFO:     127.0.0.1:51524 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:55 | INFO     | backend | [HTTP] request_id=req_9f21c9f06e53 GET /health -> 404 (0.47ms)
+INFO:     127.0.0.1:51525 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:56 | INFO     | backend | [HTTP] request_id=req_11b23656ea82 GET /health -> 404 (0.34ms)
+INFO:     127.0.0.1:51526 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:56 | INFO     | backend | [HTTP] request_id=req_f8269094fbe9 GET /health -> 404 (0.31ms)
+INFO:     127.0.0.1:51527 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:56 | INFO     | backend | [HTTP] request_id=req_554889bfd0fc GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51528 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:57 | INFO     | backend | [HTTP] request_id=req_4959294d3071 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51529 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:58 | INFO     | backend | [HTTP] request_id=req_d9dd54dc5c56 GET /health -> 404 (0.29ms)
+INFO:     127.0.0.1:51530 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:52:59 | INFO     | backend | [HTTP] request_id=req_d4a0630ec9bb GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51531 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:00 | INFO     | backend | [HTTP] request_id=req_b71f24018b7a GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51532 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:01 | INFO     | backend | [HTTP] request_id=req_13d82429f908 GET /health -> 404 (0.49ms)
+INFO:     127.0.0.1:51534 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:02 | INFO     | backend | [HTTP] request_id=req_1f03345fac7e GET /health -> 404 (0.41ms)
+INFO:     127.0.0.1:51535 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:03 | INFO     | backend | [HTTP] request_id=req_e26427997951 GET /health -> 404 (0.31ms)
+INFO:     127.0.0.1:51536 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:04 | INFO     | backend | [HTTP] request_id=req_5c3854631292 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51537 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:05 | INFO     | backend | [HTTP] request_id=req_1fbc45ecda1c GET /health -> 404 (0.32ms)
+INFO:     127.0.0.1:51538 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:06 | INFO     | backend | [HTTP] request_id=req_953e83d1456d GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51539 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:08 | INFO     | backend | [HTTP] request_id=req_24898daaf189 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51541 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:09 | INFO     | backend | [HTTP] request_id=req_ad8d3300d126 GET /health -> 404 (0.27ms)
+INFO:     127.0.0.1:51542 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:10 | INFO     | backend | [HTTP] request_id=req_60ad19413155 GET /health -> 404 (1.16ms)
+INFO:     127.0.0.1:51543 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:11 | INFO     | backend | [HTTP] request_id=req_53df8e8e4dc3 GET /health -> 404 (0.33ms)
+INFO:     127.0.0.1:51544 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:12 | INFO     | backend | [HTTP] request_id=req_266271a0aa98 GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51545 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:13 | INFO     | backend | [HTTP] request_id=req_53709172c520 GET /health -> 404 (0.39ms)
+INFO:     127.0.0.1:51546 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:14 | INFO     | backend | [HTTP] request_id=req_bfc177f0da6b GET /health -> 404 (0.29ms)
+INFO:     127.0.0.1:51547 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:15 | INFO     | backend | [HTTP] request_id=req_2e4d5edc7f84 GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51549 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:16 | INFO     | backend | [HTTP] request_id=req_d553e1b21e3e GET /health -> 404 (0.29ms)
+INFO:     127.0.0.1:51551 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:17 | INFO     | backend | [HTTP] request_id=req_51945d4c740f GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51552 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:18 | INFO     | backend | [HTTP] request_id=req_bfde1f671bc8 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51553 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:19 | INFO     | backend | [HTTP] request_id=req_938ac39b6e81 GET /health -> 404 (0.75ms)
+INFO:     127.0.0.1:51554 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:20 | INFO     | backend | [HTTP] request_id=req_89167d1f5cd8 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51555 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:21 | INFO     | backend | [HTTP] request_id=req_31e7708f9517 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51556 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:22 | INFO     | backend | [HTTP] request_id=req_c77baeb94fb6 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51558 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:22 | INFO     | backend | [HTTP] request_id=req_56c213413278 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51559 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:23 | INFO     | backend | [HTTP] request_id=req_3d60968af531 GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51560 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:24 | INFO     | backend | [HTTP] request_id=req_159dbf644b81 GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51561 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:25 | INFO     | backend | [HTTP] request_id=req_118ee908ef68 GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51562 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:26 | INFO     | backend | [HTTP] request_id=req_1c1ee2c01c82 GET /health -> 404 (0.44ms)
+INFO:     127.0.0.1:51564 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:27 | INFO     | backend | [HTTP] request_id=req_82bda0ff73de GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:51566 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:28 | INFO     | backend | [HTTP] request_id=req_287175c4e7a9 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51567 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:29 | INFO     | backend | [HTTP] request_id=req_683c47cc248b GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51569 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:30 | INFO     | backend | [HTTP] request_id=req_6846bcf9df61 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51570 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:31 | INFO     | backend | [HTTP] request_id=req_faba579e4153 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51571 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:32 | INFO     | backend | [HTTP] request_id=req_ded92a96d4d9 GET /health -> 404 (0.33ms)
+INFO:     127.0.0.1:51573 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:33 | INFO     | backend | [HTTP] request_id=req_a8167b5f8aea GET /health -> 404 (0.72ms)
+INFO:     127.0.0.1:51574 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:34 | INFO     | backend | [HTTP] request_id=req_ae1128f93339 GET /health -> 404 (0.31ms)
+INFO:     127.0.0.1:51576 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:35 | INFO     | backend | [HTTP] request_id=req_712976e25442 GET /health -> 404 (0.31ms)
+INFO:     127.0.0.1:51577 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:36 | INFO     | backend | [HTTP] request_id=req_f43458c270a4 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:51579 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:37 | INFO     | backend | [HTTP] request_id=req_35b5c6119ea6 GET /health -> 404 (0.41ms)
+INFO:     127.0.0.1:51581 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:37 | INFO     | backend | [CONVERSATION] session_id=codex-fix-verification turn_count=1 is_followup=False topic_shift=False topic='5 techinque of llm fine tuning' entities=['techinque fine tuning']
+2026-08-30 07:53:37 | INFO     | backend | [QUERY_RESOLUTION] query='what are the 5 techinque of llm fine tuning' resolved='what are the 5 techinque of llm fine tuning' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-30 07:53:37 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Answer only the exact question in one short paragraph or at most four compact bullets. - Omit preambles, adjacent facts, implementation details, recaps, and conclusions unless requested. - Use only the retrieved context.'
+2026-08-30 07:53:37 | INFO     | backend | Executing dense retrieval for query: what are the 5 techinque of llm fine tuning
+2026-08-30 07:53:37 | INFO     | backend | Dense retrieve: computing embedding for what are the 5 techinque of llm fine tuning
+2026-08-30 07:53:37 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-30 07:53:37 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-30 07:53:37 | INFO     | backend | Executing BM25 retrieval for query: what are the 5 techinque of llm fine tuning
+2026-08-30 07:53:37 | INFO     | backend | BM25 retrieval complete
+2026-08-30 07:53:37 | INFO     | backend | Starting CrossEncoder prediction for 8 pairs...
+2026-08-30 07:53:38 | INFO     | backend | [HTTP] request_id=req_64456453e120 GET /health -> 404 (0.63ms)
+INFO:     127.0.0.1:51583 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:38 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-30 07:53:38 | INFO     | backend | Evidence Sufficiency Gate: Missing required evidence types (referenced_visual_content) for intent 'factual'. Continuation cues detected: ['depicted below']. -> Inspecting pages [70, 71, 72, 73, 74]
+2026-08-30 07:53:38 | INFO     | backend | Evidence sufficiency check failed for query 'what are the 5 techinque of llm fine tuning' (intent=QueryCategory.FACTUAL). Inspecting pages [70, 71, 72, 73, 74]
+2026-08-30 07:53:38 | WARNING  | backend | [VISION] Skipping live query-time vision: CPU-only vision is disabled for interactive queries.
+2026-08-30 07:53:38 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=PARTIAL monotonic=PARTIAL rationale='Single turn evaluation'
+2026-08-30 07:53:38 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    what are the 5 techinque of llm fine tuning
+INTENT:                   factual
+RESPONSE_MODE:            standard
+RETRIEVAL_TOP_K:          8
+RERANK_TOP_K:             6
+CONTEXT_TOKENS:           250
+GENERATION_MAX_TOKENS:    700
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           LLM Fine-tuning Techniques
+TEXT_CANDIDATES:          8
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      3
+FINAL_VISUAL_EVIDENCE:    1
+PAGE_IDENTITY:            internal_page_index=70 physical_page_number=71 display_page_number=70
+VISUAL_ASSET:             FOUND
+VISION_STATUS:            DEGRADED
+EVIDENCE_STATUS:          PARTIAL
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            1122.91 ms
+======================================================================
+
+2026-08-30 07:53:38 | INFO     | backend | [HTTP] request_id=req_d2c4a81f677e POST /api/chat -> 200 (1129.42ms)
+INFO:     127.0.0.1:51582 - "POST /api/chat HTTP/1.1" 200 OK
+2026-08-30 07:53:39 | INFO     | backend | [HTTP] request_id=req_c5eac6b8a2cc GET /health -> 404 (0.34ms)
+INFO:     127.0.0.1:51584 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-30 07:53:40 | INFO     | backend | [HTTP] request_id=req_2ec9cd94b27c GET /health -> 404 (0.29ms)
+INFO:     127.0.0.1:51585 - "GET /health HTTP/1.1" 404 Not Found

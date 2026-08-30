@@ -1,0 +1,55 @@
+2026-08-30 08:05:37 | INFO     | backend | ==========================================================
+2026-08-30 08:05:37 | INFO     | backend |   STARTING RAG SYSTEM PRELOADING & MODEL WARM-UP          
+2026-08-30 08:05:37 | INFO     | backend | ==========================================================
+2026-08-30 08:05:37 | INFO     | backend | ChromaVectorStore initialized collection 'company_policy' at storage\chroma
+2026-08-30 08:05:37 | INFO     | backend | BM25 index built with 403 chunks
+2026-08-30 08:05:37 | INFO     | backend | Restored 1 documents into the document registry.
+2026-08-30 08:05:37 | INFO     | backend | SemanticCacheManager initialized collection 'semantic_cache' at storage\chroma
+2026-08-30 08:05:47 | INFO     | backend | Loading embedding model BAAI/bge-small-en-v1.5
+2026-08-30 08:05:53 | INFO     | backend | [1/4] Embedding model loaded & warmed up in 15.32s
+2026-08-30 08:05:53 | INFO     | backend | Loading CrossEncoder reranker model BAAI/bge-reranker-base on device cpu
+2026-08-30 08:05:59 | INFO     | backend | [2/4] CrossEncoder reranker loaded & warmed up in 6.06s
+2026-08-30 08:06:07 | INFO     | backend | Preloaded Ollama model 'qwen2.5:7b' via keep_alive=-1
+2026-08-30 08:06:09 | INFO     | backend | [3/4] Ollama LLM 'qwen2.5:7b' preloaded & warmed up in 9.85s
+2026-08-30 08:06:09 | INFO     | backend | [4/5] Vector Store (403 chunks) & BM25 (403 chunks) ready in 0.00s
+2026-08-30 08:06:09 | INFO     | backend | [5/5] Vision Model 'Qwen3-VL-2B-Instruct': READY (HF Vision model Qwen3-VL-2B-Instruct is available (lazy load).) in 0.00s
+2026-08-30 08:06:09 | INFO     | backend | ==========================================================
+2026-08-30 08:06:09 | INFO     | backend |   ALL RAG MODELS READY IN 32.09s — ZERO COLD START READY!  
+2026-08-30 08:06:09 | INFO     | backend | ==========================================================
+2026-08-30 08:06:19 | INFO     | backend | [HTTP] request_id=req_f8d0e680f559 GET /api/models -> 200 (1144.98ms)
+INFO:     127.0.0.1:60504 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-30 08:06:19 | INFO     | backend | [HTTP] request_id=req_9e5b8b46b94b POST /api/models/select -> 200 (11.41ms)
+INFO:     127.0.0.1:60519 - "POST /api/models/select HTTP/1.1" 200 OK
+2026-08-30 08:06:43 | INFO     | backend | Preloaded Ollama model 'gemma2:2b' via keep_alive=-1
+2026-08-30 08:06:43 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    Reply with exactly MODEL_SWITCH_OK
+INTENT:                   conversational
+RESPONSE_MODE:            compact
+RETRIEVAL_TOP_K:          0
+RERANK_TOP_K:             0
+CONTEXT_TOKENS:           0
+GENERATION_MAX_TOKENS:    320
+DOCUMENT_SCOPE:           general
+ANCHOR_SECTION:           General
+TEXT_CANDIDATES:          0
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      0
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            N/A
+VISUAL_ASSET:             NONE
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          SUFFICIENT
+GROUNDING:                PASS
+GENERATION_MODEL:         gemma2:2b
+TOTAL LATENCY:            23318.58 ms
+======================================================================
+
+2026-08-30 08:06:43 | INFO     | backend | [HTTP] request_id=req_278130b1658d POST /api/chat -> 200 (23323.55ms)
+INFO:     127.0.0.1:60522 - "POST /api/chat HTTP/1.1" 200 OK
+2026-08-30 08:06:43 | INFO     | backend | [HTTP] request_id=req_5f6ac4ae0218 GET /api/models -> 200 (8.08ms)
+INFO:     127.0.0.1:60615 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-30 08:06:43 | INFO     | backend | [HTTP] request_id=req_5055293647eb POST /api/models/select -> 200 (8.66ms)
+INFO:     127.0.0.1:60617 - "POST /api/models/select HTTP/1.1" 200 OK
+2026-08-30 08:06:50 | INFO     | backend | Preloaded Ollama model 'qwen2.5:7b' via keep_alive=-1

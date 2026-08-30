@@ -117,8 +117,8 @@ def test_adversarial_02_vision_timeout_fallback_to_verified_text():
     mock_hybrid.retrieve.return_value = [scored_text]
 
     mock_vision_service = MagicMock()
-    mock_vision_service.vision_model = "qwen2.5vl:7b"
-    mock_vision_service.process_pdf_page_visuals.side_effect = TimeoutError("Vision model qwen2.5vl:7b timed out after 35s")
+    mock_vision_service.vision_model = "Qwen3-VL-2B-Instruct"
+    mock_vision_service.process_pdf_page_visuals.side_effect = TimeoutError("Vision model Qwen3-VL-2B-Instruct timed out after 35s")
 
     mock_asset_manager = MagicMock()
     mock_asset_manager.get_page_assets.return_value = []

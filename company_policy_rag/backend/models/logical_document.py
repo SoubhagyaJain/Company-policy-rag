@@ -29,6 +29,8 @@ CONTINUATION_PATTERNS = [
     re.compile(r"(?:output\s+format|expected\s+output)\s*:", re.IGNORECASE),
     re.compile(r"(?:\(continued\)|continued\s+on\s+next\s+page|\.\.\.\s*continued)", re.IGNORECASE),
     re.compile(r"see\s+(?:figure|diagram|architecture|workflow)\s+below", re.IGNORECASE),
+    re.compile(r"(?:depicted|illustrated|shown)\s+below", re.IGNORECASE),
+    re.compile(r"(?:figure|diagram|chart|table|visual)\s+below", re.IGNORECASE),
 ]
 
 

@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
-
-from backend.models.chunk import ContentType
 from backend.models.logical_document import detect_continuation_signals
 from backend.models.rag import EvidenceStatus, QueryCategory, ScoredChunk
 from backend.utils.logging import logger
@@ -39,6 +36,56 @@ _VISUAL_INTENTS = {
     "workflow",
     "flowchart",
 }
+
+_NUMBER_WORDS = {
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+
+
+def _referenced_enumeration_is_complete(candidate_chunks: list[ScoredChunk]) -> bool:
+    """Return true when continuation text contains every item promised by a visual cue.
+
+    Some PDFs render a summary infographic on one page and repeat its labels as
+    searchable numbered text on the following pages. In that case the text is
+    direct evidence and a query-time vision call is unnecessary.
+    """
+    ordered = sorted(
+        candidate_chunks,
+        key=lambda sc: (
+            sc.chunk.metadata.document_id,
+            sc.chunk.metadata.page_number or 0,
+            sc.chunk.id,
+        ),
+    )
+    combined = "\n".join(sc.chunk.text for sc in ordered)
+    cue_match = re.search(
+        r"\b(?P<count>\d+|two|three|four|five|six|seven|eight|nine|ten)\b"
+        r".{0,80}\b(?:techniques?|methods?|steps?|types?|ways?|items?)\b"
+        r".{0,120}\b(?:depicted|illustrated|shown|listed|presented)\b",
+        combined,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not cue_match:
+        return False
+
+    raw_count = cue_match.group("count").lower()
+    expected = int(raw_count) if raw_count.isdigit() else _NUMBER_WORDS.get(raw_count, 0)
+    if expected < 2:
+        return False
+
+    numbered_items = {
+        int(value)
+        for value in re.findall(r"(?m)^\s*(\d{1,2})\s*[.)]\s*\S", combined)
+    }
+    return all(item in numbered_items for item in range(1, expected + 1))
 
 
 @dataclass
@@ -119,7 +166,7 @@ class EvidenceSufficiencyGate:
     Distinguishes TEXT_EVIDENCE, VISUAL_ASSET_AVAILABLE, and VISION_UNDERSTANDING_AVAILABLE.
     """
 
-    def __init__(self, max_continuation_depth: int = 2) -> None:
+    def __init__(self, max_continuation_depth: int = 3) -> None:
         self.max_continuation_depth = max_continuation_depth
 
     def evaluate(
@@ -183,6 +230,7 @@ class EvidenceSufficiencyGate:
         # 1. Inspect existing chunks for code, tables, diagrams, and continuation cues
         has_concrete_code = False
         has_diagram_understanding = False
+        has_extracted_visual_understanding = False
         has_visual_asset = False
         has_table = False
         all_cues: list[str] = []
@@ -198,6 +246,12 @@ class EvidenceSufficiencyGate:
             # Check if chunk has visual asset attached
             if meta.image_assets or meta.visual_asset_ids or extra.get("image_url") or extra.get("image_hash") or extra.get("is_visual_extraction"):
                 has_visual_asset = True
+
+            if (
+                extra.get("is_visual_extraction")
+                or extra.get("visual_type") in ("diagram_architecture", "workflow", "figure", "table_data", "code_screenshot")
+            ):
+                has_extracted_visual_understanding = True
 
             # Code detection
             if (
@@ -262,6 +316,26 @@ class EvidenceSufficiencyGate:
         # 4. Check table requirement
         if requires_table and not has_table:
             missing_types.append("table_data")
+
+        # A sentence such as "five techniques are depicted below" is a pointer,
+        # not the five techniques themselves. Force visual extraction instead of
+        # allowing the generator to fill the absent labels from model memory.
+        visual_reference_cues = [
+            cue
+            for cue in all_cues
+            if re.search(
+                r"\b(?:depicted|illustrated|shown|figure|diagram|chart|table|visual)\b",
+                cue,
+                re.IGNORECASE,
+            )
+        ]
+        text_resolves_visual_reference = _referenced_enumeration_is_complete(candidate_chunks)
+        if (
+            visual_reference_cues
+            and not has_extracted_visual_understanding
+            and not text_resolves_visual_reference
+        ):
+            missing_types.append("referenced_visual_content")
 
         # Determine 4-tier evidence status: DIRECT, PARTIAL, RELATED, MISSING
         all_text = "\n".join(sc.chunk.text for sc in candidate_chunks)

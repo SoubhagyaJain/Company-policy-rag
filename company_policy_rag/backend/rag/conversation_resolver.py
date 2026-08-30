@@ -343,7 +343,9 @@ class FollowUpResolver:
             )
         return (
             "Mode: DIRECT EXTRACTION\n"
-            "- Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context."
+            "- Answer only the exact question in one short paragraph or at most four compact bullets.\n"
+            "- Omit preambles, adjacent facts, implementation details, recaps, and conclusions unless requested.\n"
+            "- Use only the retrieved context."
         )
 
     # =========================================================================

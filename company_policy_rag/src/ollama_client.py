@@ -73,7 +73,18 @@ def preload_model(
         return False
 
     url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/generate"
-    payload = json.dumps({"model": model_name, "keep_alive": -1}).encode("utf-8")
+    payload = json.dumps(
+        {
+            "model": model_name,
+            "keep_alive": -1,
+            "options": {
+                # Do not let Ollama use the model's much larger native context
+                # by default. On 6 GB GPUs that inflates the KV cache and forces
+                # most of a 7B model onto CPU, reducing generation by ~6x.
+                "num_ctx": int(getattr(settings, "llm_context_window", 4096)),
+            },
+        }
+    ).encode("utf-8")
     req = Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
 
     try:
@@ -122,7 +133,7 @@ def probe_vision_model_status(
     if not ok:
         return False, f"Ollama connection error while checking vision model: {err}"
 
-    # Check exact match or tag prefix match (e.g. qwen2.5vl:7b matches qwen2.5vl:7b or qwen2.5vl:latest)
+    # Check exact match or tag prefix match (e.g. Qwen3-VL-2B-Instruct matches Qwen3-VL-2B-Instruct or qwen2.5vl:latest)
     target_base = target.split(":")[0].lower()
     matched = False
     for m in available_models:

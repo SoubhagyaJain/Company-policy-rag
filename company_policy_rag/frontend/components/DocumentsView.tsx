@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
@@ -19,6 +19,8 @@ import {
   RotateCcw,
   Sparkles,
   Eye,
+  Search,
+  CopyCheck,
 } from 'lucide-react';
 
 import { LiquidGlassCard } from '@/components/LiquidGlassCard';
@@ -111,18 +113,31 @@ export function DocumentsView() {
     currentStage,
     stageMessage,
     error,
+    duplicateCount,
+    deduplicating,
     refreshDocuments,
     uploadDocument,
     retryDocument,
     deleteDocument,
+    removeDuplicates,
   } = useDocuments();
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('General');
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const CATEGORIES = ['General', 'HR & Benefits', 'Operations', 'IT & Security', 'Finance', 'Compliance'];
+  const visibleDocuments = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return documents;
+    return documents.filter((doc) =>
+      [doc.filename, doc.category, doc.file_type, doc.file_hash]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [documents, searchQuery]);
 
   /* ── Drag & drop handlers ────────────────────── */
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -178,14 +193,31 @@ export function DocumentsView() {
             </p>
           </div>
 
-          <button
-            onClick={refreshDocuments}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs font-medium text-charcoal dark:text-cream-200 hover:bg-cream-200 dark:hover:bg-[#2A2925] transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            {duplicateCount > 0 && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Remove ${duplicateCount} byte-identical duplicate documents? The best indexed copy of each file will be kept.`)) {
+                    void removeDuplicates();
+                  }
+                }}
+                disabled={deduplicating}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                title="Keep the newest indexed copy and remove only byte-identical duplicates"
+              >
+                <CopyCheck className="w-3.5 h-3.5" />
+                {deduplicating ? 'Cleaning…' : `Remove ${duplicateCount} duplicates`}
+              </button>
+            )}
+            <button
+              onClick={refreshDocuments}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs font-medium text-charcoal dark:text-cream-200 hover:bg-cream-200 dark:hover:bg-[#2A2925] transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* ── Error banner ────────────────────────── */}
@@ -326,18 +358,27 @@ export function DocumentsView() {
         </div>
 
         {/* ── Document list ────────────────────────── */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-charcoal-muted dark:text-cream-400" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search by filename, category, type, or content hash…"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-sm text-charcoal dark:text-cream-100 outline-none focus:border-terracotta-500"
+          />
+        </div>
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <RefreshCw className="w-6 h-6 animate-spin text-charcoal-muted dark:text-cream-400" />
           </div>
-        ) : documents.length === 0 ? (
+        ) : visibleDocuments.length === 0 ? (
           <div className="text-center py-20 text-charcoal-muted dark:text-cream-400 text-sm">
-            No documents found. Upload your first policy document above.
+            {documents.length === 0 ? 'No documents found. Upload your first policy document above.' : 'No documents match your search.'}
           </div>
         ) : (
           <div className="space-y-2">
             <AnimatePresence mode="popLayout">
-              {documents.map((doc, i) => (
+              {visibleDocuments.map((doc, i) => (
                 <motion.div
                   key={doc.id}
                   custom={i}
@@ -366,11 +407,17 @@ export function DocumentsView() {
                         <span>{doc.file_type?.toUpperCase() ?? 'FILE'}</span>
                         <span>•</span>
                         <span>{doc.chunks_count} chunks</span>
+                        {Boolean(doc.pages_count) && <><span>•</span><span>{doc.pages_count} pages</span></>}
                         <span>•</span>
                         <span>{formatBytes(doc.file_size)}</span>
                         <span className="hidden sm:inline">•</span>
                         <span className="hidden sm:inline">{formatDate(doc.uploaded_at)}</span>
                       </div>
+                      {doc.file_hash && (
+                        <p className="mt-1 text-[9.5px] font-mono text-charcoal-muted/70 dark:text-cream-400/70" title={doc.file_hash}>
+                          SHA-256 {doc.file_hash.slice(0, 12)}…
+                        </p>
+                      )}
                     </div>
 
                     {/* Category pill */}

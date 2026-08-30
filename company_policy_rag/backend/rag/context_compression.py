@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from backend.models.chunk import Chunk, ContentType
 from backend.models.rag import ScoredChunk
 from backend.utils.logging import logger
@@ -120,7 +122,25 @@ class ContextCompressor:
         Ensure balanced coverage across complementary categories (description, code, diagram/workflow, table, inputs/outputs)
         for procedural, building, or workflow queries to prevent redundant description chunks from crowding out visual/code evidence.
         """
-        if not chunks or len(chunks) <= max_chunks:
+        if not chunks:
+            return chunks
+
+        # The same PDF is often uploaded under more than one filename. Chunk
+        # IDs differ in that case, so ID-only deduplication sends repeated text
+        # to the model and produces duplicate/mixed source cards. Preserve the
+        # highest-ranked occurrence of each substantive passage.
+        unique_chunks: list[ScoredChunk] = []
+        seen_content: set[str] = set()
+        for sc in chunks:
+            normalized = re.sub(r"\s+", " ", (sc.chunk.text or "")).strip().casefold()
+            content_key = normalized if len(normalized) >= 80 else f"{sc.chunk.id}:{normalized}"
+            if content_key in seen_content:
+                continue
+            seen_content.add(content_key)
+            unique_chunks.append(sc)
+        chunks = unique_chunks
+
+        if len(chunks) <= max_chunks:
             return chunks
 
         query_lower = query.lower()
@@ -220,7 +240,45 @@ class ContextCompressor:
 
         return selected if selected else chunks[:max_chunks]
 
-    def format_context_for_prompt(self, chunks: list[ScoredChunk]) -> str:
+    @staticmethod
+    def estimate_chunk_tokens(sc: ScoredChunk) -> int:
+        """Estimate a complete source block without cutting citation metadata or text."""
+        meta = sc.chunk.metadata
+        metadata_words = " ".join(
+            str(value or "")
+            for value in (
+                meta.source_file,
+                meta.section_title,
+                meta.section_path,
+                meta.get_page_identity().display_label,
+                sc.chunk.id,
+            )
+        ).split()
+        return max(1, int((len(sc.chunk.text.split()) + len(metadata_words) + 12) * 1.3))
+
+    def pack_to_token_budget(
+        self,
+        chunks: list[ScoredChunk],
+        max_token_budget: int,
+    ) -> tuple[list[ScoredChunk], int]:
+        """Pack whole ranked chunks into a request-scoped context budget."""
+        selected: list[ScoredChunk] = []
+        estimated_tokens = 0
+        for sc in chunks:
+            chunk_tokens = self.estimate_chunk_tokens(sc)
+            if selected and estimated_tokens + chunk_tokens > max_token_budget:
+                break
+            selected.append(sc)
+            estimated_tokens += chunk_tokens
+            if estimated_tokens >= max_token_budget:
+                break
+        return selected, estimated_tokens
+
+    def format_context_for_prompt(
+        self,
+        chunks: list[ScoredChunk],
+        max_token_budget: int | None = None,
+    ) -> str:
         """
         Format retrieved scored chunks into structured [Source N] and [VISUAL SOURCE N]
         context blocks for LLM synthesis with canonical human-readable page labels.
@@ -230,6 +288,9 @@ class ContextCompressor:
 
         context_blocks: list[str] = []
         total_estimated_tokens = 0
+        effective_budget = (
+            self.max_token_budget if max_token_budget is None else max(1, int(max_token_budget))
+        )
 
         for idx, sc in enumerate(chunks, start=1):
             meta = sc.chunk.metadata
@@ -262,7 +323,7 @@ class ContextCompressor:
 
             # Token estimate: ~1.3 tokens per word
             block_tokens = int(len(block.split()) * 1.3)
-            if total_estimated_tokens + block_tokens > self.max_token_budget and context_blocks:
+            if total_estimated_tokens + block_tokens > effective_budget and context_blocks:
                 logger.info("Context formatted clipped at %d sources (%d estimated tokens)", idx - 1, total_estimated_tokens)
                 break
 

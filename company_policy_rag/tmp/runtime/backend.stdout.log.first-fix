@@ -1,0 +1,113 @@
+2026-08-27 18:46:47 | INFO     | backend | ==========================================================
+2026-08-27 18:46:47 | INFO     | backend |   STARTING RAG SYSTEM PRELOADING & MODEL WARM-UP          
+2026-08-27 18:46:47 | INFO     | backend | ==========================================================
+2026-08-27 18:46:48 | INFO     | backend | ChromaVectorStore initialized collection 'company_policy' at storage\chroma
+2026-08-27 18:46:48 | INFO     | backend | SemanticCacheManager initialized collection 'semantic_cache' at storage\chroma
+2026-08-27 18:47:03 | INFO     | backend | Loading embedding model BAAI/bge-small-en-v1.5
+2026-08-27 18:47:09 | INFO     | backend | [1/4] Embedding model loaded & warmed up in 20.64s
+2026-08-27 18:47:09 | INFO     | backend | Loading CrossEncoder reranker model BAAI/bge-reranker-large on device cpu
+2026-08-27 18:47:17 | INFO     | backend | [2/4] CrossEncoder reranker loaded & warmed up in 7.79s
+2026-08-27 18:47:17 | INFO     | backend | Preloaded Ollama model 'qwen2.5:7b' via keep_alive=-1
+2026-08-27 18:47:22 | INFO     | backend | [3/4] Ollama LLM 'qwen2.5:7b' preloaded & warmed up in 5.29s
+2026-08-27 18:47:22 | INFO     | backend | [4/5] Vector Store (12905 chunks) & BM25 (0 chunks) ready in 0.05s
+2026-08-27 18:47:22 | INFO     | backend | [5/5] Vision Model 'Qwen3-VL-2B-Instruct': READY (HF Vision model Qwen3-VL-2B-Instruct is available (lazy load).) in 0.00s
+2026-08-27 18:47:22 | INFO     | backend | ==========================================================
+2026-08-27 18:47:22 | INFO     | backend |   ALL RAG MODELS READY IN 35.17s — ZERO COLD START READY!  
+2026-08-27 18:47:22 | INFO     | backend | ==========================================================
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:47:27 | WARNING  | backend | Redis connection failed (Timeout connecting to server). Falling back to in-memory cache.
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63371 - "GET /api/health HTTP/1.1" 200 OK
+2026-08-27 18:47:30 | WARNING  | backend | Redis connection failed (Timeout connecting to server). Falling back to in-memory cache.
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:47:50 | INFO     | backend | [HTTP] request_id=req_4a7530257efa POST /api/chat/stream -> 200 (4.18ms)
+INFO:     127.0.0.1:63384 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 18:47:50 | INFO     | backend | [CONVERSATION] session_id=latency_fix_validation_20260827 turn_count=1 is_followup=False topic_shift=False topic='How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech' entities=['build low-latency voice assistant']
+2026-08-27 18:47:50 | INFO     | backend | [QUERY_RESOLUTION] query='How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech?' resolved='How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech?' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-27 18:47:50 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:47:52 | INFO     | backend | Semantic cache MISS: similarity score 0.8292 < threshold 0.9500 (dist: 0.1708, latency: 2281.02ms)
+2026-08-27 18:47:52 | INFO     | backend | Executing dense retrieval for query: How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech? Agentic RAG retriever agent workflow vector DB context
+2026-08-27 18:47:52 | INFO     | backend | Dense retrieve: computing embedding for How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech? Agentic RAG retriever agent workflow vector DB context
+2026-08-27 18:47:52 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-27 18:47:52 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-27 18:47:52 | INFO     | backend | Executing BM25 retrieval for query: How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech? Agentic RAG retriever agent workflow vector DB context
+2026-08-27 18:47:52 | INFO     | backend | BM25 retrieval complete
+2026-08-27 18:47:52 | INFO     | backend | Starting CrossEncoder prediction for 16 pairs...
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:47:59 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-27 18:47:59 | INFO     | backend | Evidence Sufficiency Gate: Missing required evidence types (code_implementation) for intent 'implementation'. Continuation cues detected: none. -> Inspecting pages [41, 42, 43, 44]
+2026-08-27 18:47:59 | INFO     | backend | Skipping lazy vision for query 'How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech?': evidence is incomplete, but no visual asset, continuation cue, or explicit visual request exists.
+2026-08-27 18:47:59 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=RELATED monotonic=RELATED rationale='Single turn evaluation'
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:48:29 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    How can I build a low-latency voice RAG assistant using speech-to-text and text-to-speech?
+INTENT:                   implementation
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Levels of Agentic AI Systems
+TEXT_CANDIDATES:          25
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      8
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            internal_page_index=41 physical_page_number=42 display_page_number=42
+VISUAL_ASSET:             NONE
+VISION_STATUS:            SKIPPED_NO_VISUAL_SIGNAL
+EVIDENCE_STATUS:          RELATED
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            39138.04 ms
+======================================================================
+
+2026-08-27 18:48:29 | INFO     | backend | Successfully stored entry in semantic cache (id: dfe589b8)
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:48:44 | INFO     | backend | [HTTP] request_id=req_ae8678be14d3 GET /api/admin/observability/queries -> 200 (8.32ms)
+INFO:     127.0.0.1:63421 - "GET /api/admin/observability/queries?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65423 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK

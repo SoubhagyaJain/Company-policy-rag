@@ -29,7 +29,7 @@ class SubsystemHealth(BaseModel):
     uptime_seconds: float = 0.0
     error_rate: float = 0.0
     active_model_text: str = "qwen2.5:7b"
-    active_model_vision: str = "qwen2.5vl:7b"
+    active_model_vision: str = "Qwen3-VL-2B-Instruct"
     details: dict[str, str] = Field(default_factory=dict)
 
 
@@ -141,7 +141,7 @@ class VisionFailureRecord(BaseModel):
 
 
 class VisionTelemetry(BaseModel):
-    model_name: str = "qwen2.5vl:7b"
+    model_name: str = "Qwen3-VL-2B-Instruct"
     visual_pages_detected: int = 0
     code_screenshots: int = 0
     diagrams: int = 0
@@ -432,3 +432,13 @@ class ObservabilitySummary(BaseModel):
     recent_traces: list[QueryTraceRecord] = Field(default_factory=list)
     recent_incidents: list[ErrorIncident] = Field(default_factory=list)
     time_series: list[TimeSeriesPoint] = Field(default_factory=list)
+
+    # Legacy top-level aliases, populated from the same measured aggregates.
+    total_queries: int = 0
+    avg_latency_ms: float | None = None
+    avg_ttft_ms: float | None = None
+    p95_latency_ms: float | None = None
+    token_usage: dict[str, int] = Field(default_factory=dict)
+    active_documents: int = 0
+    indexed_chunks: int = 0
+    score_distributions: dict[str, float] = Field(default_factory=dict)

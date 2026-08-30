@@ -4,6 +4,7 @@ import {
   VerificationReport,
   QueryCategory,
   DocumentItem,
+  DuplicateDocumentSummary,
   IngestionStatusResponse,
   ObservabilityData,
   HealthStatus,
@@ -14,6 +15,7 @@ import {
   ThinkingEvent,
   ThinkingDetailLevel,
   ReasoningSummary,
+  ResponseMode,
 } from './types';
 
 const API_BASE =
@@ -34,6 +36,8 @@ export interface DonePayload {
   thinking_events?: ThinkingEvent[];
   reasoning_summary?: ReasoningSummary;
   thinking_detail_level?: ThinkingDetailLevel;
+  response_mode?: ResponseMode;
+  model?: string;
 }
 
 export interface StreamCallbacks {
@@ -106,17 +110,28 @@ function mapCitation(c: any, index = 0): Citation {
 
 export function mapVerificationReport(raw: any): VerificationReport | null {
   if (!raw || typeof raw !== 'object') return null;
+  const hasMeasurement = [
+    raw.faithfulness,
+    raw.completeness,
+    raw.citation_coverage,
+    raw.citationCoverage,
+    raw.coherence,
+    raw.composite_score,
+    raw.compositeScore,
+    raw.passed,
+  ].some((value) => typeof value === 'number' || typeof value === 'boolean');
+  if (!hasMeasurement) return null;
   return {
-    faithfulness: typeof raw.faithfulness === 'number' ? raw.faithfulness : 1.0,
-    completeness: typeof raw.completeness === 'number' ? raw.completeness : 1.0,
+    faithfulness: typeof raw.faithfulness === 'number' ? raw.faithfulness : undefined,
+    completeness: typeof raw.completeness === 'number' ? raw.completeness : undefined,
     citation_coverage: typeof raw.citation_coverage === 'number'
       ? raw.citation_coverage
-      : (typeof raw.citationCoverage === 'number' ? raw.citationCoverage : 1.0),
-    coherence: typeof raw.coherence === 'number' ? raw.coherence : 1.0,
+      : (typeof raw.citationCoverage === 'number' ? raw.citationCoverage : undefined),
+    coherence: typeof raw.coherence === 'number' ? raw.coherence : undefined,
     composite_score: typeof raw.composite_score === 'number'
       ? raw.composite_score
-      : (typeof raw.compositeScore === 'number' ? raw.compositeScore : 1.0),
-    passed: typeof raw.passed === 'boolean' ? raw.passed : true,
+      : (typeof raw.compositeScore === 'number' ? raw.compositeScore : undefined),
+    passed: typeof raw.passed === 'boolean' ? raw.passed : undefined,
     critique: raw.critique ?? null,
     missing_aspects: Array.isArray(raw.missing_aspects)
       ? raw.missing_aspects
@@ -138,12 +153,10 @@ export function mapTrace(t: any): QueryTrace {
       timestamp: new Date().toISOString(),
       original_query: '',
       total_chunks_retrieved: 0,
-      top_rerank_score: 0.9,
-      rerank_latency_ms: 0,
       total_latency_ms: 0,
       prompt_tokens: 0,
       completion_tokens: 0,
-      model: 'FastAPI RAG',
+      model: 'Unknown',
     };
   }
 
@@ -203,7 +216,7 @@ export function mapTrace(t: any): QueryTrace {
     ? t.rerank_scores[0]
     : (typeof t.top_rerank_score === 'number'
       ? t.top_rerank_score
-      : (typeof t.topRerankScore === 'number' ? t.topRerankScore : (t.verification_score ?? 0.9)));
+      : (typeof t.topRerankScore === 'number' ? t.topRerankScore : undefined));
 
   const pTokens = t.token_usage?.prompt_tokens ?? t.prompt_tokens ?? t.promptTokens ?? 0;
   const cTokens = t.token_usage?.completion_tokens ?? t.completion_tokens ?? t.completionTokens ?? 0;
@@ -222,11 +235,11 @@ export function mapTrace(t: any): QueryTrace {
     expanded_queries: t.sub_queries || t.expanded_queries || t.expandedQueries || [],
     total_chunks_retrieved: t.candidate_count ?? t.total_chunks_retrieved ?? t.totalChunksRetrieved ?? t.retrieved_candidate_count ?? 0,
     top_rerank_score: topScore,
-    rerank_latency_ms: t.stage_timings?.reranking ?? t.stage_timings_ms?.reranking ?? t.rerank_latency_ms ?? t.rerankLatencyMs ?? 0,
+    rerank_latency_ms: t.stage_timings?.reranking ?? t.stage_timings_ms?.reranking ?? t.rerank_latency_ms ?? t.rerankLatencyMs,
     total_latency_ms: t.execution_time_ms ?? t.total_latency_ms ?? t.totalLatencyMs ?? t.latency_ms ?? 0,
     prompt_tokens: pTokens,
     completion_tokens: cTokens,
-    model: t.model || t.generation_model || 'FastAPI RAG',
+    model: t.model || t.generation_model || 'Unknown',
 
     // Agentic & Production Telemetry fields
     query_type: queryType,
@@ -262,6 +275,11 @@ export function mapTrace(t: any): QueryTrace {
     ttft_ms: t.ttft_ms ?? null,
     error: t.error ?? null,
     safe_context_preview: t.safe_context_preview ?? null,
+    response_mode: t.response_mode,
+    retrieval_top_k: t.retrieval_top_k,
+    rerank_top_k: t.rerank_top_k,
+    context_tokens: t.context_tokens,
+    generation_max_tokens: t.generation_max_tokens,
   };
 }
 
@@ -282,7 +300,8 @@ export class ApiClient {
     model?: string,
     callbacks?: StreamCallbacks,
     signal?: AbortSignal,
-    thinkingDetailLevel: ThinkingDetailLevel = 'standard'
+    thinkingDetailLevel: ThinkingDetailLevel = 'standard',
+    responseMode: ResponseMode = 'standard'
   ): Promise<void> {
     const url = `${this.baseUrl}/api/chat/stream`;
     const payload = {
@@ -291,6 +310,10 @@ export class ApiClient {
       filters: filters || {},
       model: model || 'default',
       thinking_detail_level: thinkingDetailLevel,
+      response_mode: responseMode,
+      active_document_id: filters?.document_id,
+      active_document_name: filters?.source_file,
+      document_scope: filters?.document_id ? 'current_document' : undefined,
     };
 
     try {
@@ -306,7 +329,14 @@ export class ApiClient {
 
       if (!response.ok) {
         if (response.status === 404) {
-          return await this.fallbackNonStreamingChat(message, sessionId, filters, model, callbacks);
+          return await this.fallbackNonStreamingChat(
+            message,
+            sessionId,
+            filters,
+            model,
+            callbacks,
+            responseMode
+          );
         }
         const errText = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
         throw new Error(`HTTP ${response.status}: ${errText || 'Stream request failed'}`);
@@ -456,10 +486,11 @@ export class ApiClient {
     sessionId: string,
     filters?: FilterOptions,
     model?: string,
-    callbacks?: StreamCallbacks
+    callbacks?: StreamCallbacks,
+    responseMode: ResponseMode = 'standard'
   ) {
     try {
-      const res = await this.sendChatMessage(message, sessionId, filters, model);
+      const res = await this.sendChatMessage(message, sessionId, filters, model, responseMode);
       if (callbacks?.onChunk && res.answer) {
         callbacks.onChunk(res.answer);
       }
@@ -467,26 +498,29 @@ export class ApiClient {
         res.citations.forEach((c, i) => callbacks.onCitation?.(mapCitation(c, i)));
       }
       if (callbacks?.onTrace) {
+        const metrics = res.metrics || {};
+        const promptTokens = typeof metrics.prompt_tokens === 'number' ? metrics.prompt_tokens : 0;
+        const completionTokens = typeof metrics.completion_tokens === 'number' ? metrics.completion_tokens : 0;
         callbacks.onTrace(mapTrace({
           trace_id: res.id || `trace_${Date.now()}`,
           request_id: (res.metrics as any)?.request_id || `req_${Date.now()}`,
           timestamp: new Date().toISOString(),
           original_query: message,
           total_chunks_retrieved: res.citations?.length || 0,
-          top_rerank_score: res.citations?.[0]?.score || 0.9,
-          rerank_latency_ms: Math.round((res.latency_ms || 300) * 0.2),
-          total_latency_ms: res.latency_ms || 300,
-          prompt_tokens: 150,
-          completion_tokens: 120,
-          model: model || 'FastAPI RAG',
+          top_rerank_score: typeof res.citations?.[0]?.score === 'number' ? res.citations[0].score : undefined,
+          rerank_latency_ms: typeof metrics.rerank_latency_ms === 'number' ? metrics.rerank_latency_ms : undefined,
+          total_latency_ms: res.latency_ms ?? 0,
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          model: typeof metrics.model === 'string' ? metrics.model : (model || 'Unknown'),
         }));
       }
       if (callbacks?.onDone) {
         callbacks.onDone({
           answer: res.answer,
           citations: res.citations,
-          latency_ms: res.latency_ms || 300,
-          total_latency_ms: res.latency_ms || 300,
+          latency_ms: res.latency_ms ?? 0,
+          total_latency_ms: res.latency_ms ?? 0,
         });
       }
     } catch (err) {
@@ -505,7 +539,8 @@ export class ApiClient {
     message: string,
     sessionId?: string,
     filters?: FilterOptions,
-    model?: string
+    model?: string,
+    responseMode: ResponseMode = 'standard'
   ): Promise<{
     id: string;
     answer: string;
@@ -517,6 +552,10 @@ export class ApiClient {
       message,
       session_id: sessionId,
       filters: filters || {},
+      active_document_id: filters?.document_id,
+      active_document_name: filters?.source_file,
+      document_scope: filters?.document_id ? 'current_document' : undefined,
+      response_mode: responseMode,
     };
     if (model && model !== 'default') {
       payload.model = model;
@@ -730,6 +769,9 @@ export class ApiClient {
       error: doc.error,
       failed_stage: doc.failed_stage,
       file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown',
+      file_hash: doc.file_hash || '',
+      pages_count: doc.pages_count ?? 0,
+      storage_state: doc.storage_state || 'HEALTHY',
     }));
   }
 
@@ -772,8 +814,14 @@ export class ApiClient {
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Upload failed (${res.status}): ${errText}`);
+      let message = `Upload failed (${res.status})`;
+      try {
+        const payload = await res.json();
+        message = payload?.detail?.message || payload?.detail || message;
+      } catch {
+        // Keep the concise status fallback for non-JSON errors.
+      }
+      throw new Error(message);
     }
 
     const doc = await res.json();
@@ -796,7 +844,21 @@ export class ApiClient {
       error: doc.error,
       failed_stage: doc.failed_stage,
       file_type: doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || 'unknown',
+      file_hash: doc.file_hash || '',
+      pages_count: doc.pages_count ?? 0,
+      storage_state: doc.storage_state || 'HEALTHY',
     };
+  }
+
+  /** Preview or safely remove byte-identical documents. */
+  async deduplicateDocuments(dryRun = true): Promise<DuplicateDocumentSummary> {
+    const res = await fetch(`${this.baseUrl}/api/documents/deduplicate?dry_run=${dryRun}`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      throw new Error(`Duplicate cleanup failed (${res.status})`);
+    }
+    return res.json();
   }
 
   /**
@@ -835,7 +897,19 @@ export class ApiClient {
   /**
    * Models API: GET /api/models
    */
-  async getModels(): Promise<{ active_model: string; models: Array<{ id: string; name: string; type: string; is_active: boolean }> }> {
+  async getModels(): Promise<{
+    active_model: string;
+    models: Array<{
+      id: string;
+      name: string;
+      type: string;
+      is_active: boolean;
+      family?: string | null;
+      parameter_size?: string | null;
+      quantization?: string | null;
+      badges?: string[];
+    }>;
+  }> {
     try {
       const res = await fetch(`${this.baseUrl}/api/models`);
       if (!res.ok) {
@@ -850,16 +924,23 @@ export class ApiClient {
   /**
    * Models API: POST /api/models/select
    */
-  async selectModel(model: string): Promise<boolean> {
+  async selectModel(model: string): Promise<{ status: string; active_model: string }> {
     try {
       const res = await fetch(`${this.baseUrl}/api/models/select`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model }),
       });
-      return res.ok;
-    } catch {
-      return false;
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.detail || `Unable to switch to ${model}`);
+      }
+      return {
+        status: String(payload.status || 'switched'),
+        active_model: String(payload.active_model || model),
+      };
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(`Unable to switch to ${model}`);
     }
   }
 

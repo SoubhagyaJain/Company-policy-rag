@@ -42,7 +42,7 @@ def test_e2e_01_health_and_models_endpoints(client: TestClient):
     assert res_models.status_code == 200
     data_models = res_models.json()
     assert "models" in data_models
-    assert data_models["vision_model"] == "qwen2.5vl:7b"
+    assert data_models["vision_model"] == "Qwen3-VL-2B-Instruct"
     assert data_models["vision_enabled"] is True
 
 

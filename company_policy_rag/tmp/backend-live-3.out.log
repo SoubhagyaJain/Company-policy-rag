@@ -1,0 +1,135 @@
+2026-08-30 07:57:49 | INFO     | backend | ==========================================================
+2026-08-30 07:57:49 | INFO     | backend |   STARTING RAG SYSTEM PRELOADING & MODEL WARM-UP          
+2026-08-30 07:57:49 | INFO     | backend | ==========================================================
+2026-08-30 07:57:49 | INFO     | backend | ChromaVectorStore initialized collection 'company_policy' at storage\chroma
+2026-08-30 07:57:50 | INFO     | backend | BM25 index built with 403 chunks
+2026-08-30 07:57:50 | INFO     | backend | Restored 1 documents into the document registry.
+2026-08-30 07:57:50 | INFO     | backend | SemanticCacheManager initialized collection 'semantic_cache' at storage\chroma
+2026-08-30 07:58:01 | INFO     | backend | Loading embedding model BAAI/bge-small-en-v1.5
+2026-08-30 07:58:07 | INFO     | backend | [1/4] Embedding model loaded & warmed up in 16.87s
+2026-08-30 07:58:07 | INFO     | backend | Loading CrossEncoder reranker model BAAI/bge-reranker-base on device cpu
+2026-08-30 07:58:13 | INFO     | backend | [2/4] CrossEncoder reranker loaded & warmed up in 6.41s
+2026-08-30 07:58:13 | INFO     | backend | Preloaded Ollama model 'qwen2.5:7b' via keep_alive=-1
+2026-08-30 07:58:18 | INFO     | backend | [3/4] Ollama LLM 'qwen2.5:7b' preloaded & warmed up in 4.79s
+2026-08-30 07:58:18 | INFO     | backend | [4/5] Vector Store (403 chunks) & BM25 (403 chunks) ready in 0.00s
+2026-08-30 07:58:18 | INFO     | backend | [5/5] Vision Model 'Qwen3-VL-2B-Instruct': READY (HF Vision model Qwen3-VL-2B-Instruct is available (lazy load).) in 0.00s
+2026-08-30 07:58:18 | INFO     | backend | ==========================================================
+2026-08-30 07:58:18 | INFO     | backend |   ALL RAG MODELS READY IN 29.16s — ZERO COLD START READY!  
+2026-08-30 07:58:18 | INFO     | backend | ==========================================================
+INFO:     127.0.0.1:53247 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53247 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-30 07:58:32 | INFO     | backend | [CONVERSATION] session_id=codex-final-verification turn_count=1 is_followup=False topic_shift=False topic='5 techinque of llm fine tuning' entities=['techinque fine tuning']
+2026-08-30 07:58:32 | INFO     | backend | [QUERY_RESOLUTION] query='what are the 5 techinque of llm fine tuning' resolved='what are the 5 techinque of llm fine tuning' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-30 07:58:32 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Answer only the exact question in one short paragraph or at most four compact bullets. - Omit preambles, adjacent facts, implementation details, recaps, and conclusions unless requested. - Use only the retrieved context.'
+2026-08-30 07:58:32 | INFO     | backend | Executing dense retrieval for query: what are the 5 techinque of llm fine tuning
+2026-08-30 07:58:32 | INFO     | backend | Dense retrieve: computing embedding for what are the 5 techinque of llm fine tuning
+2026-08-30 07:58:32 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-30 07:58:32 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-30 07:58:32 | INFO     | backend | Executing BM25 retrieval for query: what are the 5 techinque of llm fine tuning
+2026-08-30 07:58:32 | INFO     | backend | BM25 retrieval complete
+2026-08-30 07:58:32 | INFO     | backend | Starting CrossEncoder prediction for 12 pairs...
+INFO:     127.0.0.1:53247 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-30 07:58:33 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-30 07:58:33 | INFO     | backend | Evidence Sufficiency Gate: Missing required evidence types (referenced_visual_content) for intent 'factual'. Continuation cues detected: ['depicted below']. -> Inspecting pages [70, 71, 72, 73, 74]
+2026-08-30 07:58:33 | INFO     | backend | Resolved incomplete evidence from 4 indexed continuation chunk(s); skipping vision.
+2026-08-30 07:58:33 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=DIRECT monotonic=DIRECT rationale='Single turn evaluation'
+2026-08-30 07:58:33 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    what are the 5 techinque of llm fine tuning
+INTENT:                   factual
+RESPONSE_MODE:            standard
+RETRIEVAL_TOP_K:          8
+RERANK_TOP_K:             6
+CONTEXT_TOKENS:           611
+GENERATION_MAX_TOKENS:    700
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           LLM Fine-tuning Techniques
+TEXT_CANDIDATES:          15
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      6
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            internal_page_index=70 physical_page_number=71 display_page_number=70
+VISUAL_ASSET:             FOUND
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          DIRECT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            1127.02 ms
+======================================================================
+
+2026-08-30 07:58:33 | INFO     | backend | [HTTP] request_id=req_4a16cc9c99c6 POST /api/chat -> 200 (1134.39ms)
+INFO:     127.0.0.1:55197 - "POST /api/chat HTTP/1.1" 200 OK
+2026-08-30 07:58:33 | INFO     | backend | Successfully stored entry in semantic cache (id: e1d8d08b)
+2026-08-30 07:58:33 | INFO     | backend | [CONVERSATION] session_id=codex-final-verification turn_count=2 is_followup=False topic_shift=False topic='5 techinque of llm fine tuning' entities=['techinque fine tuning']
+2026-08-30 07:58:33 | INFO     | backend | [QUERY_RESOLUTION] query='what are the 5 techinque of llm fine tuning' resolved='what are the 5 techinque of llm fine tuning' confidence=0.50 cues='Unresolved query intent'
+2026-08-30 07:58:33 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Answer only the exact question in one short paragraph or at most four compact bullets. - Omit preambles, adjacent facts, implementation details, recaps, and conclusions unless requested. - Use only the retrieved context.'
+2026-08-30 07:58:33 | INFO     | backend | Starting CrossEncoder prediction for 12 pairs...
+2026-08-30 07:58:34 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-30 07:58:34 | INFO     | backend | Evidence Sufficiency Gate: Missing required evidence types (referenced_visual_content) for intent 'factual'. Continuation cues detected: ['depicted below']. -> Inspecting pages [70, 71, 72, 73, 74]
+2026-08-30 07:58:34 | INFO     | backend | Resolved incomplete evidence from 4 indexed continuation chunk(s); skipping vision.
+2026-08-30 07:58:34 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=DIRECT monotonic=DIRECT rationale='Single turn evaluation'
+2026-08-30 07:58:34 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    what are the 5 techinque of llm fine tuning
+INTENT:                   factual
+RESPONSE_MODE:            standard
+RETRIEVAL_TOP_K:          8
+RERANK_TOP_K:             6
+CONTEXT_TOKENS:           611
+GENERATION_MAX_TOKENS:    700
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           LLM Fine-tuning Techniques
+TEXT_CANDIDATES:          15
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      6
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            internal_page_index=70 physical_page_number=71 display_page_number=70
+VISUAL_ASSET:             FOUND
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          DIRECT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            988.34 ms
+======================================================================
+
+2026-08-30 07:58:34 | INFO     | backend | [HTTP] request_id=req_909878804766 POST /api/chat -> 200 (996.08ms)
+INFO:     127.0.0.1:55199 - "POST /api/chat HTTP/1.1" 200 OK
+2026-08-30 07:58:34 | INFO     | backend | Successfully stored entry in semantic cache (id: e1d8d08b)
+INFO:     127.0.0.1:53247 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-30 07:58:45 | INFO     | backend | [CONVERSATION] session_id=codex-cache-verification turn_count=1 is_followup=False topic_shift=False topic='5 techinque of llm fine tuning' entities=['techinque fine tuning']
+2026-08-30 07:58:45 | INFO     | backend | [QUERY_RESOLUTION] query='what are the 5 techinque of llm fine tuning' resolved='what are the 5 techinque of llm fine tuning' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-30 07:58:45 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Answer only the exact question in one short paragraph or at most four compact bullets. - Omit preambles, adjacent facts, implementation details, recaps, and conclusions unless requested. - Use only the retrieved context.'
+2026-08-30 07:58:45 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    what are the 5 techinque of llm fine tuning
+INTENT:                   factual
+RESPONSE_MODE:            standard
+RETRIEVAL_TOP_K:          8
+RERANK_TOP_K:             6
+CONTEXT_TOKENS:           0
+GENERATION_MAX_TOKENS:    700
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           General
+TEXT_CANDIDATES:          0
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      0
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            N/A
+VISUAL_ASSET:             NONE
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          SUFFICIENT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            0.85 ms
+======================================================================
+
+2026-08-30 07:58:45 | INFO     | backend | [HTTP] request_id=req_56d095b2574b POST /api/chat -> 200 (2.84ms)
+INFO:     127.0.0.1:53645 - "POST /api/chat HTTP/1.1" 200 OK
+2026-08-30 08:01:42 | INFO     | backend | [HTTP] request_id=req_e8e2f2fcf7f2 GET /api/models -> 200 (2847.34ms)
+INFO:     127.0.0.1:49228 - "GET /api/models HTTP/1.1" 200 OK

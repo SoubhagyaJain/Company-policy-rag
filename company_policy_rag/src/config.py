@@ -177,7 +177,11 @@ class Settings(BaseSettings):
     embed_model: str = Field(default="nomic-embed-text", alias="OLLAMA_EMBED_MODEL")
 
     # ── Vision Model & Document Understanding ──────────────────────────────
-    vision_model: str = Field(default="qwen2.5vl:7b", alias="VISION_MODEL")
+    vision_model: str = Field(default="Qwen3-VL-2B-Instruct", alias="VISION_MODEL")
+    vision_model_path: Path = Field(
+        default=Path.home() / "Qwen3-VL-2B-Instruct",
+        alias="VISION_MODEL_PATH",
+    )
     vision_enabled: bool = Field(default=True, alias="VISION_ENABLED")
     vision_cache_dir: Path = Field(default=PROJECT_ROOT / "storage" / "vision_cache")
     images_storage_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
@@ -186,13 +190,19 @@ class Settings(BaseSettings):
     vision_num_ctx: int = Field(default=4096, alias="VISION_NUM_CTX")
     # Retrieval needs concise factual descriptions, not long-form visual prose.
     # This protects the query-time budget on partly CPU-offloaded local models.
-    vision_num_predict: int = Field(default=384, alias="VISION_NUM_PREDICT")
+    vision_num_predict: int = Field(default=160, alias="VISION_NUM_PREDICT")
     vision_max_ingestion_retries: int = Field(default=0, alias="VISION_MAX_INGESTION_RETRIES")
     vision_max_lazy_retries: int = Field(default=0, alias="VISION_MAX_LAZY_RETRIES")
     vision_timeout_seconds: float = Field(default=35.0, alias="VISION_TIMEOUT_SECONDS")
     enable_lazy_vision_fallback: bool = Field(default=True, alias="ENABLE_LAZY_VISION_FALLBACK")
-    vision_request_timeout: float = Field(default=35.0, alias="VISION_REQUEST_TIMEOUT")
-    vision_query_budget_seconds: float = Field(default=45.0, alias="VISION_QUERY_BUDGET_SECONDS")
+    vision_request_timeout: float = Field(default=30.0, alias="VISION_REQUEST_TIMEOUT")
+    vision_query_budget_seconds: float = Field(default=40.0, alias="VISION_QUERY_BUDGET_SECONDS")
+    vision_query_max_pages: int = Field(default=2, alias="VISION_QUERY_MAX_PAGES")
+    vision_min_gpu_free_gb: float = Field(default=2.0, alias="VISION_MIN_GPU_FREE_GB")
+    # CPU-only Qwen3-VL generation can take several minutes and cannot be
+    # cancelled safely in-process. Query-time vision therefore requires a GPU
+    # by default; cached visual understanding remains available on every host.
+    vision_allow_cpu_query_time: bool = Field(default=False, alias="VISION_ALLOW_CPU_QUERY_TIME")
 
     @property
     def VISION_MODEL(self) -> str:
@@ -208,7 +218,9 @@ class Settings(BaseSettings):
 
     llm_temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")
     llm_request_timeout: float = Field(default=120.0, alias="LLM_REQUEST_TIMEOUT")
-    llm_context_window: int = Field(default=8192, alias="LLM_CONTEXT_WINDOW")
+    # 4K keeps Qwen2.5 7B mostly GPU-resident on common 6 GB cards. The
+    # model's 32K native default creates an oversized KV cache and CPU offload.
+    llm_context_window: int = Field(default=4096, alias="LLM_CONTEXT_WINDOW")
 
     # ── PDF parsing ────────────────────────────────────────────────────────
     # Marker improves layout/code extraction on technical PDFs; PDFReader fallback always available.
@@ -260,11 +272,11 @@ class Settings(BaseSettings):
     )
 
     # ── Reranker (post-retrieval precision) ────────────────────────────────
-    # bge-reranker-large > base for Context Precision on dense legal text.
-    # Trade-off: ~2× rerank latency vs base. Set RERANKER_MODEL=base for speed.
+    # Base is the latency-safe default for CPU inference. Large can improve
+    # precision on dense legal text, but adds several seconds per query.
     enable_reranker: bool = Field(default=True, alias="ENABLE_RERANKER")
     reranker_model: str = Field(
-        default="BAAI/bge-reranker-large", alias="RERANKER_MODEL"
+        default="BAAI/bge-reranker-base", alias="RERANKER_MODEL"
     )
     # Final context passed to generation (4 balances recall for Qwen 2.5 7B without context bloat)
     reranker_top_n: int = Field(default=4, alias="RERANKER_TOP_N")
@@ -286,9 +298,10 @@ class Settings(BaseSettings):
     enable_query_rewrite: bool = Field(default=False, alias="ENABLE_QUERY_REWRITE")
 
     # ── Dynamic Output Limits (Qwen 2.5 7B) ────────────────────────────────
+    max_new_tokens_direct: int = Field(default=128, alias="MAX_NEW_TOKENS_DIRECT")
     max_new_tokens_factual: int = Field(default=256, alias="MAX_NEW_TOKENS_FACTUAL")
-    max_new_tokens_technical: int = Field(default=512, alias="MAX_NEW_TOKENS_TECHNICAL")
-    max_new_tokens_complex: int = Field(default=1024, alias="MAX_NEW_TOKENS_COMPLEX")
+    max_new_tokens_technical: int = Field(default=384, alias="MAX_NEW_TOKENS_TECHNICAL")
+    max_new_tokens_complex: int = Field(default=512, alias="MAX_NEW_TOKENS_COMPLEX")
 
     # ── Generation / faithfulness grounding ──────────────────────────────────
     # balanced (default): helpful synthesis + partial answers; strict: max faithfulness

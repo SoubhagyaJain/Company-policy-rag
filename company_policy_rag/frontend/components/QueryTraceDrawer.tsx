@@ -26,12 +26,13 @@ import { QueryTrace } from '../lib/types';
 interface QueryTraceDrawerProps {
   trace: QueryTrace | null;
   onClose: () => void;
-  onDelete?: (traceId: string) => void;
+  onDelete?: (traceId: string) => boolean | Promise<boolean>;
 }
 
 export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClose, onDelete }) => {
   const [showRawJson, setShowRawJson] = useState(false);
   const [activeTab, setActiveTab] = useState<'waterfall' | 'evidence' | 'grounding' | 'json'>('waterfall');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!trace) return null;
 
@@ -107,12 +108,18 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
           <div className="flex items-center gap-1.5 shrink-0">
             {onDelete && (
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (window.confirm(`Delete trace "${trace.original_query.slice(0, 30)}..."?`)) {
-                    onDelete(trace.trace_id);
-                    onClose();
+                    setIsDeleting(true);
+                    try {
+                      const deleted = await onDelete(trace.trace_id);
+                      if (deleted) onClose();
+                    } finally {
+                      setIsDeleting(false);
+                    }
                   }
                 }}
+                disabled={isDeleting}
                 className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 rounded-xl transition-colors"
                 title="Delete this query trace"
               >
@@ -266,7 +273,7 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
                   <div>Strategy: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.retrieval_strategy || 'balanced'}</span></div>
                   <div>Anchor Section: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.anchor_section || 'N/A'}</span></div>
                   <div>Section Expansion: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.section_expansion_used ? 'YES' : 'NO'}</span></div>
-                  <div>Vision Extraction: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.vision_used ? `YES (${trace.vision_model || 'qwen2.5vl:7b'})` : 'NO'}</span></div>
+                  <div>Vision Extraction: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.vision_used ? `YES (${trace.vision_model || 'Qwen3-VL-2B-Instruct'})` : 'NO'}</span></div>
                   <div>Cache Hit: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.cache_hit ? 'YES' : 'NO'}</span></div>
                 </div>
               </div>
@@ -337,7 +344,9 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
                     <div className="p-3.5 rounded-xl bg-white dark:bg-sand-dark/80 border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-sm">
                       <span className="text-charcoal-muted dark:text-cream-400 block">Faithfulness Status</span>
                       <div className="flex items-center gap-2 mt-1">
-                        {trace.faithfulness_passed !== false ? (
+                        {trace.faithfulness_passed === undefined ? (
+                          <span className="text-sm font-bold text-charcoal-muted dark:text-cream-400">NOT MEASURED</span>
+                        ) : trace.faithfulness_passed ? (
                           <>
                             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                             <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">PASSED</span>
@@ -354,9 +363,9 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
                     <div className="p-3.5 rounded-xl bg-white dark:bg-sand-dark/80 border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-sm">
                       <span className="text-charcoal-muted dark:text-cream-400 block">Verification Composite Score</span>
                       <span className="text-sm font-bold text-terracotta-600 dark:text-terracotta-400 font-mono mt-1 block">
-                        {trace.verification_score !== undefined
+                        {trace.verification_score !== undefined && trace.verification_score !== null
                           ? (trace.verification_score * 100).toFixed(1) + '%'
-                          : '100.0%'}
+                          : 'Not measured'}
                       </span>
                     </div>
                   </div>
@@ -365,10 +374,10 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
                     <div className="p-4 rounded-xl bg-white dark:bg-sand-dark/80 border border-sand-border/80 dark:border-sand-darkBorder/80 text-xs space-y-2 shadow-sm">
                       <h4 className="font-semibold text-charcoal dark:text-cream-100 font-serif">Detailed Criteria Breakdown</h4>
                       <div className="grid grid-cols-2 gap-2 text-charcoal-muted dark:text-cream-400 pt-1">
-                        <div>Faithfulness: <span className="text-charcoal dark:text-cream-200 font-mono">{(trace.verification.faithfulness * 100).toFixed(0)}%</span></div>
-                        <div>Completeness: <span className="text-charcoal dark:text-cream-200 font-mono">{(trace.verification.completeness * 100).toFixed(0)}%</span></div>
-                        <div>Citation Coverage: <span className="text-charcoal dark:text-cream-200 font-mono">{(trace.verification.citation_coverage * 100).toFixed(0)}%</span></div>
-                        <div>Coherence: <span className="text-charcoal dark:text-cream-200 font-mono">{(trace.verification.coherence * 100).toFixed(0)}%</span></div>
+                        <div>Faithfulness: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.faithfulness === undefined ? 'Not measured' : `${(trace.verification.faithfulness * 100).toFixed(0)}%`}</span></div>
+                        <div>Completeness: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.completeness === undefined ? 'Not measured' : `${(trace.verification.completeness * 100).toFixed(0)}%`}</span></div>
+                        <div>Citation Coverage: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.citation_coverage === undefined ? 'Not measured' : `${(trace.verification.citation_coverage * 100).toFixed(0)}%`}</span></div>
+                        <div>Coherence: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.coherence === undefined ? 'Not measured' : `${(trace.verification.coherence * 100).toFixed(0)}%`}</span></div>
                       </div>
 
                       {trace.verification.critique && (

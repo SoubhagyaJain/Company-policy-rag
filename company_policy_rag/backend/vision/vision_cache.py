@@ -131,3 +131,17 @@ class VisionCacheManager:
                     item.unlink()
                 except OSError:
                     pass
+
+    def delete_by_document_id(self, document_id: str) -> int:
+        """Delete document-scoped cached visual extractions."""
+        if not document_id or any(ch in document_id for ch in ("/", "\\", "*", "?")):
+            raise ValueError(f"Invalid document ID: {document_id}")
+        removed = 0
+        with self._lock:
+            for item in self.cache_dir.glob(f"{document_id}_p*_*.json"):
+                try:
+                    item.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+        return removed

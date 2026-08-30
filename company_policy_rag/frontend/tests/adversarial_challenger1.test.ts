@@ -124,8 +124,8 @@ export function runAdversarialTests(): TestResult[] {
 
     const chatHtml = renderMessageWithTrace(trace, { expanded: true });
     assert(chatHtml.includes('82% Verified'), 'Renders composite score pill with 82%');
-    assert(chatHtml.includes('Faithfulness'), 'Renders Faithfulness dimension fallback');
-    assert(chatHtml.includes('Completeness'), 'Renders Completeness dimension fallback');
+    assert(!chatHtml.includes('Faithfulness'), 'Does not invent a missing Faithfulness dimension');
+    assert(!chatHtml.includes('Completeness'), 'Does not invent a missing Completeness dimension');
 
     const adminHtml = renderAdminView({ recent_traces: [trace] }, { expandedTraceId: 'tr_partial_verif_003' });
     assert(adminHtml.includes('82%'), 'Admin renders 82% composite score');

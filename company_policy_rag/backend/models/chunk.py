@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import uuid
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from backend.models.page_identity import PageIdentity
 
 
 class ChunkRole(str, Enum):
@@ -55,11 +58,40 @@ class ChunkMetadata(BaseModel):
 
     def get_page_identity(self) -> PageIdentity:
         from backend.models.page_identity import PageIdentity
+
+        extra = self.extra or {}
+
+        def _optional_int(value: Any) -> int | None:
+            if value is None or isinstance(value, bool):
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        internal_page_index = self.internal_page_index
+        if internal_page_index is None:
+            internal_page_index = _optional_int(extra.get("internal_page_index"))
+
+        physical_page_number = self.page_number
+        if physical_page_number is None:
+            physical_page_number = _optional_int(
+                extra.get("physical_page_number", extra.get("page_number"))
+            )
+
+        display_page_number = self.display_page_number
+        if display_page_number is None:
+            display_page_number = extra.get("display_page_number")
+
+        page_label = self.page_label
+        if page_label is None and extra.get("page_label") is not None:
+            page_label = str(extra["page_label"])
+
         return PageIdentity.from_indices(
-            internal_page_index=self.internal_page_index,
-            physical_page_number=self.page_number,
-            display_page_number=self.display_page_number,
-            page_label=self.page_label,
+            internal_page_index=internal_page_index,
+            physical_page_number=physical_page_number,
+            display_page_number=display_page_number,
+            page_label=page_label,
         )
 
 

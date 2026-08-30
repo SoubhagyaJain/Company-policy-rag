@@ -10,6 +10,7 @@
     "test": "npx tsx tests/run-all-tests.ts"
   },
   "dependencies": {
+    "@types/three": "^0.185.4",
     "clsx": "^2.1.1",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.468.0",
@@ -17,7 +18,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
-    "tailwind-merge": "^2.5.5"
+    "tailwind-merge": "^2.5.5",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

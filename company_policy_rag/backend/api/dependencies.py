@@ -46,7 +46,7 @@ def get_telemetry_service() -> TelemetryService:
 def get_document_service() -> DocumentService:
     global _document_service
     if _document_service is None:
-        with _lock:
+        with _lock:  
             if _document_service is None:
                 _document_service = DocumentService()
     return _document_service
@@ -112,6 +112,7 @@ def get_rag_pipeline() -> RAGPipeline:
                 ollama_model = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:7b")
                 temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
                 request_timeout = float(os.getenv("LLM_REQUEST_TIMEOUT", "300.0"))
+                context_window = int(os.getenv("LLM_CONTEXT_WINDOW", "4096"))
 
                 llm = None
                 global Ollama
@@ -128,6 +129,8 @@ def get_rag_pipeline() -> RAGPipeline:
                             model=ollama_model,
                             temperature=temperature,
                             request_timeout=request_timeout,
+                            context_window=context_window,
+                            keep_alive=-1,
                         )
                     except Exception:
                         llm = None

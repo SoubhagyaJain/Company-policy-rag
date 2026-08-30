@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import re
 import threading
 import time
@@ -9,14 +8,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from backend.models.logical_document import detect_continuation_signals
 from backend.models.page_identity import PageIdentity
 from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
 from src.config import settings
-from src.ollama_client import execute_vision_completion, probe_vision_model_status
-
+from backend.vision.hf_vision_client import HFVisionClient
 _CODE_CUES = re.compile(
     r"(?:def\s+|class\s+|import\s+|from\s+\w+\s+import|function\s+|const\s+|let\s+|"
     r"here'?s\s+(?:the\s+)?code|see\s+code\s+below|implementation|code:|snippet|python|"
@@ -200,10 +197,22 @@ class VisionService:
         self.vision_model = (vision_model or settings.vision_model).strip()
 
     def is_available(self) -> tuple[bool, str]:
-        """Check whether local Ollama vision capabilities are ready."""
+        """Check local HF model readiness without loading model weights."""
         if not getattr(settings, "vision_enabled", True):
             return False, "Vision processing is disabled via VISION_ENABLED=false."
-        return probe_vision_model_status(self.vision_model)
+        return HFVisionClient.get_instance().readiness()
+
+    def is_query_time_available(self) -> tuple[bool, str]:
+        """Return whether uncached interactive vision can meet a bounded latency."""
+        ready, reason = self.is_available()
+        if not ready:
+            return ready, reason
+
+        client = HFVisionClient.get_instance()
+        device = client.device if client.is_loaded else client._choose_device()
+        if device == "cpu" and not getattr(settings, "vision_allow_cpu_query_time", False):
+            return False, "CPU-only vision is disabled for interactive queries."
+        return True, f"Interactive vision is available on {device}."
 
     def detect_visual_content(
         self,
@@ -253,11 +262,18 @@ class VisionService:
         img_hash = VisionCacheManager.compute_image_hash(image_bytes) if image_bytes else None
         text_lower = page_text.lower()
 
-        # Rule 3: Prior continuation cue indicates code screenshot on this page
+        # Rule 3: A continuation cue points to a visual on this page. Only
+        # classify it as code when the cue itself is code-specific; phrases
+        # such as "depicted below" usually introduce a diagram or infographic.
         if continuation_cue and image_bytes is not None:
+            cue_visual_type = (
+                VisualContentType.CODE_SCREENSHOT
+                if _CODE_CUES.search(continuation_cue.lower())
+                else VisualContentType.DIAGRAM_ARCHITECTURE
+            )
             return VisualDetectionResult(
                 has_visual=True,
-                visual_type=VisualContentType.CODE_SCREENSHOT,
+                visual_type=cue_visual_type,
                 confidence=0.95,
                 reason=f"Prior page continuation cue '{continuation_cue}' with visual content on current page.",
                 image_bytes=image_bytes,
@@ -376,7 +392,7 @@ class VisionService:
         if not image_bytes:
             return None
 
-        effective_timeout = timeout or getattr(settings, "vision_request_timeout", 35.0)
+        effective_timeout = timeout or getattr(settings, "vision_request_timeout", 30.0)
         image_hash = VisionCacheManager.compute_image_hash(image_bytes)
         asset_id = f"ast_{image_hash[:12]}"
         disp_label = str(page_label) if page_label is not None else str(display_page_number or page_number or 1)
@@ -497,9 +513,8 @@ class VisionService:
                 cur_timeout = effective_timeout
                 cur_img_bytes = inference_image_bytes
 
-                # Adaptive retry on second attempt: downscale image to 768px and reduce timeout
+                # Adaptive retry on second attempt: downscale image to 768px
                 if attempt > 1:
-                    cur_timeout = min(effective_timeout, 20.0)
                     cur_img_bytes = ImageAssetManager.get_optimized_inference_bytes(
                         image_bytes,
                         is_code=False,
@@ -520,11 +535,11 @@ class VisionService:
                         max_attempts,
                         cur_timeout,
                     )
-                    extracted_text = execute_vision_completion(
+                    extracted_text = HFVisionClient.get_instance().execute(
                         prompt=prompt,
                         image_bytes=cur_img_bytes,
-                        model_name=self.vision_model,
                         timeout=cur_timeout,
+                        max_new_tokens=getattr(settings, "vision_num_predict", 160),
                     )
                     if extracted_text:
                         self._circuit_breaker.record_success()

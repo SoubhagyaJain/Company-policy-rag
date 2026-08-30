@@ -14,7 +14,7 @@ from backend.models.api_dto import (
     DocumentUploadResponse,
     IngestionStatusResponse,
 )
-from backend.services.document_service import MAX_FILE_SIZE_BYTES, DocumentService
+from backend.services.document_service import MAX_FILE_SIZE_BYTES, DocumentService, DuplicateDocumentError
 from backend.utils.logging import logger
 
 router = APIRouter(tags=["Documents"])
@@ -66,6 +66,17 @@ async def upload_document_file(
             chunk_strategy,
         )
         return res
+    except DuplicateDocumentError as duplicate_err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "DUPLICATE_DOCUMENT",
+                "message": str(duplicate_err),
+                "existing_document_id": duplicate_err.document_id,
+                "existing_filename": duplicate_err.filename,
+                "file_hash": duplicate_err.file_hash,
+            },
+        )
     except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as val_err:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
     except Exception as exc:
@@ -85,6 +96,23 @@ def list_indexed_documents(
 ) -> DocumentListResponse:
     """Retrieve list of indexed documents with summary metadata and real-time status."""
     return doc_service.list_documents(category=category, limit=limit, offset=offset)
+
+
+@router.get("/api/documents/duplicates")
+def list_duplicate_documents(
+    doc_service: DocumentService = Depends(get_document_service),
+):
+    """Preview byte-identical documents without changing storage."""
+    return doc_service.deduplicate_documents(dry_run=True)
+
+
+@router.post("/api/documents/deduplicate")
+def deduplicate_documents(
+    dry_run: bool = True,
+    doc_service: DocumentService = Depends(get_document_service),
+):
+    """Preview or remove byte-identical duplicate documents across all storage layers."""
+    return doc_service.deduplicate_documents(dry_run=dry_run)
 
 
 @router.get("/api/documents/{doc_id}/status", response_model=IngestionStatusResponse)

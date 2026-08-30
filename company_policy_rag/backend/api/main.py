@@ -95,12 +95,11 @@ def warmup_rag_system() -> None:
     except Exception as exc:
         logger.warning("[4/5] Vector store / BM25 notice: %s", exc)
 
-    # 6. Vision Model Probe & Health Check
+    # 6. Vision Model Probe & Health Check (metadata only; keep weights lazy)
     t0 = time.perf_counter()
     try:
-        from src.ollama_client import probe_vision_model_status
-        vision_model_name = getattr(pipeline.vision_service, "vision_model", "qwen2.5vl:7b")
-        is_ready, msg = probe_vision_model_status(vision_model_name)
+        vision_model_name = getattr(pipeline.vision_service, "vision_model", "Qwen3-VL-2B-Instruct")
+        is_ready, msg = pipeline.vision_service.is_available()
         status_label = "READY" if is_ready else "UNAVAILABLE (Text RAG fallback active)"
         logger.info("[5/5] Vision Model '%s': %s (%s) in %.2fs", vision_model_name, status_label, msg, time.perf_counter() - t0)
     except Exception as exc:

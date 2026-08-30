@@ -109,7 +109,7 @@ export function SessionSidebar({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: -280, opacity: 0 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="w-72 shrink-0 h-[calc(100vh-57px)] sticky top-[57px] bg-[#F7F4EB] dark:bg-[#181715] border-r border-[#E8E2D5] dark:border-[#272522] flex flex-col justify-between p-3.5 z-20 select-none font-sans"
+          className="absolute inset-y-0 left-0 z-40 flex h-full w-[min(19rem,88vw)] shrink-0 flex-col justify-between border-r border-[#E8E2D5] bg-[#F7F4EB]/96 p-3.5 font-sans shadow-2xl backdrop-blur-xl select-none dark:border-[#272522] dark:bg-[#181715]/96 lg:relative lg:z-20 lg:w-72 lg:shadow-none"
         >
           {/* Top Section */}
           <div className="flex flex-col h-full overflow-hidden">
@@ -260,7 +260,7 @@ export function SessionSidebar({
                   <Layers className="w-3 h-3 text-amber-600" /> Reranker
                 </span>
                 <span className="font-mono text-[10px] text-charcoal dark:text-cream-200">
-                  BGE Large
+                  BGE Base
                 </span>
               </div>
             </div>

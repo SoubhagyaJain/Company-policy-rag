@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import json
-import math
 import queue
 import sqlite3
 import threading
-import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,10 +13,7 @@ from backend.models.telemetry_models import (
     CacheTypeMetrics,
     DocumentIngestionTrace,
     ErrorIncident,
-    EvidenceItem,
-    GroundingTelemetry,
     IngestionStageTelemetry,
-    LatencyBreakdown,
     MemoryResolutionEvent,
     QueryTraceRecord,
     SeverityLevel,
@@ -45,7 +40,9 @@ class TelemetryDB:
 
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._write_queue: queue.Queue[tuple[str, tuple[Any, ...]]] = queue.Queue(maxsize=10000)
+        self._write_generation = 0
+        self._deleted_trace_identifiers: set[str] = set()
+        self._write_queue: queue.Queue[tuple[int, str, tuple[Any, ...]]] = queue.Queue(maxsize=10000)
         self._stop_event = threading.Event()
         self._init_schema()
 
@@ -222,16 +219,28 @@ class TelemetryDB:
                     break
 
             try:
-                conn = self._get_connection()
-                with conn:
-                    for sql, params in batch:
-                        conn.execute(sql, params)
-                conn.close()
+                with self._lock:
+                    conn = self._get_connection()
+                    with conn:
+                        for generation, sql, params in batch:
+                            if generation != self._write_generation:
+                                continue
+                            if (
+                                "query_traces" in sql
+                                and len(params) >= 2
+                                and (str(params[0]) in self._deleted_trace_identifiers or str(params[1]) in self._deleted_trace_identifiers)
+                            ):
+                                continue
+                            conn.execute(sql, params)
+                    conn.close()
             except Exception as exc:
                 logger.error("TelemetryDB background batch write error: %s", exc)
 
     def record_query_trace(self, trace: QueryTraceRecord) -> None:
         """Enqueue QueryTraceRecord for persistent SQLite storage."""
+        with self._lock:
+            self._deleted_trace_identifiers.discard(trace.trace_id)
+            self._deleted_trace_identifiers.discard(trace.request_id)
         sql = """
             INSERT OR REPLACE INTO query_traces (
                 trace_id, request_id, conversation_id, document_id, timestamp,
@@ -290,7 +299,7 @@ class TelemetryDB:
             trace.model_dump_json(),
         )
         try:
-            self._write_queue.put_nowait((sql, params))
+            self._write_queue.put_nowait((self._write_generation, sql, params))
         except queue.Full:
             logger.warning("TelemetryDB write queue full, dropping record.")
 
@@ -301,7 +310,7 @@ class TelemetryDB:
         visual_type: str,
         status: str,
         duration_ms: float,
-        model_name: str = "qwen2.5vl:7b",
+        model_name: str = "Qwen3-VL-2B-Instruct",
         request_id: str | None = None,
         message: str | None = None,
     ) -> None:
@@ -325,7 +334,7 @@ class TelemetryDB:
             message or "",
         )
         try:
-            self._write_queue.put_nowait((sql, params))
+            self._write_queue.put_nowait((self._write_generation, sql, params))
         except queue.Full:
             pass
 
@@ -356,7 +365,7 @@ class TelemetryDB:
             latency_ms,
         )
         try:
-            self._write_queue.put_nowait((sql, params))
+            self._write_queue.put_nowait((self._write_generation, sql, params))
         except queue.Full:
             pass
 
@@ -384,7 +393,7 @@ class TelemetryDB:
             model_name,
         )
         try:
-            self._write_queue.put_nowait((sql, params))
+            self._write_queue.put_nowait((self._write_generation, sql, params))
         except queue.Full:
             pass
 
@@ -410,7 +419,7 @@ class TelemetryDB:
             json.dumps(incident.details),
         )
         try:
-            self._write_queue.put_nowait((sql, params))
+            self._write_queue.put_nowait((self._write_generation, sql, params))
         except queue.Full:
             pass
 
@@ -440,7 +449,7 @@ class TelemetryDB:
             json.dumps([s.model_dump() for s in trace.stages]),
         )
         try:
-            self._write_queue.put_nowait((sql, params))
+            self._write_queue.put_nowait((self._write_generation, sql, params))
         except queue.Full:
             pass
 
@@ -995,6 +1004,7 @@ class TelemetryDB:
     def delete_query_trace(self, identifier: str) -> bool:
         """Delete a single query trace by trace_id or request_id."""
         with self._lock:
+            self._deleted_trace_identifiers.add(identifier)
             conn = self._get_connection()
             try:
                 with conn:
@@ -1009,6 +1019,13 @@ class TelemetryDB:
     def clear(self) -> None:
         """Purge all telemetry database records."""
         with self._lock:
+            self._write_generation += 1
+            self._deleted_trace_identifiers.clear()
+            while True:
+                try:
+                    self._write_queue.get_nowait()
+                except queue.Empty:
+                    break
             conn = self._get_connection()
             try:
                 with conn:

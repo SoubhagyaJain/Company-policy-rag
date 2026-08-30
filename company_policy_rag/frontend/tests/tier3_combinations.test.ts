@@ -197,14 +197,15 @@ export function runTier3Tests(): TestResult[] {
     assert(html.includes('98% Verified') || (html.includes('98%') && html.includes('Verified')), 'renders 98% Verified');
   });
 
-  test('C9: Unknown Custom Query Type + Missing Verification Object + Fallback Score', () => {
+  test('C9: Unknown Custom Query Type + Boolean Verification Without Invented Score', () => {
     const html = renderMessageWithTrace({
       query_type: 'multi_modal_spec',
       routing_confidence: 0.77,
       faithfulness_passed: true,
     });
     assert(html.includes('multi_modal_spec'), 'renders custom type');
-    assert(html.includes('95% Verified') || (html.includes('95%') && html.includes('Verified')), 'uses default fallback score 0.95');
+    assert(html.includes('Verified'), 'renders the recorded boolean verification result');
+    assert(!html.includes('95% Verified'), 'does not invent a fallback verification score');
   });
 
   test('C10: Cache Hit + Inferred Filters + Verification Passed', () => {

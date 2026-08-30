@@ -10,7 +10,7 @@
 ![Observability: SQLite WAL](https://img.shields.io/badge/Observability-SQLite_WAL_Write--Behind-success)
 ![Tests: 192/192](https://img.shields.io/badge/Tests-192%2F192_Passed_(100%25)-brightgreen)
 
-A production-grade **Retrieval-Augmented Generation (RAG)** platform designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance, technical architecture). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, an **Agentic Intelligence Layer** (query routing, self-reflection & verification, dynamic metadata filtering), **dual-model vision pipeline** (code screenshot extraction, diagram understanding, table OCR via `qwen2.5vl:7b`), **end-to-end model fine-tuning & Ollama export**, and a **Full-Screen Production Observability & Telemetry Dashboard** with persistent SQLite storage.
+A production-grade **Retrieval-Augmented Generation (RAG)** platform designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance, technical architecture). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, an **Agentic Intelligence Layer** (query routing, self-reflection & verification, dynamic metadata filtering), **dual-model vision pipeline** (code screenshot extraction, diagram understanding, table OCR via `Qwen3-VL-2B-Instruct`), **end-to-end model fine-tuning & Ollama export**, and a **Full-Screen Production Observability & Telemetry Dashboard** with persistent SQLite storage.
 
 ---
 
@@ -21,7 +21,7 @@ A production-grade **Retrieval-Augmented Generation (RAG)** platform designed to
 - **Persistent SQLite Telemetry DB** — Zero-latency async write-behind queue with a dedicated background thread, SQLite WAL mode, and indexed aggregations across `5m`, `15m`, `1h`, `6h`, `24h`, and `7d` time horizons.
 - **10-Subsystem Live Health Probes** — Continuous health monitoring across API Gateway, Ollama Daemon, Chroma Vector DB, BM25 Index, Embedding Model, Text Generation Model, Vision VLM, Semantic Cache, Vision Cache, and Session Memory.
 - **16-Stage Waterfall Latency Breakdown** — Microsecond-accurate latency accounting from request intake, memory resolution, rewrite, dense/sparse search, RRF fusion, neural reranking, vision extraction, TTFT, to SSE token streaming.
-- **Strict Multi-Model Separation** — Clear separation between Text Synthesis (`qwen2.5:7b`) and Vision VLM (`qwen2.5vl:7b`) with distinct latency percentiles, throughput counters, and circuit breaker states.
+- **Strict Multi-Model Separation** — Clear separation between Text Synthesis (`qwen2.5:7b`) and Vision VLM (`Qwen3-VL-2B-Instruct`) with distinct latency percentiles, throughput counters, and circuit breaker states.
 - **Multi-Tier Cache Telemetry** — Independent metrics for Semantic Response Cache, Embedding Cache, Vision Cache, Negative Vision Cache, and Retrieval Candidates Cache.
 - **Evidence & Grounding Claims Inspection** — Classification of retrieved evidence into `TEXT`, `CODE`, `DIAGRAM`, and `TABLE`, combined with self-reflection grounding claim verifications (`SUPPORTED`, `UNSUPPORTED`, `INFERRED`).
 - **Query Trace Inspection Drawer** — Slide-over drawer visualizer for waterfall timings, extracted visual snippets, citation sources, and raw JSON export.
@@ -51,7 +51,7 @@ A production-grade **Retrieval-Augmented Generation (RAG)** platform designed to
 - **Autonomous Retry Engine** — Automatically adjusts retrieval parameters and retries (up to 2 cycles) if unverified claims or missing aspects are detected.
 
 ### 👁️ Multimodal Vision RAG
-- **Dual-Model Architecture** — `qwen2.5:7b` (Text) and `qwen2.5vl:7b` (Vision).
+- **Dual-Model Architecture** — `qwen2.5:7b` (Text) and `Qwen3-VL-2B-Instruct` (Vision).
 - **Visual Asset Detection** — Classifies PDF pages (`CODE_SCREENSHOT`, `DIAGRAM_ARCHITECTURE`, `TABLE_DATA`) and caches OCR/diagram structures with SHA-256 content addressing.
 - **Lazy Vision Fallback** — Triggers on-demand extraction for visual pages during query execution when references are detected.
 
@@ -80,7 +80,7 @@ flowchart TD
     RRFFusion --> CrossEncoderRerank["Cross-Encoder Reranker (BGE-Large CUDA)"]
     CrossEncoderRerank --> EvidenceClassifier["Evidence Gate (TEXT, CODE, DIAGRAM, TABLE)"]
 
-    EvidenceClassifier -->|Visual Detection| VisionExtraction["Vision VLM Fallback (qwen2.5vl:7b)"]
+    EvidenceClassifier -->|Visual Detection| VisionExtraction["Vision VLM Fallback (Qwen3-VL-2B-Instruct)"]
     EvidenceClassifier -->|Context Ready| ContextAssembly["Context Compression & Assembly"]
     VisionExtraction --> ContextAssembly
 
@@ -112,7 +112,7 @@ flowchart TD
 | **Embeddings** | `BAAI/bge-small-en-v1.5` | Dense document and query vector representations |
 | **Reranker** | `BAAI/bge-reranker-large` (CUDA GPU) | Neural cross-encoder reranking |
 | **Text Generation** | Ollama (`qwen2.5:7b` default) | Local, privacy-first grounded response generation |
-| **Vision VLM** | Ollama (`qwen2.5vl:7b`) | Multimodal diagram, code screenshot, and table understanding |
+| **Vision VLM** | Ollama (`Qwen3-VL-2B-Instruct`) | Multimodal diagram, code screenshot, and table understanding |
 | **Hardware** | NVIDIA RTX 4050 (CUDA) | Accelerated neural inference, embeddings, and reranking |
 
 ---
@@ -130,7 +130,7 @@ flowchart TD
 
 ```bash
 ollama pull qwen2.5:7b
-ollama pull qwen2.5vl:7b
+ollama pull Qwen3-VL-2B-Instruct
 ollama pull nomic-embed-text
 
 # Optional alternative models
@@ -171,7 +171,7 @@ Configure your environment settings in `.env`:
 ```env
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_LLM_MODEL=qwen2.5:7b
-VISION_MODEL=qwen2.5vl:7b
+VISION_MODEL=Qwen3-VL-2B-Instruct
 VISION_ENABLED=true
 RERANKER_DEVICE=cuda
 TELEMETRY_DB_PATH=storage/telemetry.sqlite3

@@ -15,7 +15,7 @@ import { useSessions } from '@/hooks/useSessions';
 import { useObservability } from '@/hooks/useObservability';
 import { apiClient } from '@/lib/api-client';
 
-import type { FilterOptions } from '@/lib/types';
+import type { FilterOptions, ResponseMode } from '@/lib/types';
 
 
 export default function HomePage() {
@@ -41,7 +41,15 @@ export default function HomePage() {
 
   /* ─── Tabs & sidebar ─────────────────────────── */
   const [activeTab, setActiveTab] = useState<ViewTab>('chat');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const desktopQuery = window.matchMedia('(min-width: 1024px)');
+    const syncSidebar = () => setIsSidebarOpen(desktopQuery.matches);
+    syncSidebar();
+    desktopQuery.addEventListener('change', syncSidebar);
+    return () => desktopQuery.removeEventListener('change', syncSidebar);
+  }, []);
 
   /* ─── Sessions ───────────────────────────────── */
   const {
@@ -99,8 +107,8 @@ export default function HomePage() {
 
   /* ─── Handlers ───────────────────────────────── */
   const handleSendMessage = useCallback(
-    (content: string, filters?: FilterOptions, model?: string) => {
-      sendMessage(content, activeSessionId, filters, model);
+    (content: string, filters?: FilterOptions, model?: string, responseMode: ResponseMode = 'standard') => {
+      sendMessage(content, activeSessionId, filters, model, 'standard', responseMode);
     },
     [sendMessage, activeSessionId],
   );
@@ -123,6 +131,7 @@ export default function HomePage() {
       const targetSession = sessions.find((s) => s.id === id);
       prevActiveSessionIdRef.current = id;
       setMessages(targetSession?.messages || []);
+      if (window.innerWidth < 1024) setIsSidebarOpen(false);
     },
     [activeSessionId, cancelStream, messages, sessions, setMessages, switchSession, updateSessionMessages],
   );
@@ -179,7 +188,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#FAF9F5] dark:bg-[#141413] transition-colors">
+    <div className="app-shell h-[100dvh] flex flex-col bg-[#FAF9F5] dark:bg-[#141413] transition-colors">
       {/* Header */}
       <Header
         activeTab={activeTab}
@@ -192,7 +201,15 @@ export default function HomePage() {
       />
 
       {/* Main body: sidebar + content */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {activeTab === 'chat' && isSidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close conversation sidebar"
+            onClick={() => setIsSidebarOpen(false)}
+            className="absolute inset-0 z-30 bg-[#211E1A]/25 backdrop-blur-[2px] lg:hidden"
+          />
+        )}
         {/* Session sidebar — only relevant on chat tab */}
         {activeTab === 'chat' && (
           <SessionSidebar

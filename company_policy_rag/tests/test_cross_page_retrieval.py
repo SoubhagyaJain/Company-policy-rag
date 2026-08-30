@@ -56,8 +56,8 @@ def _create_test_chunk(
 @pytest.fixture
 def mock_vision_service(tmp_path: Path):
     vision = MagicMock()
-    vision.is_available.return_value = (True, "Vision model 'qwen2.5vl:7b' is available locally.")
-    vision.vision_model = "qwen2.5vl:7b"
+    vision.is_available.return_value = (True, "Vision model 'Qwen3-VL-2B-Instruct' is available locally.")
+    vision.vision_model = "Qwen3-VL-2B-Instruct"
 
     def fake_process_pdf_page_visuals(
         pdf_path, page_number, page_text="", document_id=None, section_title=None, continuation_cue=None, **kwargs
@@ -191,6 +191,45 @@ def test_scenario_1_x_writer_agent_cross_page_retrieval(tmp_path: Path, mock_vis
     assert response.trace.evidence_code_count >= 1
     assert response.trace.vision_fallback is True
     assert response.trace.adjacent_page_check is True
+
+
+def test_generic_build_question_does_not_trigger_vision_without_visual_signal(tmp_path: Path):
+    """A normal implementation question must stay on the fast text-RAG path."""
+    chunk = _create_test_chunk(
+        chunk_id="chunk_voice_rag_overview",
+        text=(
+            "A voice RAG agent combines speech recognition, retrieval, grounded "
+            "generation, and text-to-speech response playback."
+        ),
+        document_id="doc_voice_rag",
+        source_file="voice_rag_guide.pdf",
+        page_number=4,
+        section_title="Voice RAG architecture",
+    )
+    chunk.metadata.file_path = str(tmp_path / "voice_rag_guide.pdf")
+    scored = ScoredChunk(chunk=chunk, score=0.91)
+
+    vision = MagicMock()
+    vision.vision_model = "Qwen3-VL-2B-Instruct"
+    vision.image_asset_manager.get_page_assets_by_physical_page.return_value = []
+    vision.image_asset_manager.get_page_assets.return_value = []
+
+    pipeline = RAGPipeline(
+        hybrid_retriever=MagicMock(),
+        docstore={chunk.id: chunk},
+        llm=MagicMock(),
+        vision_service=vision,
+    )
+    augmented, telemetry = pipeline._apply_cross_page_vision_fallback_if_needed(
+        chunks=[scored],
+        user_query="How can I build a voice RAG agent for my RAG app?",
+        intent=QueryCategory.IMPLEMENTATION,
+    )
+
+    assert augmented == [scored]
+    assert telemetry["vision_fallback"] is False
+    assert telemetry["vision_status"] == "SKIPPED_NO_VISUAL_SIGNAL"
+    vision.process_pdf_page_visuals.assert_not_called()
 
 
 def test_scenario_2_x_analyst_agent_implementation(tmp_path: Path, mock_vision_service):

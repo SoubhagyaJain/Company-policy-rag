@@ -1,0 +1,769 @@
+2026-08-27 18:50:20 | INFO     | backend | ==========================================================
+2026-08-27 18:50:20 | INFO     | backend |   STARTING RAG SYSTEM PRELOADING & MODEL WARM-UP          
+2026-08-27 18:50:20 | INFO     | backend | ==========================================================
+2026-08-27 18:50:21 | INFO     | backend | ChromaVectorStore initialized collection 'company_policy' at storage\chroma
+2026-08-27 18:50:21 | INFO     | backend | SemanticCacheManager initialized collection 'semantic_cache' at storage\chroma
+2026-08-27 18:50:35 | INFO     | backend | Loading embedding model BAAI/bge-small-en-v1.5
+2026-08-27 18:50:40 | INFO     | backend | [1/4] Embedding model loaded & warmed up in 19.05s
+2026-08-27 18:50:40 | INFO     | backend | Loading CrossEncoder reranker model BAAI/bge-reranker-base on device cpu
+2026-08-27 18:50:47 | INFO     | backend | [2/4] CrossEncoder reranker loaded & warmed up in 6.62s
+2026-08-27 18:50:47 | INFO     | backend | Preloaded Ollama model 'qwen2.5:7b' via keep_alive=-1
+2026-08-27 18:50:52 | INFO     | backend | [3/4] Ollama LLM 'qwen2.5:7b' preloaded & warmed up in 5.60s
+2026-08-27 18:50:52 | INFO     | backend | [4/5] Vector Store (12905 chunks) & BM25 (0 chunks) ready in 0.02s
+2026-08-27 18:50:52 | INFO     | backend | [5/5] Vision Model 'Qwen3-VL-2B-Instruct': READY (HF Vision model Qwen3-VL-2B-Instruct is available (lazy load).) in 0.00s
+2026-08-27 18:50:52 | INFO     | backend | ==========================================================
+2026-08-27 18:50:52 | INFO     | backend |   ALL RAG MODELS READY IN 32.33s — ZERO COLD START READY!  
+2026-08-27 18:50:52 | INFO     | backend | ==========================================================
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:50:57 | WARNING  | backend | Redis connection failed (Timeout connecting to server). Falling back to in-memory cache.
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52317 - "GET /api/health HTTP/1.1" 200 OK
+2026-08-27 18:50:59 | WARNING  | backend | Redis connection failed (Timeout connecting to server). Falling back to in-memory cache.
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:13:58 | INFO     | backend | [HTTP] request_id=req_5a6f4070201e POST /api/chat/session/session_0k2k8r3_1787835761540/clear -> 200 (1.43ms)
+INFO:     127.0.0.1:51846 - "POST /api/chat/session/session_0k2k8r3_1787835761540/clear HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:14:01 | INFO     | backend | [HTTP] request_id=req_77ea876921dd OPTIONS /api/chat/stream -> 200 (0.15ms)
+INFO:     127.0.0.1:51846 - "OPTIONS /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 19:14:01 | INFO     | backend | [HTTP] request_id=req_61d16152a3ae POST /api/chat/stream -> 200 (2.71ms)
+INFO:     127.0.0.1:51846 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 19:14:01 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=1 is_followup=False topic_shift=False topic='hi' entities=[]
+2026-08-27 19:14:01 | INFO     | backend | [QUERY_RESOLUTION] query='hi' resolved='hi' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-27 19:14:01 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+2026-08-27 19:14:01 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    hi
+INTENT:                   conversational
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Conversational Bypass
+TEXT_CANDIDATES:          0
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      0
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            N/A
+VISUAL_ASSET:             NONE
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          SUFFICIENT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            1.70 ms
+======================================================================
+
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51846 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:14:23 | INFO     | backend | [HTTP] request_id=req_69eb1bdf72dc POST /api/chat/stream -> 200 (1.02ms)
+INFO:     127.0.0.1:51846 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 19:14:23 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=2 is_followup=False topic_shift=False topic='how can i create voice rag agent' entities=['create voice agent']
+2026-08-27 19:14:23 | INFO     | backend | [QUERY_RESOLUTION] query='how can i create voice rag agent' resolved='how can i create voice rag agent' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-27 19:14:23 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+2026-08-27 19:14:24 | INFO     | backend | Semantic cache HIT: score 0.9904 >= threshold 0.9500 (latency: 810.76ms)
+2026-08-27 19:14:24 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    how can i create voice rag agent
+INTENT:                   implementation
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           General
+TEXT_CANDIDATES:          0
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      0
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            N/A
+VISUAL_ASSET:             NONE
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          SUFFICIENT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            813.72 ms
+======================================================================
+
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56516 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:14:50 | INFO     | backend | [HTTP] request_id=req_6aaabce19d3b POST /api/chat/stream -> 200 (1.09ms)
+INFO:     127.0.0.1:56516 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 19:14:50 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=3 is_followup=False topic_shift=False topic='how can i create multi agent flight finder' entities=['create multi agent flight']
+2026-08-27 19:14:50 | INFO     | backend | [QUERY_RESOLUTION] query='how can i create multi agent flight finder' resolved='how can i create multi agent flight finder' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-27 19:14:50 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+2026-08-27 19:14:51 | INFO     | backend | Semantic cache MISS: similarity score 0.6540 < threshold 0.9500 (dist: 0.3460, latency: 32.03ms)
+2026-08-27 19:14:51 | INFO     | backend | Executing dense retrieval for query: how can i create multi agent flight finder
+2026-08-27 19:14:51 | INFO     | backend | Dense retrieve: computing embedding for how can i create multi agent flight finder
+2026-08-27 19:14:51 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-27 19:14:51 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-27 19:14:51 | INFO     | backend | Executing BM25 retrieval for query: how can i create multi agent flight finder
+2026-08-27 19:14:51 | INFO     | backend | BM25 retrieval complete
+2026-08-27 19:14:51 | INFO     | backend | Starting CrossEncoder prediction for 16 pairs...
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:14:52 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-27 19:14:52 | INFO     | backend | Evidence Sufficiency Gate: Missing required evidence types (code_implementation) for intent 'implementation'. Continuation cues detected: none. -> Inspecting pages [46, 47, 48, 49]
+2026-08-27 19:14:52 | INFO     | backend | Skipping lazy vision for query 'how can i create multi agent flight finder': evidence is incomplete, but no visual asset, continuation cue, or explicit visual request exists.
+2026-08-27 19:14:52 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=RELATED monotonic=RELATED rationale='Single turn evaluation'
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:15:03 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    how can i create multi agent flight finder
+INTENT:                   implementation
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Levels of Agentic AI Systems
+TEXT_CANDIDATES:          25
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      1
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            internal_page_index=46 physical_page_number=47 display_page_number=46
+VISUAL_ASSET:             NONE
+VISION_STATUS:            SKIPPED_NO_VISUAL_SIGNAL
+EVIDENCE_STATUS:          RELATED
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            12746.15 ms
+======================================================================
+
+2026-08-27 19:15:03 | INFO     | backend | Successfully stored entry in semantic cache (id: df75cc01)
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:15:13 | INFO     | backend | [HTTP] request_id=req_a56fbf96e78f POST /api/chat/stream -> 200 (1.03ms)
+INFO:     127.0.0.1:58523 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 19:15:13 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=4 is_followup=False topic_shift=True topic='tech stack' entities=['tech stack']
+2026-08-27 19:15:13 | INFO     | backend | [QUERY_RESOLUTION] query='what is the tech stack' resolved='what is the tech stack' confidence=0.90 cues='Distinct new topic detected without referential pronouns or continuation cues'
+2026-08-27 19:15:13 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+2026-08-27 19:15:13 | INFO     | backend | Semantic cache MISS: similarity score 0.5255 < threshold 0.9500 (dist: 0.4745, latency: 35.97ms)
+2026-08-27 19:15:13 | INFO     | backend | Executing dense retrieval for query: what is the tech stack
+2026-08-27 19:15:13 | INFO     | backend | Dense retrieve: computing embedding for what is the tech stack
+2026-08-27 19:15:13 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-27 19:15:13 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-27 19:15:13 | INFO     | backend | Executing BM25 retrieval for query: what is the tech stack
+2026-08-27 19:15:13 | INFO     | backend | BM25 retrieval complete
+2026-08-27 19:15:13 | INFO     | backend | Starting CrossEncoder prediction for 8 pairs...
+2026-08-27 19:15:14 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-27 19:15:14 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=DIRECT monotonic=DIRECT rationale='Single turn evaluation'
+INFO:     127.0.0.1:58368 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:15:18 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    what is the tech stack
+INTENT:                   factual
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Browserbase tool
+TEXT_CANDIDATES:          12
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      1
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            internal_page_index=59 physical_page_number=60 display_page_number=60
+VISUAL_ASSET:             NONE
+VISION_STATUS:            N/A
+EVIDENCE_STATUS:          DIRECT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            4359.45 ms
+======================================================================
+
+2026-08-27 19:15:18 | INFO     | backend | Successfully stored entry in semantic cache (id: 54ace81f)
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:02 | INFO     | backend | [HTTP] request_id=req_b2693bda8dac POST /api/chat/stream -> 200 (1.95ms)
+INFO:     127.0.0.1:58523 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 19:16:02 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=5 is_followup=False topic_shift=True topic='how can i create financila analyst' entities=['create financila analyst']
+2026-08-27 19:16:02 | INFO     | backend | [QUERY_RESOLUTION] query='how can i create financila analyst' resolved='how can i create financila analyst' confidence=0.90 cues='Distinct new topic detected without referential pronouns or continuation cues'
+2026-08-27 19:16:02 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+2026-08-27 19:16:02 | INFO     | backend | Semantic cache MISS: similarity score 0.6069 < threshold 0.9500 (dist: 0.3931, latency: 28.95ms)
+2026-08-27 19:16:02 | INFO     | backend | Executing dense retrieval for query: how can i create financila analyst
+2026-08-27 19:16:02 | INFO     | backend | Dense retrieve: computing embedding for how can i create financila analyst
+2026-08-27 19:16:02 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-27 19:16:02 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-27 19:16:02 | INFO     | backend | Executing BM25 retrieval for query: how can i create financila analyst
+2026-08-27 19:16:02 | INFO     | backend | BM25 retrieval complete
+2026-08-27 19:16:02 | INFO     | backend | Starting CrossEncoder prediction for 16 pairs...
+2026-08-27 19:16:03 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-27 19:16:03 | INFO     | backend | Evidence Sufficiency Gate: Missing required evidence types (code_implementation) for intent 'implementation'. Continuation cues detected: none. -> Inspecting pages [54, 55, 56, 57]
+2026-08-27 19:16:03 | INFO     | backend | Skipping lazy vision for query 'how can i create financila analyst': evidence is incomplete, but no visual asset, continuation cue, or explicit visual request exists.
+2026-08-27 19:16:03 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=RELATED monotonic=RELATED rationale='Single turn evaluation'
+INFO:     127.0.0.1:60024 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60024 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60024 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:12 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    how can i create financila analyst
+INTENT:                   implementation
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Browserbase tool
+TEXT_CANDIDATES:          25
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      1
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            internal_page_index=54 physical_page_number=55 display_page_number=55
+VISUAL_ASSET:             NONE
+VISION_STATUS:            SKIPPED_NO_VISUAL_SIGNAL
+EVIDENCE_STATUS:          RELATED
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            9494.73 ms
+======================================================================
+
+2026-08-27 19:16:12 | INFO     | backend | Successfully stored entry in semantic cache (id: 2e1a92d6)
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:24 | INFO     | backend | [HTTP] request_id=req_587413733856 POST /api/chat/stream -> 200 (1.27ms)
+INFO:     127.0.0.1:58523 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 19:16:24 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=6 is_followup=False topic_shift=True topic='can u tell me the work flo' entities=[]
+2026-08-27 19:16:24 | INFO     | backend | [QUERY_RESOLUTION] query='can u tell me the work flo' resolved='can u tell me the work flo' confidence=0.90 cues='Distinct new topic detected without referential pronouns or continuation cues'
+2026-08-27 19:16:24 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+2026-08-27 19:16:24 | INFO     | backend | Semantic cache MISS: similarity score 0.6281 < threshold 0.9500 (dist: 0.3719, latency: 28.68ms)
+2026-08-27 19:16:24 | INFO     | backend | Executing dense retrieval for query: can u tell me the work flo
+2026-08-27 19:16:24 | INFO     | backend | Dense retrieve: computing embedding for can u tell me the work flo
+2026-08-27 19:16:24 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-27 19:16:24 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-27 19:16:24 | INFO     | backend | Executing BM25 retrieval for query: can u tell me the work flo
+2026-08-27 19:16:24 | INFO     | backend | BM25 retrieval complete
+2026-08-27 19:16:24 | INFO     | backend | Starting CrossEncoder prediction for 8 pairs...
+2026-08-27 19:16:24 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-27 19:16:24 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=DIRECT monotonic=DIRECT rationale='Single turn evaluation'
+INFO:     127.0.0.1:51935 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51935 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51935 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:30 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    can u tell me the work flo
+INTENT:                   factual
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Types of Contexts for AI
+TEXT_CANDIDATES:          12
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      1
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            internal_page_index=167 physical_page_number=168 display_page_number=167
+VISUAL_ASSET:             NONE
+VISION_STATUS:            N/A
+EVIDENCE_STATUS:          DIRECT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            6782.47 ms
+======================================================================
+
+2026-08-27 19:16:30 | INFO     | backend | Successfully stored entry in semantic cache (id: 49570b41)
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:36 | INFO     | backend | [HTTP] request_id=req_b504a0169f90 POST /api/chat/session/session_0k2k8r3_1787835761540/clear -> 200 (1.23ms)
+INFO:     127.0.0.1:58523 - "POST /api/chat/session/session_0k2k8r3_1787835761540/clear HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58523 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:40 | INFO     | backend | [HTTP] request_id=req_842e348e1d6d GET /api/documents -> 200 (4.63ms)
+INFO:     127.0.0.1:53332 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 19:16:40 | INFO     | backend | [HTTP] request_id=req_0afa0fc37f5c GET /api/documents -> 200 (1.12ms)
+INFO:     127.0.0.1:53332 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59183 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53332 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:40 | INFO     | backend | [HTTP] request_id=req_dc4056f52aa3 GET /api/documents -> 200 (1.52ms)
+INFO:     127.0.0.1:59183 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59183 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:40 | INFO     | backend | [HTTP] request_id=req_52289978d894 GET /api/documents -> 200 (1.55ms)
+INFO:     127.0.0.1:59183 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59183 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_2231bdcca578 GET /api/documents -> 200 (5.38ms)
+INFO:     127.0.0.1:61103 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_d34068a2fad5 GET /api/models -> 200 (1331.25ms)
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_72b72bd58d0b GET /api/documents -> 200 (3.12ms)
+INFO:     127.0.0.1:61103 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_6bc6228c79e7 GET /api/models -> 200 (41.11ms)
+INFO:     127.0.0.1:59183 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_2d925e568745 GET /api/models -> 200 (11.12ms)
+INFO:     127.0.0.1:59183 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_ae8360a30e87 GET /api/models -> 200 (342.90ms)
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_67562af8adc3 GET /api/models -> 200 (20.38ms)
+INFO:     127.0.0.1:59183 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60155 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 19:16:41 | INFO     | backend | [HTTP] request_id=req_20387a403d5c GET /api/models -> 200 (12.92ms)
+INFO:     127.0.0.1:61103 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59183 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59183 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK

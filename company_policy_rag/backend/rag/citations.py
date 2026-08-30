@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Any
 
 from backend.models.rag import Citation, ScoredChunk
 from backend.utils.section_tracker import is_noise_line
@@ -137,10 +136,12 @@ class CitationEngine:
         answer_text: str,
         generation_chunks: list[ScoredChunk],
         user_query: str | None = None,
+        max_citations: int | None = None,
     ) -> list[Citation]:
         """Map answer text [Source N] tags or relevance scores to Citation models."""
         if not generation_chunks:
             return []
+        citation_limit = max(1, int(max_citations)) if max_citations is not None else 3
 
         cited_indices = self.extract_source_tags(answer_text)
         citations: list[Citation] = []
@@ -164,9 +165,22 @@ class CitationEngine:
             if not filtered:
                 filtered = sorted(generation_chunks, key=lambda c: c.score, reverse=True)[:1]
 
-            for sc in filtered[:3]:
+            for sc in filtered[:citation_limit]:
                 idx = sc.rank if sc.rank is not None else 1
                 cit = self._build_citation_from_chunk(idx, sc, selection_mode)
                 citations.append(cit)
 
-        return citations
+        # Collapse duplicate uploads that contain the same passage. Prefer the
+        # first (highest-ranked) citation so the UI does not present identical
+        # evidence as multiple independent sources.
+        deduped: list[Citation] = []
+        seen_passages: set[str] = set()
+        for citation in citations:
+            normalized = re.sub(r"\s+", " ", (citation.snippet or "")).strip().casefold()
+            passage_key = normalized if len(normalized) >= 80 else f"{citation.chunk_id}:{normalized}"
+            if passage_key in seen_passages:
+                continue
+            seen_passages.add(passage_key)
+            deduped.append(citation)
+
+        return deduped if max_citations is None else deduped[:citation_limit]

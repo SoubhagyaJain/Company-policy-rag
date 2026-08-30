@@ -33,13 +33,11 @@ from backend.models.telemetry_models import (
     SubsystemStatus,
     TextModelTelemetry,
     TokenTelemetry,
-    VisionFailureRecord,
     VisionTelemetry,
 )
 from backend.services.telemetry_db import TelemetryDB
-from backend.utils.logging import logger
 from src.config import settings
-from src.ollama_client import probe_ollama_tags, probe_vision_model_status
+from src.ollama_client import probe_ollama_tags
 
 
 class TelemetryService:
@@ -107,7 +105,7 @@ class TelemetryService:
         visual_type: str,
         status: str,  # SUCCESS | TIMEOUT | ERROR | CACHE_HIT
         duration_ms: float,
-        model_name: str = "qwen2.5vl:7b",
+        model_name: str = "Qwen3-VL-2B-Instruct",
         request_id: str | None = None,
         message: str | None = None,
     ) -> None:
@@ -379,12 +377,12 @@ class TelemetryService:
             )
         else:
             grounding_data = GroundingTelemetry(
-                supported_claims_pct=100.0,
-                unsupported_claims_pct=0.0,
-                inferred_claims_pct=0.0,
+                supported_claims_pct=None,
+                unsupported_claims_pct=None,
+                inferred_claims_pct=None,
                 citation_count=len(rag_response.citations),
-                citation_coverage_pct=100.0 if rag_response.citations else None,
-                grounding_status=GroundingStatus.GROUNDED,
+                citation_coverage_pct=None,
+                grounding_status=GroundingStatus.NOT_APPLICABLE,
             )
 
         # Stage timings map
@@ -409,7 +407,7 @@ class TelemetryService:
         prompt_tok = rag_response.token_usage.get("prompt_tokens", 0)
         comp_tok = rag_response.token_usage.get("completion_tokens", 0)
         tot_tok = prompt_tok + comp_tok
-        duration_sec = max(0.001, (t.execution_time_ms if t else 100.0) / 1000.0)
+        duration_sec = max(0.001, (t.execution_time_ms if t else rag_response.latency_ms) / 1000.0)
         tps = round(comp_tok / duration_sec, 1) if comp_tok > 0 else None
 
         req_id = request_id or getattr(rag_response, "id", f"req_{rag_response.id.replace('resp_', '')}")
@@ -425,7 +423,7 @@ class TelemetryService:
             rewritten_query=t.rewritten_query if t else None,
             sub_queries=t.sub_queries if t else [],
             query_type=t.query_type if t else "factual",
-            routing_confidence=t.routing_confidence if t else 1.0,
+            routing_confidence=t.routing_confidence if t else None,
             retrieval_strategy=t.retrieval_strategy if t else "balanced_hybrid",
             retrieval_required=retrieval_required,
             conversational_bypass=conversational_bypass,
@@ -436,7 +434,7 @@ class TelemetryService:
             anchor_section=t.anchor_section if t else None,
             section_expansion_used=t.section_expansion if t else False,
             vision_used=t.vision_fallback if t else False,
-            vision_model=t.vision_model if t else "qwen2.5vl:7b",
+            vision_model=t.vision_model if t else str(settings.vision_model),
             vision_cache_status=t.vision_cache_status if t else "N/A",
             evidence_items=evidence_items,
             evidence_text_count=text_cnt,
@@ -445,7 +443,7 @@ class TelemetryService:
             evidence_table_count=tab_cnt,
             grounding=grounding_data,
             faithfulness_passed=t.faithfulness_passed if t else True,
-            verification_score=t.verification_score if t else 1.0,
+            verification_score=t.verification_score if t else None,
             retry_count=t.retry_count if t else 0,
             retry_reasons=t.retry_reasons if t else [],
             cache_hit=t.cache_hit if t else False,
@@ -502,6 +500,11 @@ class TelemetryService:
             verification_score=record.verification_score,
             retry_count=record.retry_count,
             retry_reasons=record.retry_reasons,
+            response_mode=t.response_mode if t else "standard",
+            retrieval_top_k=t.retrieval_top_k if t else 0,
+            rerank_top_k=t.rerank_top_k if t else 0,
+            context_tokens=t.context_tokens if t else 0,
+            generation_max_tokens=t.generation_max_tokens if t else 0,
         )
         # The canonical record already updated counters. Keep the legacy view
         # without counting the same request a second time.
@@ -552,8 +555,13 @@ class TelemetryService:
                 details["text_model"] = f"Model '{text_model}' not found in Ollama tags"
 
         # 7. Vision Model Probe
-        vision_model = getattr(settings, "vision_model", "qwen2.5vl:7b")
-        vis_ready, vis_msg = probe_vision_model_status(vision_model)
+        vision_model = getattr(settings, "vision_model", "Qwen3-VL-2B-Instruct")
+        try:
+            from backend.vision.hf_vision_client import HFVisionClient
+
+            vis_ready, vis_msg = HFVisionClient.get_instance().readiness()
+        except Exception as exc:
+            vis_ready, vis_msg = False, f"HF vision readiness check failed: {exc}"
         vision_status = SubsystemStatus.HEALTHY if vis_ready else SubsystemStatus.DEGRADED
         details["vision_model"] = vis_msg
 
@@ -944,6 +952,21 @@ class TelemetryService:
             recent_traces=traces,
             recent_incidents=incidents,
             time_series=time_series,
+            total_queries=query_metrics.total_queries,
+            avg_latency_ms=query_metrics.avg_latency_ms,
+            avg_ttft_ms=query_metrics.avg_ttft_ms,
+            p95_latency_ms=query_metrics.p95_latency_ms,
+            token_usage={
+                "prompt_tokens": token_telem.total_prompt_tokens,
+                "completion_tokens": token_telem.total_completion_tokens,
+                "total_tokens": token_telem.total_tokens,
+            },
+            active_documents=ing_telem.documents_processed,
+            indexed_chunks=ing_telem.chunks_indexed,
+            score_distributions={
+                "similarity_avg": retrieval_quality.avg_rerank_score,
+                "rerank_avg": retrieval_quality.avg_rerank_score,
+            },
         )
 
     # ── Backward Compatibility with Existing Route / Tests ────

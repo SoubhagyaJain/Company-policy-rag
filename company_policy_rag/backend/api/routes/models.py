@@ -44,10 +44,14 @@ def get_available_models() -> ModelListResponse:
             type="llm" if item["id"] in chat_models else "embedding" if "embed" in item["id"].lower() else "reranker",
             loaded=True,
             is_active=(item["id"] == active_name),
+            family=item.get("family"),
+            parameter_size=item.get("parameter_size"),
+            quantization=item.get("quantization"),
+            badges=item.get("badges") or [],
         )
         responses.append(info)
 
-    vision_model_name = getattr(settings, "vision_model", "qwen2.5vl:7b")
+    vision_model_name = getattr(settings, "vision_model", "Qwen3-VL-2B-Instruct")
     vision_on = getattr(settings, "vision_enabled", True)
     return ModelListResponse(
         active_model=active_name,

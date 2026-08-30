@@ -5,6 +5,9 @@
 
 document.addEventListener('DOMContentLoaded', () => {
 
+  requestAnimationFrame(() => document.body.classList.add('is-ready'));
+  if (window.lucide) window.lucide.createIcons();
+
   // ── Audio Feedback System (Web Audio API) ──────────────────
   let audioCtx = null;
   let isSoundEnabled = false;
@@ -102,6 +105,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }, duration);
   }
 
+  // ── Interview Pitch Copy Action ────────────────────────────
+  document.querySelectorAll('.copy-defense-btn').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const target = document.getElementById(button.dataset.copyTarget || '');
+      if (!target) return;
+      try {
+        await navigator.clipboard.writeText(target.innerText.trim());
+        button.classList.add('copied');
+        button.innerHTML = '<span aria-hidden="true">✓</span> Copied';
+        showToast('Interview pitch copied');
+        setTimeout(() => {
+          button.classList.remove('copied');
+          button.innerHTML = '<i data-lucide="copy" aria-hidden="true"></i> Copy pitch';
+          if (window.lucide) window.lucide.createIcons();
+        }, 1800);
+      } catch (error) {
+        showToast('Select the pitch text to copy');
+      }
+    });
+  });
+
   // ── Light / Dark Mode Toggle ──────────────────────────────
   const themeToggleBtn = document.getElementById('themeToggle');
   const hudThemeToggleBtn = document.getElementById('hudThemeToggle');
@@ -118,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     document.body.classList.toggle('dark-theme', theme === 'dark');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#090B0D' : '#F3F5F7');
     if (themeToggleBtn) {
       themeToggleBtn.setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`);
       themeToggleBtn.setAttribute('title', `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`);
@@ -143,165 +168,320 @@ document.addEventListener('DOMContentLoaded', () => {
   if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
   if (hudThemeToggleBtn) hudThemeToggleBtn.addEventListener('click', toggleTheme);
 
-  // ── Three.js 3D Neural Vector Embedding Scene ──────────────
+  // ── Three.js 3D Query-to-Evidence Pipeline ──────────────────
   (function initThreeJsHero() {
     const canvas = document.getElementById('heroCanvas3d');
-    if (!canvas || typeof THREE === 'undefined') return;
-
     const container = document.getElementById('hero3dWrapper');
-    let width = container ? container.clientWidth : 560;
-    let height = container ? container.clientHeight : 560;
+    const detail = document.getElementById('heroStageDetail');
+    if (!canvas || !container || typeof THREE === 'undefined') {
+      container?.classList.add('webgl-fallback');
+      return;
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const palette = {
+      query: 0x64a8f7,
+      retrieve: 0x38d6c3,
+      rank: 0xffb35c,
+      verify: 0xff7547,
+      output: 0xa78bfa
+    };
+    const stageCopy = {
+      query: ['01 / request', 'Query + conversation', 'Resolve intent, follow-ups, and evidence continuity.'],
+      retrieve: ['02 / recall', 'Hybrid retrieval', 'Dense meaning + BM25 exact terms, fused with RRF k=60.'],
+      rank: ['03 / precision', 'Rerank + expand', 'Cross-encode candidates, then restore parent and page context.'],
+      verify: ['04 / trust', 'Evidence gate + verification', 'Cite, score, retry, or return an explicit degraded state.']
+    };
+    const nodes = [
+      { id: 'query', label: 'QUERY', position: [-118, 18, 0], color: palette.query },
+      { id: 'retrieve', label: 'DENSE', position: [-54, 52, 6], color: palette.retrieve },
+      { id: 'retrieve', label: 'BM25', position: [-54, -30, -2], color: palette.retrieve },
+      { id: 'retrieve', label: 'RRF', position: [8, 14, 4], color: palette.retrieve },
+      { id: 'rank', label: 'RERANK', position: [68, 45, -4], color: palette.rank },
+      { id: 'rank', label: 'CONTEXT', position: [68, -28, 5], color: palette.rank },
+      { id: 'verify', label: 'VERIFY', position: [127, 12, 0], color: palette.verify },
+      { id: 'verify', label: 'ANSWER', position: [170, -44, -7], color: palette.output }
+    ];
+
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+    } catch (error) {
+      container.classList.add('webgl-fallback');
+      return;
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    renderer.outputEncoding = THREE.sRGBEncoding;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-    camera.position.z = 240;
+    const camera = new THREE.PerspectiveCamera(38, 1, 1, 900);
+    camera.position.set(18, 20, 355);
 
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const world = new THREE.Group();
+    world.scale.setScalar(0.70);
+    world.rotation.x = -0.08;
+    world.rotation.y = -0.05;
+    scene.add(world);
 
-    const group = new THREE.Group();
-    scene.add(group);
+    const nodeMeshes = [];
+    const themeMaterials = [];
+    const sharedNodeGeometry = new THREE.BoxGeometry(42, 24, 14, 2, 2, 1);
+    const sharedCoreGeometry = new THREE.IcosahedronGeometry(4.2, 1);
 
-    // Generate 160 interconnected neural vector nodes on a sphere
-    const particleCount = 160;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    const radius = 88;
+    nodes.forEach((node, index) => {
+      const nodeGroup = new THREE.Group();
+      nodeGroup.position.set(...node.position);
+      nodeGroup.userData = { ...node, index };
 
-    for (let i = 0; i < particleCount; i++) {
-      const phi = Math.acos(-1 + (2 * i) / particleCount);
-      const theta = Math.sqrt(particleCount * Math.PI) * phi;
+      const shellMaterial = new THREE.MeshBasicMaterial({
+        color: node.color,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false
+      });
+      const shell = new THREE.Mesh(sharedNodeGeometry, shellMaterial);
+      shell.userData = nodeGroup.userData;
+      nodeGroup.add(shell);
+      nodeMeshes.push(shell);
 
-      const x = radius * Math.cos(theta) * Math.sin(phi) + (Math.random() - 0.5) * 14;
-      const y = radius * Math.sin(theta) * Math.sin(phi) + (Math.random() - 0.5) * 14;
-      const z = radius * Math.cos(phi) + (Math.random() - 0.5) * 14;
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: node.color, transparent: true, opacity: 0.68 });
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(sharedNodeGeometry), edgeMaterial);
+      nodeGroup.add(edges);
 
-      positions[i * 3] = x;
-      positions[i * 3 + 1] = y;
-      positions[i * 3 + 2] = z;
+      const coreMaterial = new THREE.MeshBasicMaterial({ color: node.color });
+      const core = new THREE.Mesh(sharedCoreGeometry, coreMaterial);
+      core.position.x = -13;
+      nodeGroup.add(core);
+
+      const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-5, 5, 7.4),
+        new THREE.Vector3(13, 5, 7.4),
+        new THREE.Vector3(-5, 0, 7.4),
+        new THREE.Vector3(8, 0, 7.4),
+        new THREE.Vector3(-5, -5, 7.4),
+        new THREE.Vector3(4, -5, 7.4)
+      ]);
+      const ticks = new THREE.LineSegments(tickGeometry, edgeMaterial);
+      nodeGroup.add(ticks);
+
+      themeMaterials.push(shellMaterial, edgeMaterial);
+      world.add(nodeGroup);
+    });
+
+    const nodePosition = (index) => new THREE.Vector3(...nodes[index].position);
+    const routeDefinitions = [
+      [0, 1, 3, 4, 6, 7],
+      [0, 2, 3, 5, 6, 7]
+    ];
+    const routeCurves = routeDefinitions.map((route, routeIndex) => {
+      const curve = new THREE.CatmullRomCurve3(route.map(nodePosition), false, 'catmullrom', 0.16);
+      const tubeMaterial = new THREE.MeshBasicMaterial({
+        color: routeIndex === 0 ? palette.query : palette.retrieve,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false
+      });
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 128, 0.7, 6, false), tubeMaterial);
+      world.add(tube);
+      themeMaterials.push(tubeMaterial);
+      return curve;
+    });
+
+    const packetGeometry = new THREE.SphereGeometry(2.25, 10, 10);
+    const packets = Array.from({ length: 10 }, (_, index) => {
+      const material = new THREE.MeshBasicMaterial({ color: index % 2 ? palette.retrieve : palette.query });
+      const mesh = new THREE.Mesh(packetGeometry, material);
+      mesh.userData = { route: index % 2, offset: index / 10 };
+      world.add(mesh);
+      return mesh;
+    });
+
+    const ambientGeometry = new THREE.BufferGeometry();
+    const ambientPositions = new Float32Array(120 * 3);
+    for (let i = 0; i < ambientPositions.length; i += 3) {
+      ambientPositions[i] = (Math.random() - 0.5) * 370;
+      ambientPositions[i + 1] = (Math.random() - 0.5) * 190;
+      ambientPositions[i + 2] = (Math.random() - 0.5) * 110 - 28;
+    }
+    ambientGeometry.setAttribute('position', new THREE.BufferAttribute(ambientPositions, 3));
+    const ambientMaterial = new THREE.PointsMaterial({ color: 0x6f8290, size: 1.15, transparent: true, opacity: 0.32 });
+    const ambientPoints = new THREE.Points(ambientGeometry, ambientMaterial);
+    world.add(ambientPoints);
+    themeMaterials.push(ambientMaterial);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2(8, 8);
+    let activeStage = 'query';
+    let targetTiltX = world.rotation.x;
+    let targetTiltY = world.rotation.y;
+    let isVisible = true;
+
+    function setActiveStage(stageId) {
+      activeStage = stageCopy[stageId] ? stageId : 'query';
+      const copy = stageCopy[activeStage];
+      if (detail) {
+        detail.innerHTML = `<span class="hero-stage-detail-kicker">${copy[0]}</span><strong>${copy[1]}</strong><small>${copy[2]}</small>`;
+      }
+      document.querySelectorAll('[data-pipeline-stage]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.pipelineStage === activeStage);
+      });
+      nodeMeshes.forEach((mesh) => {
+        const selected = mesh.userData.id === activeStage;
+        mesh.material.opacity = selected ? 0.34 : 0.09;
+        mesh.scale.setScalar(selected ? 1.09 : 1);
+      });
     }
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    // Particle Points Material
-    const pointColor = currentTheme === 'dark' ? 0xE07A4B : 0xC4653A;
-    const pointMaterial = new THREE.PointsMaterial({
-      color: pointColor,
-      size: 3.5,
-      transparent: true,
-      opacity: 0.85
-    });
-    const pointsMesh = new THREE.Points(geometry, pointMaterial);
-    group.add(pointsMesh);
-
-    // Line Connections between close nodes
-    const lineIndices = [];
-    const maxDistance = 38;
-
-    for (let i = 0; i < particleCount; i++) {
-      for (let j = i + 1; j < particleCount; j++) {
-        const dx = positions[i * 3] - positions[j * 3];
-        const dy = positions[i * 3 + 1] - positions[j * 3 + 1];
-        const dz = positions[i * 3 + 2] - positions[j * 3 + 2];
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (dist < maxDistance) {
-          lineIndices.push(i, j);
-        }
-      }
+    function inspectPointer(event) {
+      const bounds = canvas.getBoundingClientRect();
+      pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+      pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+      targetTiltY = (pointer.x * 0.11) - 0.05;
+      targetTiltX = (-pointer.y * 0.07) - 0.08;
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObjects(nodeMeshes, false)[0];
+      if (hit?.object?.userData?.id) setActiveStage(hit.object.userData.id);
     }
 
-    const lineGeometry = new THREE.BufferGeometry();
-    lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    lineGeometry.setIndex(lineIndices);
-
-    const lineColor = currentTheme === 'dark' ? 0x4A90E2 : 0x2C6B92;
-    const lineMaterial = new THREE.LineBasicMaterial({
-      color: lineColor,
-      transparent: true,
-      opacity: currentTheme === 'dark' ? 0.3 : 0.2
+    canvas.addEventListener('pointermove', inspectPointer, { passive: true });
+    canvas.addEventListener('pointerleave', () => {
+      pointer.set(8, 8);
+      targetTiltX = -0.08;
+      targetTiltY = -0.05;
     });
-    const lineMesh = new THREE.LineSegments(lineGeometry, lineMaterial);
-    group.add(lineMesh);
-
-    // Core pulsing inner wireframe
-    const coreGeo = new THREE.IcosahedronGeometry(42, 1);
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: currentTheme === 'dark' ? 0xE07A4B : 0xC4653A,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.25
+    canvas.addEventListener('keydown', (event) => {
+      const orderedStages = Object.keys(stageCopy);
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      const nextIndex = (orderedStages.indexOf(activeStage) + direction + orderedStages.length) % orderedStages.length;
+      setActiveStage(orderedStages[nextIndex]);
     });
-    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    group.add(coreMesh);
-
-    // Mouse Interaction
-    let targetRotationX = 0;
-    let targetRotationY = 0;
-    let isDragging = false;
-    let prevMouseX = 0;
-    let prevMouseY = 0;
-
-    window.addEventListener('mousemove', (e) => {
-      const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-      const mouseY = (e.clientY / window.innerHeight) * 2 - 1;
-      targetRotationY = mouseX * 0.6;
-      targetRotationX = mouseY * 0.4;
+    document.querySelectorAll('[data-pipeline-stage]').forEach((button) => {
+      button.addEventListener('click', () => setActiveStage(button.dataset.pipelineStage));
     });
 
-    canvas.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      prevMouseX = e.clientX;
-      prevMouseY = e.clientY;
-    });
+    function resizeRenderer() {
+      const width = Math.max(container.clientWidth, 1);
+      const height = Math.max(container.clientHeight, 1);
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+    const resizeObserver = new ResizeObserver(resizeRenderer);
+    resizeObserver.observe(container);
+    resizeRenderer();
 
-    window.addEventListener('mouseup', () => { isDragging = false; });
-    window.addEventListener('mousemove', (e) => {
-      if (isDragging) {
-        const deltaX = e.clientX - prevMouseX;
-        const deltaY = e.clientY - prevMouseY;
-        group.rotation.y += deltaX * 0.008;
-        group.rotation.x += deltaY * 0.008;
-        prevMouseX = e.clientX;
-        prevMouseY = e.clientY;
-      }
-    });
-
-    // Theme Update callback
     window.updateThreeJsTheme = (theme) => {
       const isDark = theme === 'dark';
-      pointMaterial.color.setHex(isDark ? 0xE07A4B : 0xC4653A);
-      lineMaterial.color.setHex(isDark ? 0x4A90E2 : 0x2C6B92);
-      lineMaterial.opacity = isDark ? 0.35 : 0.2;
-      coreMat.color.setHex(isDark ? 0xE07A4B : 0xC4653A);
-      coreMat.opacity = isDark ? 0.3 : 0.2;
+      ambientMaterial.color.setHex(isDark ? 0x6f8290 : 0x607686);
+      ambientMaterial.opacity = isDark ? 0.32 : 0.22;
+      renderer.toneMappingExposure = isDark ? 1 : 0.88;
     };
+    window.updateThreeJsTheme(currentTheme);
 
-    // Animation Loop
-    let clock = new THREE.Clock();
+    if ('IntersectionObserver' in window) {
+      const sceneObserver = new IntersectionObserver(([entry]) => { isVisible = entry.isIntersecting; }, { threshold: 0.05 });
+      sceneObserver.observe(container);
+    }
+
+    const clock = new THREE.Clock();
+    let animationFrame;
     function animate() {
-      requestAnimationFrame(animate);
+      animationFrame = requestAnimationFrame(animate);
+      if (!isVisible) return;
       const elapsed = clock.getElapsedTime();
-
-      group.rotation.y += 0.0025;
-      group.rotation.x += (targetRotationX - group.rotation.x) * 0.05;
-      group.rotation.y += (targetRotationY - group.rotation.y) * 0.05;
-
-      coreMesh.rotation.y = -elapsed * 0.15;
-      coreMesh.rotation.x = elapsed * 0.1;
-
+      const motionScale = prefersReducedMotion.matches ? 0 : 1;
+      world.rotation.x += (targetTiltX - world.rotation.x) * 0.045;
+      world.rotation.y += (targetTiltY - world.rotation.y) * 0.045;
+      packets.forEach((packet, index) => {
+        const progress = (packet.userData.offset + elapsed * 0.075 * motionScale) % 1;
+        packet.position.copy(routeCurves[packet.userData.route].getPointAt(progress));
+        const pulse = 1 + Math.sin(elapsed * 4 + index) * 0.12 * motionScale;
+        packet.scale.setScalar(pulse);
+      });
+      nodeMeshes.forEach((mesh, index) => {
+        mesh.rotation.y = Math.sin(elapsed * 0.75 + index * 0.45) * 0.035 * motionScale;
+      });
+      ambientPoints.rotation.z = elapsed * 0.008 * motionScale;
       renderer.render(scene, camera);
     }
+    setActiveStage('query');
     animate();
 
-    window.addEventListener('resize', () => {
-      if (!container) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+    window.addEventListener('beforeunload', () => {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      scene.traverse((object) => {
+        object.geometry?.dispose?.();
+        if (Array.isArray(object.material)) object.material.forEach((material) => material.dispose?.());
+        else object.material?.dispose?.();
+      });
+      renderer.dispose();
+    }, { once: true });
+  })();
+
+  // ── Interactive Architecture Atlas ─────────────────────────
+  (function initArchitectureAtlas() {
+    const atlas = document.getElementById('architectureAtlas');
+    if (!atlas) return;
+
+    const nodes = [...atlas.querySelectorAll('.arch-map-node, .arch-platform-chip')];
+    const viewButtons = [...atlas.querySelectorAll('[data-arch-view]')].filter((element) => element.tagName === 'BUTTON');
+    const inspectorIndex = document.getElementById('archInspectorIndex');
+    const inspectorTitle = document.getElementById('archInspectorTitle');
+    const inspectorBody = document.getElementById('archInspectorBody');
+    const inspectorContract = document.getElementById('archInspectorContract');
+    const inspectorPrompt = document.getElementById('archInspectorPrompt');
+
+    const interviewPrompts = {
+      runtime: 'Explain the boundary, the invariant it protects, and what data enters and leaves it.',
+      trust: 'Explain how this component prevents unsupported claims or preserves already-verified evidence.',
+      failure: 'Explain its failure signal, degraded path, and why the request can still terminate safely.'
+    };
+
+    function inspectNode(node, announce = false) {
+      if (!node) return;
+      nodes.forEach((candidate) => {
+        const selected = candidate === node;
+        candidate.classList.toggle('active', selected);
+        candidate.setAttribute('aria-pressed', String(selected));
+      });
+
+      const category = node.querySelector('small')?.textContent?.trim() || 'platform';
+      if (inspectorIndex) inspectorIndex.textContent = `${node.dataset.index || '--'} / ${category}`;
+      if (inspectorTitle) inspectorTitle.textContent = node.dataset.title || 'Architecture component';
+      if (inspectorBody) inspectorBody.textContent = node.dataset.body || '';
+      if (inspectorContract) inspectorContract.textContent = node.dataset.contract || '';
+      if (inspectorPrompt) inspectorPrompt.textContent = interviewPrompts[atlas.dataset.archView] || interviewPrompts.runtime;
+      if (announce) playUiSound('click');
+    }
+
+    function setView(view) {
+      const nextView = interviewPrompts[view] ? view : 'runtime';
+      atlas.dataset.archView = nextView;
+      viewButtons.forEach((button) => {
+        const selected = button.dataset.archView === nextView;
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-pressed', String(selected));
+      });
+      const activeNode = nodes.find((node) => node.classList.contains('active')) || nodes[0];
+      inspectNode(activeNode);
+      playUiSound('click');
+    }
+
+    nodes.forEach((node) => {
+      node.setAttribute('aria-pressed', String(node.classList.contains('active')));
+      node.addEventListener('click', () => inspectNode(node, true));
+      node.addEventListener('focus', () => inspectNode(node));
     });
+
+    viewButtons.forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.classList.contains('active')));
+      button.addEventListener('click', () => setView(button.dataset.archView));
+    });
+
+    inspectNode(nodes.find((node) => node.classList.contains('active')) || nodes[0]);
   })();
 
   // ── Animated Number Counters on Scroll ─────────────────────
@@ -784,10 +964,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // Index architecture nodes
-    document.querySelectorAll('.arch-node').forEach((node) => {
-      const title = node.querySelector('.arch-node-title')?.textContent.trim() || '';
-      const desc = node.querySelector('.arch-node-desc')?.textContent.trim() || '';
+    // Index visible architecture atlas nodes
+    document.querySelectorAll('.arch-map-node, .arch-platform-chip').forEach((node) => {
+      const title = node.dataset.title || '';
+      const desc = node.dataset.contract || node.dataset.body || '';
       if (title) {
         indexEntries.push({
           type: 'arch',
@@ -890,6 +1070,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (item.element.classList.contains('question-block')) {
         item.element.classList.remove('hidden');
         item.element.classList.add('open');
+      }
+
+      if (item.element.matches('.arch-map-node, .arch-platform-chip')) {
+        item.element.click();
       }
 
       item.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1309,4 +1493,3 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
-

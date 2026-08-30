@@ -59,6 +59,17 @@ class BaseChunker(ABC):
             elif raw_ct == "table" or doc_meta.has_tables:
                 final_content_type = ContentType.TABLE
 
+        image_assets = [dict(asset) for asset in (doc_meta.image_assets or [])]
+        visual_asset_ids = [
+            str(asset["asset_id"])
+            for asset in image_assets
+            if asset.get("asset_id")
+        ]
+        if doc_meta.extra.get("asset_id"):
+            extra_asset_id = str(doc_meta.extra["asset_id"])
+            if extra_asset_id not in visual_asset_ids:
+                visual_asset_ids.append(extra_asset_id)
+
         chunk_meta = ChunkMetadata(
             document_id=document.id,
             source_file=doc_meta.source_file,
@@ -73,6 +84,9 @@ class BaseChunker(ABC):
             topic_tags=list(doc_meta.topic_tags) if doc_meta.topic_tags else [],
             chunk_index=chunk_index,
             page_number=doc_meta.page_number,
+            internal_page_index=doc_meta.internal_page_index,
+            display_page_number=doc_meta.display_page_number,
+            page_label=doc_meta.page_label,
             section_title=final_sec_title,
             section_number=final_sec_num,
             section_path=final_sec_path,
@@ -82,7 +96,11 @@ class BaseChunker(ABC):
             parent_id=parent_id,
             child_ids=child_ids or [],
             content_type=final_content_type,
+            has_code=doc_meta.has_code or final_content_type == ContentType.CODE,
+            has_tables=doc_meta.has_tables or final_content_type == ContentType.TABLE,
             is_atomic=is_atomic,
+            image_assets=image_assets,
+            visual_asset_ids=visual_asset_ids,
             extra=dict(doc_meta.extra),
         )
 

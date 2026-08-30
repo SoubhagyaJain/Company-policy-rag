@@ -35,6 +35,10 @@ _POLICY_TOPIC_EXPANSIONS: list[tuple[tuple[str, ...], str]] = [
 
 _GUIDEBOOK_TOPIC_EXPANSIONS: list[tuple[tuple[str, ...], str]] = [
     (
+        ("voice rag", "voice agent", "speech rag", "real-time voice"),
+        "real-time voice RAG speech-to-text text-to-speech audio streaming",
+    ),
+    (
         ("building block", "building blocks", "six building"),
         "Role-playing Focus Tasks Tools Cooperation Guardrails Planning Memory six AI agents",
     ),
@@ -79,7 +83,7 @@ _GUIDEBOOK_TOPIC_EXPANSIONS: list[tuple[tuple[str, ...], str]] = [
         "manager agent coordinates sub-agents multi-agent pattern",
     ),
     (
-        ("rag", "agent workflow"),
+        ("agentic rag", "rag workflow", "retriever agent"),
         "Agentic RAG retriever agent workflow vector DB context",
     ),
 ]

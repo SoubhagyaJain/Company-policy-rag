@@ -80,7 +80,7 @@ def test_zero_ingestion_retries(temp_dir):
         attempt_counter += 1
         raise TimeoutError("Ollama vision completion timed out")
 
-    with patch("backend.vision.vision_service.execute_vision_completion", side_effect=mock_vision):
+    with patch("backend.vision.hf_vision_client.HFVisionClient.execute", side_effect=mock_vision):
         with patch.object(service, "is_available", return_value=(True, "Ready")):
             res = service.extract_from_image(
                 image_bytes=img_bytes,
@@ -115,7 +115,7 @@ def test_controlled_query_time_lazy_retries(temp_dir):
             raise TimeoutError("Ollama vision timed out on attempt 1")
         return "Recovered diagram description on retry."
 
-    with patch("backend.vision.vision_service.execute_vision_completion", side_effect=mock_vision):
+    with patch("backend.vision.hf_vision_client.HFVisionClient.execute", side_effect=mock_vision):
         with patch.object(service, "is_available", return_value=(True, "Ready")):
             # Retry policy is deployment-configurable; explicitly exercise the
             # one-retry mode instead of depending on a machine-local .env file.
@@ -132,6 +132,32 @@ def test_controlled_query_time_lazy_retries(temp_dir):
     assert res is not None
     assert res.text == "Recovered diagram description on retry."
     assert attempt_counter == 2, f"Expected 2 attempts for lazy retry, got {attempt_counter}."
+
+
+def test_hf_vision_call_receives_bounded_timeout_and_token_limit(temp_dir):
+    cache = VisionCacheManager(storage_dir=temp_dir / "bounded_cache")
+    asset_mgr = ImageAssetManager(storage_dir=temp_dir / "bounded_images")
+    service = VisionService(cache_manager=cache, image_asset_manager=asset_mgr)
+
+    dummy_img = Image.new("RGB", (200, 200), color="purple")
+    buf = io.BytesIO()
+    dummy_img.save(buf, format="PNG")
+
+    with patch.object(service, "is_available", return_value=(True, "Ready")):
+        with patch("backend.vision.hf_vision_client.HFVisionClient.execute", return_value="A diagram") as execute:
+            with patch.object(settings, "vision_num_predict", 96):
+                result = service.extract_from_image(
+                    image_bytes=buf.getvalue(),
+                    visual_type=VisualContentType.DIAGRAM_ARCHITECTURE,
+                    document_id="doc_bounded",
+                    page_number=2,
+                    timeout=7.0,
+                    is_query_time=True,
+                )
+
+    assert result is not None
+    assert execute.call_args.kwargs["timeout"] == 7.0
+    assert execute.call_args.kwargs["max_new_tokens"] == 96
 
 
 def test_negative_cache_ttl_and_bypass(temp_dir):
@@ -152,7 +178,7 @@ def test_negative_cache_ttl_and_bypass(temp_dir):
         call_counter += 1
         raise RuntimeError("GPU out of memory")
 
-    with patch("backend.vision.vision_service.execute_vision_completion", side_effect=mock_vision):
+    with patch("backend.vision.hf_vision_client.HFVisionClient.execute", side_effect=mock_vision):
         with patch.object(service, "is_available", return_value=(True, "Ready")):
             # First call -> fails and writes negative cache
             res1 = service.extract_from_image(
@@ -253,7 +279,7 @@ def test_image_survives_vision_model_failure(temp_dir):
 
     loader = PDFLoader(vision_service=service, image_asset_manager=asset_mgr)
 
-    with patch("backend.vision.vision_service.execute_vision_completion", side_effect=TimeoutError("Ollama vision timed out")):
+    with patch("backend.vision.hf_vision_client.HFVisionClient.execute", side_effect=TimeoutError("Ollama vision timed out")):
         raw_docs = loader.load(pdf_path, base_metadata={"document_id": "doc_survive_test"})
 
     assert len(raw_docs) >= 1

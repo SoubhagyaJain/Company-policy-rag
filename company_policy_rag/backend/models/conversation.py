@@ -116,6 +116,7 @@ class ConversationTurn(BaseModel):
     topic_shift: bool = False
     intent: str = "factual"
     answer_mode: str = "DIRECT"
+    response_mode: str = "standard"
     evidence_status: str = "DIRECT"
     active_topic: str | None = None
     active_entities: list[str] = Field(default_factory=list)
@@ -170,7 +171,13 @@ class ConversationRAGState(BaseModel):
         messages: list[dict[str, Any]] = []
         for turn in recent_turns:
             if turn.user_query:
-                messages.append({"role": "user", "content": turn.user_query})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": turn.user_query,
+                        "response_mode": turn.response_mode,
+                    }
+                )
             if turn.answer:
                 messages.append({"role": "assistant", "content": turn.answer})
         return messages
@@ -222,4 +229,3 @@ class ConversationStateManager:
         """Check if conversation_id exists in active cache."""
         with self._lock:
             return conversation_id in self._cache
-

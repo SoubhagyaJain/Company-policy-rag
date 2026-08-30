@@ -1,0 +1,125 @@
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] Observability telemetry fetch error: TypeError: Failed to fetch
+    at ApiClient.getObservabilitySummary (lib/api-client.ts:592:23)
+    at useObservability.useCallback[fetchTelemetry] (hooks/useObservability.ts:62:43)
+    at useObservability.useEffect.interval (hooks/useObservability.ts:122:7)
+  590 |
+  591 |     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
+> 592 |     const res = await fetch(url);
+      |                       ^
+  593 |     if (!res.ok) {
+  594 |       throw new Error(`Failed to fetch observability summary (${res.status})`);
+  595 |     } (hooks/useObservability.ts:90:15)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)
+[browser] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. (components/PolicyKnowledgeScene.tsx:186:23)

@@ -39,14 +39,15 @@ export type QueryCategory =
   | 'architecture';
 
 export type QueryCategoryType = QueryCategory | string;
+export type ResponseMode = 'compact' | 'standard' | 'detailed';
 
 export interface VerificationReport {
-  faithfulness: number;
-  completeness: number;
-  citation_coverage: number;
-  coherence: number;
-  composite_score: number;
-  passed: boolean;
+  faithfulness?: number;
+  completeness?: number;
+  citation_coverage?: number;
+  coherence?: number;
+  composite_score?: number;
+  passed?: boolean;
   critique?: string | null;
   missing_aspects?: string[];
   unsupported_claims?: string[];
@@ -64,8 +65,8 @@ export interface QueryTrace {
   expanded_queries?: string[];
   sub_queries?: string[];
   total_chunks_retrieved: number;
-  top_rerank_score: number;
-  rerank_latency_ms: number;
+  top_rerank_score?: number;
+  rerank_latency_ms?: number;
   total_latency_ms: number;
   prompt_tokens: number;
   completion_tokens: number;
@@ -114,6 +115,11 @@ export interface QueryTrace {
   ttft_ms?: number | null;
   error?: string | null;
   safe_context_preview?: string | null;
+  response_mode?: ResponseMode;
+  retrieval_top_k?: number;
+  rerank_top_k?: number;
+  context_tokens?: number;
+  generation_max_tokens?: number;
 }
 
 export * from '../types/thinking';
@@ -129,6 +135,8 @@ export interface ChatMessageData {
   thinking_events?: ThinkingEvent[];
   reasoning_summary?: ReasoningSummary;
   thinking_detail_level?: ThinkingDetailLevel;
+  response_mode?: ResponseMode;
+  model?: string;
   isStreaming?: boolean;
   error?: string;
 }
@@ -198,6 +206,22 @@ export interface DocumentItem {
   error?: string;
   failed_stage?: string;
   file_type?: string;
+  file_hash?: string;
+  pages_count?: number;
+  storage_state?: 'HEALTHY' | 'FILE_ONLY' | 'INDEX_ONLY' | string;
+}
+
+export interface DuplicateDocumentSummary {
+  dry_run: boolean;
+  duplicate_groups: number;
+  duplicates_found: number;
+  duplicates_removed: number;
+  groups: Array<{
+    file_hash: string;
+    filename: string;
+    keep_document_id: string;
+    duplicate_count: number;
+  }>;
 }
 
 export interface HealthStatus {
@@ -225,6 +249,7 @@ export interface ObservabilityData {
 }
 
 export interface FilterOptions {
+  chat_mode?: 'documents' | 'general';
   category?: string;
   source_file?: string;
   document_id?: string;

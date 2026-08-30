@@ -200,6 +200,11 @@ class RAGTrace(BaseModel):
     retrieved_candidate_count: int = 0
     post_rerank_count: int = 0
     final_context_count: int = 0
+    response_mode: str = "standard"
+    retrieval_top_k: int = 0
+    rerank_top_k: int = 0
+    context_tokens: int = 0
+    generation_max_tokens: int = 0
     execution_time_ms: float = 0.0
     stage_timings_ms: dict[str, float] = Field(default_factory=dict)
     fallback_reason: str = "none"
@@ -282,4 +287,3 @@ class RAGResponse(BaseModel):
     trace: RAGTrace
     model: str = Field(default="qwen2.5:7b")
     token_usage: dict[str, int] = Field(default_factory=dict)
-

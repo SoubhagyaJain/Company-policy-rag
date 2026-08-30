@@ -1,17 +1,7 @@
-import io
-import pytest
-from fastapi.testclient import TestClient
-from backend.api.main import app
-from backend.services.document_service import DocumentService
-from backend.vision.vision_service import VisionService, VisualContentType, VisionCircuitBreaker
+from backend.vision.vision_service import VisionCircuitBreaker
 from backend.vision.vision_cache import VisionCacheManager
-from backend.models.api_dto import IngestionStatusResponse
 
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-def test_fast_document_upload_and_ready_status(client):
+def test_fast_document_upload_and_ready_status(isolated_document_client):
     """Verify document uploads fast, marks READY immediately, and text RAG is active."""
     doc_content = b"""# Engineering Remote Work Policy
 
@@ -21,7 +11,7 @@ All engineering personnel are eligible for hybrid remote work up to 3 days per w
 2. Equipment & Security
 Company laptops must run endpoint protection and VPN at all times.
 """
-    response = client.post(
+    response = isolated_document_client.post(
         "/api/documents/upload",
         files={"file": ("Engineering_Remote_Policy.md", doc_content, "text/markdown")},
         data={"category": "Engineering"},
@@ -36,7 +26,7 @@ Company laptops must run endpoint protection and VPN at all times.
 
     # Verify status endpoint
     doc_id = data["document_id"]
-    status_res = client.get(f"/api/documents/{doc_id}/status")
+    status_res = isolated_document_client.get(f"/api/documents/{doc_id}/status")
     assert status_res.status_code == 200
     status_data = status_res.json()
     assert status_data["document_id"] == doc_id
@@ -45,13 +35,13 @@ Company laptops must run endpoint protection and VPN at all times.
     assert status_data["text_ready"] is True
     assert len(status_data["stages"]) > 0
 
-def test_document_retry_endpoint(client):
+def test_document_retry_endpoint(isolated_document_client):
     """Verify POST /api/documents/{doc_id}/retry successfully re-indexes the document."""
     doc_content = b"""# Code Review Standard 2026
 
 All pull requests require 2 passing approvals and CI green.
 """
-    response = client.post(
+    response = isolated_document_client.post(
         "/api/documents/upload",
         files={"file": ("Code_Review_Standard.txt", doc_content, "text/plain")},
         data={"category": "Engineering"},
@@ -60,7 +50,7 @@ All pull requests require 2 passing approvals and CI green.
     doc_id = response.json()["document_id"]
 
     # Call retry endpoint
-    retry_res = client.post(f"/api/documents/{doc_id}/retry")
+    retry_res = isolated_document_client.post(f"/api/documents/{doc_id}/retry")
     assert retry_res.status_code == 200
     retry_data = retry_res.json()
     assert retry_data["document_id"] == doc_id

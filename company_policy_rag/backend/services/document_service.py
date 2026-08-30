@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import threading
 import time
 import uuid
@@ -8,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.embeddings.embeddings import EmbeddingService
-from backend.embeddings.vector_store import ChromaVectorStore
+from backend.embeddings.vector_store import ChromaVectorStore, unpack_chroma_metadata
 from backend.ingestion.chunkers.adaptive_chunker import AdaptiveChunker
 from backend.ingestion.loaders.loader_factory import load_document
 from backend.ingestion.metadata_extractor import DocumentMetadataExtractor
@@ -23,13 +25,24 @@ from backend.models.api_dto import (
     StageProgress,
 )
 from backend.models.chunk import Chunk
+from backend.models.telemetry_models import SeverityLevel
 from backend.retrieval.bm25 import BM25SearchIndex
 from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
-from src.config import settings
+from backend.vision.vision_cache import VisionCacheManager
 
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
 EMBEDDING_BATCH_SIZE = 32
+
+
+class DuplicateDocumentError(ValueError):
+    """Raised when uploaded bytes already belong to an indexed document."""
+
+    def __init__(self, document_id: str, filename: str, file_hash: str) -> None:
+        self.document_id = document_id
+        self.filename = filename
+        self.file_hash = file_hash
+        super().__init__(f"This file is already indexed as '{filename}' ({document_id}).")
 
 
 class DocumentService:
@@ -46,6 +59,7 @@ class DocumentService:
         embedding_service: EmbeddingService | None = None,
         docstore: dict[str, Chunk] | None = None,
         image_asset_manager: ImageAssetManager | None = None,
+        vision_cache_manager: VisionCacheManager | None = None,
         storage_dir: str = "app/storage/uploads",
     ) -> None:
         self.vector_store = vector_store or ChromaVectorStore()
@@ -53,14 +67,258 @@ class DocumentService:
         self.embedding_service = embedding_service or EmbeddingService()
         self.docstore = docstore if docstore is not None else {}
         self.image_asset_manager = image_asset_manager or ImageAssetManager()
+        self.vision_cache_manager = vision_cache_manager or VisionCacheManager()
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self._hash_catalog_path = self.storage_dir.parent / "content_hashes.json"
 
         # In-memory document metadata & job registries
         self._documents: dict[str, dict[str, Any]] = {}
         self._ingestion_jobs: dict[str, IngestionStatusResponse] = {}
         self._stored_files: dict[str, Path] = {}
+        self._pending_hashes: dict[str, str] = {}
+        self._hash_catalog = self._load_hash_catalog()
         self._lock = threading.Lock()
+        self._restore_document_registry()
+
+    def _load_hash_catalog(self) -> dict[str, dict[str, Any]]:
+        if not self._hash_catalog_path.is_file():
+            return {}
+        try:
+            payload = json.loads(self._hash_catalog_path.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    @staticmethod
+    def _metadata_list(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return []
+
+    def _save_hash_catalog(self) -> None:
+        temp_path = self._hash_catalog_path.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(self._hash_catalog, indent=2, sort_keys=True), encoding="utf-8")
+        temp_path.replace(self._hash_catalog_path)
+
+    def _hash_stored_file(self, document_id: str, file_path: Path) -> str:
+        stat = file_path.stat()
+        cached = self._hash_catalog.get(document_id, {})
+        if (
+            cached.get("bytes") == stat.st_size
+            and cached.get("modified_ns") == stat.st_mtime_ns
+            and len(str(cached.get("sha256", ""))) == 64
+        ):
+            return str(cached["sha256"])
+
+        hasher = hashlib.sha256()
+        with file_path.open("rb") as file_handle:
+            while block := file_handle.read(1024 * 1024):
+                hasher.update(block)
+        digest = hasher.hexdigest()
+        self._hash_catalog[document_id] = {
+            "sha256": digest,
+            "bytes": stat.st_size,
+            "modified_ns": stat.st_mtime_ns,
+        }
+        return digest
+
+    def _restore_document_registry(self) -> None:
+        """Rebuild the UI document registry from the persistent vector index."""
+        aggregated: dict[str, dict[str, Any]] = {}
+        page_numbers: dict[str, set[str]] = {}
+        collection = getattr(self.vector_store, "_collection", None)
+        if collection is not None:
+            try:
+                result = collection.get(include=["documents", "metadatas"])
+                result_ids = result.get("ids", []) or []
+                result_documents = result.get("documents", []) or []
+                result_metadatas = result.get("metadatas", []) or []
+                for chunk_id, document_text, raw_meta in zip(
+                    result_ids,
+                    result_documents,
+                    result_metadatas,
+                ):
+                    meta = raw_meta or {}
+                    document_id = str(meta.get("document_id") or "").strip()
+                    if not document_id:
+                        continue
+                    restored_chunk = Chunk(
+                        id=str(chunk_id),
+                        text=str(document_text or ""),
+                        metadata=unpack_chroma_metadata(meta),
+                    )
+                    self.docstore[restored_chunk.id] = restored_chunk
+                    record = aggregated.setdefault(
+                        document_id,
+                        {
+                            "document_id": document_id,
+                            "filename": str(meta.get("source_file") or f"{document_id}.pdf"),
+                            "file_type": str(meta.get("document_type") or "pdf").lower(),
+                            "file_size_bytes": 0,
+                            "file_hash": str(meta.get("file_hash") or ""),
+                            "pages_count": 0,
+                            "storage_state": "INDEX_ONLY",
+                            "chunk_count": 0,
+                            "category": str(meta.get("category") or meta.get("extra_category") or "General"),
+                            "department": meta.get("department"),
+                            "effective_date": meta.get("effective_date"),
+                            "policy_id": meta.get("policy_id"),
+                            "key_entities": self._metadata_list(meta.get("key_entities")),
+                            "topic_tags": self._metadata_list(meta.get("topic_tags")),
+                            "created_at": datetime.now(UTC).isoformat(),
+                            "status": "READY",
+                            "progress": 100,
+                            "current_stage": "READY",
+                            "text_ready": True,
+                            "vision_status": "READY_ON_DEMAND",
+                            "vision_pages_processed": 0,
+                            "vision_pages_total": 0,
+                            "chunks": [],
+                        },
+                    )
+                    record["chunk_count"] += 1
+                    page_identity = meta.get("page_label") or meta.get("page_number") or meta.get("internal_page_index")
+                    if page_identity is not None:
+                        page_numbers.setdefault(document_id, set()).add(str(page_identity))
+
+                # BM25's local pickle may be absent even while Chroma is healthy.
+                # Rebuild it from the authoritative persisted chunks so lexical
+                # retrieval and adjacent-page expansion survive process restarts.
+                if self.docstore and not self.bm25_index.entries:
+                    self.bm25_index.build_index(list(self.docstore.values()))
+            except Exception as exc:
+                logger.warning("Could not restore document registry from vector index: %s", exc)
+
+        for file_path in self.storage_dir.glob("doc_*_*"):
+            if not file_path.is_file() or len(file_path.name) < 18:
+                continue
+            document_id = file_path.name[:16]
+            if not document_id.startswith("doc_") or file_path.name[16] != "_":
+                continue
+            filename = file_path.name[17:]
+            stat = file_path.stat()
+            record = aggregated.setdefault(
+                document_id,
+                {
+                    "document_id": document_id,
+                    "filename": filename,
+                    "file_type": file_path.suffix.lstrip(".").lower() or "unknown",
+                    "file_size_bytes": stat.st_size,
+                    "file_hash": "",
+                    "pages_count": 0,
+                    "storage_state": "FILE_ONLY",
+                    "chunk_count": 0,
+                    "category": "General",
+                    "department": None,
+                    "effective_date": None,
+                    "policy_id": None,
+                    "key_entities": [],
+                    "topic_tags": [],
+                    "created_at": datetime.fromtimestamp(stat.st_ctime, UTC).isoformat(),
+                    "status": "READY",
+                    "progress": 100,
+                    "current_stage": "READY",
+                    "text_ready": True,
+                    "vision_status": "READY_ON_DEMAND",
+                    "vision_pages_processed": 0,
+                    "vision_pages_total": 0,
+                    "chunks": [],
+                },
+            )
+            record["filename"] = filename
+            record["file_type"] = file_path.suffix.lstrip(".").lower() or record["file_type"]
+            record["file_size_bytes"] = stat.st_size
+            record["created_at"] = datetime.fromtimestamp(stat.st_ctime, UTC).isoformat()
+            record["file_hash"] = self._hash_stored_file(document_id, file_path)
+            record["pages_count"] = len(page_numbers.get(document_id, set()))
+            record["storage_state"] = "HEALTHY" if record["chunk_count"] > 0 else "FILE_ONLY"
+            self._stored_files[document_id] = file_path
+
+        self._documents.update(aggregated)
+        self._save_hash_catalog()
+        if aggregated:
+            logger.info("Restored %d documents into the document registry.", len(aggregated))
+
+    @staticmethod
+    def _canonical_duplicate_record(records: list[dict[str, Any]]) -> dict[str, Any]:
+        """Prefer the newest fully indexed copy, then the newest stored copy."""
+        return max(
+            records,
+            key=lambda record: (
+                int(record.get("chunk_count", 0) > 0),
+                str(record.get("created_at") or ""),
+                str(record.get("document_id") or ""),
+            ),
+        )
+
+    def get_duplicate_groups(self) -> list[dict[str, Any]]:
+        """Return byte-identical stored files grouped by their full SHA-256 digest."""
+        with self._lock:
+            records = [dict(record) for record in self._documents.values()]
+
+        by_hash: dict[str, list[dict[str, Any]]] = {}
+        for record in records:
+            file_hash = str(record.get("file_hash") or "")
+            document_id = str(record.get("document_id") or "")
+            file_path = self._stored_files.get(document_id)
+            if len(file_hash) == 64 and file_path is not None and file_path.is_file():
+                by_hash.setdefault(file_hash, []).append(record)
+
+        groups: list[dict[str, Any]] = []
+        for file_hash, group_records in by_hash.items():
+            if len(group_records) < 2:
+                continue
+            canonical = self._canonical_duplicate_record(group_records)
+            ordered = sorted(
+                group_records,
+                key=lambda record: (record["document_id"] != canonical["document_id"], record["created_at"]),
+            )
+            groups.append(
+                {
+                    "file_hash": file_hash,
+                    "filename": canonical["filename"],
+                    "keep_document_id": canonical["document_id"],
+                    "duplicate_count": len(group_records) - 1,
+                    "documents": [
+                        {
+                            "document_id": record["document_id"],
+                            "filename": record["filename"],
+                            "chunk_count": record.get("chunk_count", 0),
+                            "created_at": record.get("created_at"),
+                            "keep": record["document_id"] == canonical["document_id"],
+                        }
+                        for record in ordered
+                    ],
+                }
+            )
+        return sorted(groups, key=lambda group: str(group["filename"]).casefold())
+
+    def deduplicate_documents(self, dry_run: bool = True) -> dict[str, Any]:
+        """Preview or remove only exact-content duplicate documents."""
+        groups = self.get_duplicate_groups()
+        remove_ids = [
+            document["document_id"]
+            for group in groups
+            for document in group["documents"]
+            if not document["keep"]
+        ]
+        removed: list[dict[str, Any]] = []
+        if not dry_run:
+            for document_id in remove_ids:
+                result = self.delete_document(document_id)
+                if result:
+                    removed.append(result)
+        return {
+            "dry_run": dry_run,
+            "duplicate_groups": len(groups),
+            "duplicates_found": len(remove_ids),
+            "duplicates_removed": len(removed),
+            "groups": groups,
+            "removed": removed,
+        }
 
     def get_ingestion_status(self, document_id: str) -> IngestionStatusResponse | None:
         """Return real-time structured ingestion status for a document."""
@@ -402,6 +660,7 @@ class DocumentService:
 
             existing_chunks = list(self.bm25_index.entries) + chunks
             self.bm25_index.build_index(existing_chunks)
+            self.bm25_index.save()
             t_bm25 = round((time.perf_counter() - t_stage) * 1000, 2)
             self._update_job_stage(
                 document_id=document_id,
@@ -437,7 +696,9 @@ class DocumentService:
                 "filename": filename,
                 "file_type": file_type,
                 "file_size_bytes": file_size,
+                "file_hash": self._hash_catalog.get(document_id, {}).get("sha256", ""),
                 "pages_count": pages_count,
+                "storage_state": "HEALTHY",
                 "chunk_count": len(chunks),
                 "chunk_strategy": used_strategy,
                 "category": category,
@@ -547,6 +808,8 @@ class DocumentService:
                 filename=filename,
                 file_type=file_type,
                 file_size_bytes=file_size,
+                file_hash=doc_record["file_hash"],
+                pages_count=pages_count,
                 chunks_indexed=len(chunks),
                 chunk_strategy=used_strategy,
                 status="READY",
@@ -620,32 +883,55 @@ class DocumentService:
         if not filename or not content_bytes:
             raise ValueError("File content or filename cannot be empty.")
 
+        content_hash = hashlib.sha256(content_bytes).hexdigest()
         document_id = f"doc_{uuid.uuid4().hex[:12]}"
         safe_filename = Path(filename).name
         target_path = self.storage_dir / f"{document_id}_{safe_filename}"
-        target_path.write_bytes(content_bytes)
 
         with self._lock:
-            self._stored_files[document_id] = target_path
-            self._ingestion_jobs[document_id] = IngestionStatusResponse(
-                document_id=document_id,
-                job_id=f"job_{uuid.uuid4().hex[:10]}",
-                filename=filename,
-                status="TEXT_INDEXING",
-                progress=10,
-                current_stage="UPLOAD",
-                text_ready=False,
-                created_at=datetime.now(UTC).isoformat(),
-                updated_at=datetime.now(UTC).isoformat(),
-            )
+            for record in self._documents.values():
+                existing_id = str(record.get("document_id") or "")
+                existing_path = self._stored_files.get(existing_id)
+                if (
+                    record.get("file_hash") == content_hash
+                    and existing_path is not None
+                    and existing_path.is_file()
+                ):
+                    raise DuplicateDocumentError(existing_id, str(record.get("filename") or filename), content_hash)
+            pending_id = self._pending_hashes.get(content_hash)
+            if pending_id:
+                raise DuplicateDocumentError(pending_id, safe_filename, content_hash)
+            self._pending_hashes[content_hash] = document_id
 
-        return self._execute_ingestion_stages(
-            document_id=document_id,
-            filename=filename,
-            file_path=target_path,
-            category=category,
-            chunk_strategy=chunk_strategy,
-        )
+        try:
+            target_path.write_bytes(content_bytes)
+            self._hash_stored_file(document_id, target_path)
+            self._save_hash_catalog()
+
+            with self._lock:
+                self._stored_files[document_id] = target_path
+                self._ingestion_jobs[document_id] = IngestionStatusResponse(
+                    document_id=document_id,
+                    job_id=f"job_{uuid.uuid4().hex[:10]}",
+                    filename=filename,
+                    status="TEXT_INDEXING",
+                    progress=10,
+                    current_stage="UPLOAD",
+                    text_ready=False,
+                    created_at=datetime.now(UTC).isoformat(),
+                    updated_at=datetime.now(UTC).isoformat(),
+                )
+
+            return self._execute_ingestion_stages(
+                document_id=document_id,
+                filename=filename,
+                file_path=target_path,
+                category=category,
+                chunk_strategy=chunk_strategy,
+            )
+        finally:
+            with self._lock:
+                self._pending_hashes.pop(content_hash, None)
 
     def retry_document(self, document_id: str) -> IngestionStatusResponse:
         """Retry indexing for a previously uploaded document without re-uploading the file."""
@@ -694,9 +980,12 @@ class DocumentService:
         with self._lock:
             records = list(self._documents.values())
 
+        duplicate_groups = self.get_duplicate_groups()
+
         if category:
             records = [r for r in records if r.get("category") == category]
 
+        records.sort(key=lambda record: (str(record.get("filename", "")).casefold(), str(record.get("created_at", ""))))
         paginated = records[offset : offset + limit]
 
         summaries = [
@@ -705,8 +994,16 @@ class DocumentService:
                 filename=r["filename"],
                 file_type=r["file_type"],
                 file_size_bytes=r["file_size_bytes"],
+                file_hash=r.get("file_hash", ""),
+                pages_count=r.get("pages_count", 0),
+                storage_state=r.get("storage_state", "HEALTHY"),
                 chunk_count=r["chunk_count"],
                 category=r["category"],
+                department=r.get("department"),
+                effective_date=r.get("effective_date"),
+                policy_id=r.get("policy_id"),
+                topic_tags=r.get("topic_tags", []),
+                key_entities=r.get("key_entities", []),
                 created_at=r["created_at"],
                 status=r.get("status", "READY"),
                 progress=r.get("progress", 100),
@@ -720,7 +1017,12 @@ class DocumentService:
             for r in paginated
         ]
 
-        return DocumentListResponse(documents=summaries, total_count=len(records))
+        return DocumentListResponse(
+            documents=summaries,
+            total_count=len(records),
+            duplicate_groups=len(duplicate_groups),
+            duplicate_documents=sum(group["duplicate_count"] for group in duplicate_groups),
+        )
 
     def get_document_detail(self, document_id: str) -> DocumentDetailResponse | None:
         """Get full details and chunk metadata for a document."""
@@ -734,8 +1036,16 @@ class DocumentService:
             filename=r["filename"],
             file_type=r["file_type"],
             file_size_bytes=r["file_size_bytes"],
+            file_hash=r.get("file_hash", ""),
+            pages_count=r.get("pages_count", 0),
+            storage_state=r.get("storage_state", "HEALTHY"),
             chunk_count=r["chunk_count"],
             category=r["category"],
+            department=r.get("department"),
+            effective_date=r.get("effective_date"),
+            policy_id=r.get("policy_id"),
+            topic_tags=r.get("topic_tags", []),
+            key_entities=r.get("key_entities", []),
             created_at=r["created_at"],
             status=r.get("status", "READY"),
             progress=r.get("progress", 100),
@@ -762,6 +1072,7 @@ class DocumentService:
 
         # 2. Purge from BM25 Index
         self.bm25_index.remove_by_document_id(document_id)
+        self.bm25_index.save()
 
         # 3. Purge from Docstore
         chunk_ids_to_del = [
@@ -771,16 +1082,24 @@ class DocumentService:
         for cid in chunk_ids_to_del:
             self.docstore.pop(cid, None)
 
-        # 4. Purge from Registry & Job store
+        # 4. Purge derived image assets and visual response cache.
+        deleted_assets = self.image_asset_manager.delete_document_assets(document_id)
+        deleted_vision_cache = self.vision_cache_manager.delete_by_document_id(document_id)
+
+        # 5. Purge from Registry, job store, hash catalog, and every exact source-file match.
         with self._lock:
             self._documents.pop(document_id, None)
             self._ingestion_jobs.pop(document_id, None)
-            file_path = self._stored_files.pop(document_id, None)
-            if file_path and file_path.is_file():
-                try:
-                    file_path.unlink()
-                except Exception:
-                    pass
+            self._stored_files.pop(document_id, None)
+            self._hash_catalog.pop(document_id, None)
+            self._save_hash_catalog()
+
+        deleted_source_files = 0
+        storage_root = self.storage_dir.resolve()
+        for file_path in self.storage_dir.glob(f"{document_id}_*"):
+            if file_path.is_file() and file_path.resolve().parent == storage_root:
+                file_path.unlink()
+                deleted_source_files += 1
 
         logger.info("Deleted document id=%s, filename=%s (%d chunks purged)", document_id, filename, len(chunk_ids_to_del))
 
@@ -789,4 +1108,7 @@ class DocumentService:
             "document_id": document_id,
             "filename": filename,
             "deleted_chunks": len(chunk_ids_to_del),
+            "deleted_source_files": deleted_source_files,
+            "deleted_assets": deleted_assets,
+            "deleted_vision_cache_entries": deleted_vision_cache,
         }

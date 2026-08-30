@@ -175,6 +175,63 @@ class SemanticCacheManager:
                 else getattr(self.settings, "semantic_cache_threshold", 0.95)
             )
 
+            # Exact repeats should not pay for another embedding call. The entry
+            # id already isolates model, corpus, prompt, and retrieval context.
+            exact_hash = "|".join(
+                [
+                    _normalized_query(query_clean),
+                    model_name or "",
+                    effective_kb_version or "",
+                    effective_prompt_version,
+                    cache_context,
+                ]
+            )
+            exact_id = hashlib.sha256(exact_hash.encode("utf-8")).hexdigest()
+            exact_entry: dict[str, Any] | None = None
+            exact_metadata: dict[str, Any] | None = None
+            with self._lock:
+                exact_entry = self._memory_cache.get(exact_id)
+                if exact_entry is None and self._collection is not None:
+                    try:
+                        exact_result = self._collection.get(
+                            ids=[exact_id], include=["documents", "metadatas"]
+                        )
+                        if exact_result and exact_result.get("ids"):
+                            metadatas = exact_result.get("metadatas") or []
+                            if metadatas:
+                                exact_metadata = metadatas[0] or {}
+                    except Exception as exact_exc:
+                        logger.debug("Exact semantic cache lookup failed: %s", exact_exc)
+
+            if exact_entry is not None:
+                latency_ms = (time.perf_counter() - start_time) * 1000.0
+                return CachedResponse(
+                    answer=exact_entry["answer"],
+                    citations=exact_entry["citations"],
+                    similarity_score=1.0,
+                    distance=0.0,
+                    lookup_latency_ms=latency_ms,
+                    timestamp=float(exact_entry["timestamp"]),
+                    kb_version=exact_entry.get("kb_version"),
+                )
+
+            if exact_metadata is not None:
+                try:
+                    citations_data = json.loads(exact_metadata.get("citations_json", "[]"))
+                    exact_citations = [Citation(**c) for c in citations_data]
+                    latency_ms = (time.perf_counter() - start_time) * 1000.0
+                    return CachedResponse(
+                        answer=str(exact_metadata.get("answer", "")),
+                        citations=exact_citations,
+                        similarity_score=1.0,
+                        distance=0.0,
+                        lookup_latency_ms=latency_ms,
+                        timestamp=float(exact_metadata.get("timestamp", time.time())),
+                        kb_version=exact_metadata.get("kb_version") if "kb_version" in exact_metadata else None,
+                    )
+                except Exception as exact_parse_exc:
+                    logger.debug("Invalid exact semantic cache entry: %s", exact_parse_exc)
+
             query_embedding = self.embedding_service.embed_text(query_clean)
             if not query_embedding:
                 return None

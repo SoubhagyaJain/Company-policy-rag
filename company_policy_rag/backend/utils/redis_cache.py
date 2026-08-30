@@ -210,4 +210,15 @@ def get_redis_cache() -> RedisCache:
     return _redis_cache_instance
 
 
-redis_cache = get_redis_cache()
+class _LazyRedisCacheProxy:
+    """Preserve the module-level cache API without connecting during import."""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(get_redis_cache(), name)
+
+    def __repr__(self) -> str:
+        state = "initialized" if _redis_cache_instance is not None else "not initialized"
+        return f"<LazyRedisCacheProxy {state}>"
+
+
+redis_cache = _LazyRedisCacheProxy()

@@ -142,22 +142,22 @@ export function runTier2Tests(): TestResult[] {
     assert(html.includes('92%'), 'renders verification pill');
   });
 
-  test('B1.9: Handles undefined model name by providing fallback', () => {
+  test('B1.9: Handles undefined model name without claiming a concrete model', () => {
     const trace = mapTrace({
       trace_id: 'tr_no_model',
       model: undefined,
     });
-    assert(trace.model === 'FastAPI RAG', 'falls back to default model name');
+    assert(trace.model === 'Unknown', 'uses an explicit unknown model state');
   });
 
-  test('B1.10: Handles undefined latency metrics gracefully with 0 ms fallback', () => {
+  test('B1.10: Keeps unmeasured stage latency distinct from a measured zero', () => {
     const trace = mapTrace({
       trace_id: 'tr_no_latency',
       total_latency_ms: undefined,
       rerank_latency_ms: undefined,
     });
     assert(trace.total_latency_ms === 0, 'total latency fallback to 0');
-    assert(trace.rerank_latency_ms === 0, 'rerank latency fallback to 0');
+    assert(trace.rerank_latency_ms === undefined, 'rerank latency remains unmeasured');
   });
 
   // =========================================================================

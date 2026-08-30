@@ -72,8 +72,8 @@ def _make_chunk(
 
 def test_probe_vision_model_status_when_available():
     """Verify that when Ollama has the vision model installed, probe returns True."""
-    with patch("src.ollama_client.probe_ollama_tags", return_value=(True, ["qwen2.5:7b", "qwen2.5vl:7b", "nomic-embed-text"], None)):
-        is_ready, msg = probe_vision_model_status("qwen2.5vl:7b")
+    with patch("src.ollama_client.probe_ollama_tags", return_value=(True, ["qwen2.5:7b", "Qwen3-VL-2B-Instruct", "nomic-embed-text"], None)):
+        is_ready, msg = probe_vision_model_status("Qwen3-VL-2B-Instruct")
         assert is_ready is True
         assert "available locally" in msg
 
@@ -81,9 +81,9 @@ def test_probe_vision_model_status_when_available():
 def test_probe_vision_model_status_when_missing():
     """Verify that when the vision model is missing, probe returns False with the pull command."""
     with patch("src.ollama_client.probe_ollama_tags", return_value=(True, ["qwen2.5:7b", "nomic-embed-text"], None)):
-        is_ready, msg = probe_vision_model_status("qwen2.5vl:7b")
+        is_ready, msg = probe_vision_model_status("Qwen3-VL-2B-Instruct")
         assert is_ready is False
-        assert "ollama pull qwen2.5vl:7b" in msg
+        assert "ollama pull Qwen3-VL-2B-Instruct" in msg
 
 
 # ============================================================================
@@ -156,12 +156,12 @@ def test_vision_cache_hit_and_miss(tmp_path: Path):
     img_hash = VisionCacheManager.compute_image_hash(img_bytes)
 
     # 1. Miss on empty cache
-    assert cache.get(img_hash, vision_model="qwen2.5vl:7b") is None
+    assert cache.get(img_hash, vision_model="Qwen3-VL-2B-Instruct") is None
 
     # 2. Set cache entry
     cache.set(
         image_hash=img_hash,
-        vision_model="qwen2.5vl:7b",
+        vision_model="Qwen3-VL-2B-Instruct",
         extracted_text="class Agent:\n    pass",
         visual_type="code_screenshot",
         document_id="doc_1",
@@ -169,7 +169,7 @@ def test_vision_cache_hit_and_miss(tmp_path: Path):
     )
 
     # 3. Hit on subsequent request
-    cached = cache.get(img_hash, vision_model="qwen2.5vl:7b", document_id="doc_1", page_number=3)
+    cached = cache.get(img_hash, vision_model="Qwen3-VL-2B-Instruct", document_id="doc_1", page_number=3)
     assert cached is not None
     assert cached["extracted_text"] == "class Agent:\n    pass"
     assert cached["visual_type"] == "code_screenshot"

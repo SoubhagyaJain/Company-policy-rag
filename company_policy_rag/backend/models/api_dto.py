@@ -8,12 +8,13 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from backend.models.rag import Citation, RAGTrace
+from backend.rag.response_modes import ResponseMode
 
 
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=8000, description="User chat query (1-8000 chars)")
     session_id: str | None = Field(default=None, min_length=1, max_length=128, description="Session ID for conversation history")
-    model: str | None = Field(default="qwen2.5:7b", min_length=1, max_length=128, description="Selected LLM model (optional, defaults to active)")
+    model: str | None = Field(default="qwen2.5:7b", max_length=128, description="Selected LLM model; omitted, 'default', or blank uses the active model")
     grounding_mode: str | None = Field(default="balanced", description="balanced | strict")
     corpus_scope: str | None = Field(default="all", description="all | policy | guidebook")
     chat_mode: str | None = Field(default="direct", description="direct | agent")
@@ -26,6 +27,10 @@ class ChatRequest(BaseModel):
     enable_verification: bool | None = Field(default=None, description="Enable answer verification override")
     enable_routing: bool | None = Field(default=None, description="Enable query routing override")
     thinking_detail_level: str | None = Field(default="standard", description="off | compact | standard | detailed")
+    response_mode: ResponseMode = Field(
+        default="standard",
+        description="Answer depth applied before retrieval: compact | standard | detailed",
+    )
     stream: bool = Field(default=False, description="Enable SSE streaming mode")
 
 
@@ -52,6 +57,7 @@ class ChatResponse(BaseModel):
     verification: dict[str, Any] | None = None
     reasoning_summary: dict[str, Any] | None = None
     thinking_events: list[dict[str, Any]] = Field(default_factory=list)
+    response_mode: ResponseMode = "standard"
 
 
 class IngestionStatus(str, Enum):
@@ -116,6 +122,8 @@ class DocumentUploadResponse(BaseModel):
     filename: str
     file_type: str
     file_size_bytes: int
+    file_hash: str = ""
+    pages_count: int = 0
     chunks_indexed: int
     chunk_strategy: str
     status: str = "READY"
@@ -141,6 +149,9 @@ class DocumentSummary(BaseModel):
     filename: str
     file_type: str
     file_size_bytes: int
+    file_hash: str = ""
+    pages_count: int = 0
+    storage_state: str = "HEALTHY"
     chunk_count: int
     category: str = "general"
     department: str | None = None
@@ -162,6 +173,8 @@ class DocumentSummary(BaseModel):
 class DocumentListResponse(BaseModel):
     documents: list[DocumentSummary] = Field(default_factory=list)
     total_count: int = 0
+    duplicate_groups: int = 0
+    duplicate_documents: int = 0
 
 
 class DocumentDetailResponse(BaseModel):
@@ -169,6 +182,9 @@ class DocumentDetailResponse(BaseModel):
     filename: str
     file_type: str
     file_size_bytes: int
+    file_hash: str = ""
+    pages_count: int = 0
+    storage_state: str = "HEALTHY"
     chunk_count: int
     category: str = "general"
     department: str | None = None
@@ -218,6 +234,11 @@ class TraceSummary(BaseModel):
     verification_score: float | None = None
     retry_count: int = 0
     retry_reasons: list[str] = Field(default_factory=list)
+    response_mode: ResponseMode = "standard"
+    retrieval_top_k: int = 0
+    rerank_top_k: int = 0
+    context_tokens: int = 0
+    generation_max_tokens: int = 0
 
 
 class ObservabilityMetrics(BaseModel):
@@ -256,10 +277,14 @@ class ModelInfo(BaseModel):
     type: str = Field(..., description="llm | embedding | reranker")
     loaded: bool = True
     is_active: bool = False
+    family: str | None = None
+    parameter_size: str | None = None
+    quantization: str | None = None
+    badges: list[str] = Field(default_factory=list)
 
 
 class ModelListResponse(BaseModel):
     active_model: str = "qwen2.5:7b"
-    vision_model: str = "qwen2.5vl:7b"
+    vision_model: str = "Qwen3-VL-2B-Instruct"
     vision_enabled: bool = True
     models: list[ModelInfo] = Field(default_factory=list)

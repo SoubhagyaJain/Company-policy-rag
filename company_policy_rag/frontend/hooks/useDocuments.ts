@@ -11,6 +11,8 @@ export function useDocuments() {
   const [stageMessage, setStageMessage] = useState<string>('');
   const [activeJob, setActiveJob] = useState<IngestionStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateCount, setDuplicateCount] = useState<number>(0);
+  const [deduplicating, setDeduplicating] = useState<boolean>(false);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -18,8 +20,12 @@ export function useDocuments() {
     setLoading(true);
     setError(null);
     try {
-      const docs = await apiClient.getDocuments();
+      const [docs, duplicateSummary] = await Promise.all([
+        apiClient.getDocuments(),
+        apiClient.deduplicateDocuments(true),
+      ]);
       setDocuments(Array.isArray(docs) ? docs : []);
+      setDuplicateCount(duplicateSummary.duplicates_found);
     } catch (err) {
       console.warn('Failed to fetch documents from backend API', err);
       setDocuments([]);
@@ -189,6 +195,22 @@ export function useDocuments() {
     []
   );
 
+  const removeDuplicates = useCallback(async (): Promise<number> => {
+    setDeduplicating(true);
+    setError(null);
+    try {
+      const result = await apiClient.deduplicateDocuments(false);
+      setDuplicateCount(0);
+      await fetchDocuments();
+      return result.duplicates_removed;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove duplicate documents');
+      return 0;
+    } finally {
+      setDeduplicating(false);
+    }
+  }, [fetchDocuments]);
+
   return {
     documents,
     loading,
@@ -198,9 +220,12 @@ export function useDocuments() {
     stageMessage,
     activeJob,
     error,
+    duplicateCount,
+    deduplicating,
     refreshDocuments: fetchDocuments,
     uploadDocument,
     retryDocument,
     deleteDocument,
+    removeDuplicates,
   };
 }

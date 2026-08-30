@@ -1,22 +1,8 @@
 from __future__ import annotations
 
 import io
-import pytest
-from fastapi.testclient import TestClient
-
-from backend.api.dependencies import reset_dependencies
-from backend.api.main import app
-
-
-@pytest.fixture(autouse=True)
-def cleanup_deps():
-    reset_dependencies()
-    yield
-    reset_dependencies()
-
-
-def test_upload_document_text_file():
-    client = TestClient(app)
+def test_upload_document_text_file(isolated_document_client):
+    client = isolated_document_client
     file_content = b"Section 1: Work Hours\nStandard working hours are 9:00 AM to 5:00 PM Monday through Friday."
     files = {"file": ("work_hours_policy.txt", io.BytesIO(file_content), "text/plain")}
     data = {"category": "policy", "chunk_strategy": "recursive"}
@@ -28,7 +14,7 @@ def test_upload_document_text_file():
     assert "document_id" in res
     assert res["filename"] == "work_hours_policy.txt"
     assert res["chunks_indexed"] > 0
-    assert res["status"] == "indexed"
+    assert res["status"] == "READY"
     assert res["category"] == "policy"
 
     doc_id = res["document_id"]
@@ -61,8 +47,8 @@ def test_upload_document_text_file():
     assert get_again.status_code == 404
 
 
-def test_upload_markdown_file_adaptive():
-    client = TestClient(app)
+def test_upload_markdown_file_adaptive(isolated_document_client):
+    client = isolated_document_client
     md_content = b"# HR Policy\n\n## Leave Policy\nEmployees are entitled to 20 days paid leave per annum."
     files = {"file": ("hr_policy.md", io.BytesIO(md_content), "text/markdown")}
 
@@ -73,8 +59,8 @@ def test_upload_markdown_file_adaptive():
     assert res["chunks_indexed"] >= 1
 
 
-def test_upload_oversized_file_rejected():
-    client = TestClient(app)
+def test_upload_oversized_file_rejected(isolated_document_client):
+    client = isolated_document_client
     # Create fake large file buffer > 100MB header simulation or content check
     # Instead of allocating 101MB RAM in test, test file content size validation logic directly or using small buffer mock if needed
     # Test client sending 100MB+ header or content
@@ -86,13 +72,13 @@ def test_upload_oversized_file_rejected():
     assert "100MB" in response.json()["detail"]
 
 
-def test_get_nonexistent_document():
-    client = TestClient(app)
+def test_get_nonexistent_document(isolated_document_client):
+    client = isolated_document_client
     response = client.get("/api/documents/non_existent_doc_id")
     assert response.status_code == 404
 
 
-def test_delete_nonexistent_document():
-    client = TestClient(app)
+def test_delete_nonexistent_document(isolated_document_client):
+    client = isolated_document_client
     response = client.delete("/api/documents/non_existent_doc_id")
     assert response.status_code == 404

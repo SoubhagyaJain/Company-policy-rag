@@ -105,6 +105,43 @@ def test_telemetry_models_validation():
     assert record.evidence_items[0].rerank_score == 0.92
 
 
+def test_empty_summary_reports_unmeasured_values_without_placeholders(temp_telemetry_db):
+    """An empty telemetry store must not manufacture healthy-looking performance data."""
+    service = TelemetryService(db_path=str(temp_telemetry_db.db_path))
+
+    summary = service.get_observability_summary(time_range="1h")
+
+    assert summary.query_metrics.total_queries == 0
+    assert summary.latency_breakdown.query_classification_ms is None
+    assert summary.latency_breakdown.generation_ms is None
+    assert summary.grounding.grounding_status.value == "not_applicable"
+    assert summary.grounding.supported_claims_pct is None
+    assert summary.models.vision_model.visual_pages_detected == 0
+    assert summary.models.vision_model.cache_hit_rate is None
+    assert summary.memory.memory_hit_rate is None
+    assert summary.memory.avg_memory_latency_ms is None
+    assert summary.tokens.avg_system_prompt_tokens == 0
+    assert summary.tokens.p95_prompt_tokens == 0
+
+
+def test_clear_discards_pending_write_behind_records(temp_telemetry_db):
+    """Clearing telemetry is durable even when records are still queued for SQLite."""
+    db = temp_telemetry_db
+    db.record_query_trace(
+        QueryTraceRecord(
+            trace_id="tr_pending_clear",
+            request_id="req_pending_clear",
+            original_query="This queued trace must be cleared",
+        )
+    )
+
+    db.clear()
+    time.sleep(0.2)
+
+    assert db.get_trace_by_id_or_request_id("tr_pending_clear") is None
+    assert db.compute_aggregates(time_range="1h")["total_queries"] == 0
+
+
 def test_telemetry_db_aggregations_and_time_ranges(temp_telemetry_db):
     """Verify that TelemetryDB correctly aggregates metrics over time ranges."""
     db = temp_telemetry_db
@@ -187,7 +224,7 @@ def test_conversational_bypass_telemetry(temp_telemetry_db):
 
 
 def test_multi_model_monitoring_separation(temp_telemetry_db):
-    """Verify that Text (qwen2.5:7b) and Vision (qwen2.5vl:7b) metrics are kept separated."""
+    """Verify that Text (qwen2.5:7b) and Vision (Qwen3-VL-2B-Instruct) metrics are kept separated."""
     db = temp_telemetry_db
     service = TelemetryService(db_path=str(db.db_path))
 
@@ -223,7 +260,7 @@ def test_multi_model_monitoring_separation(temp_telemetry_db):
     summary = service.get_observability_summary(time_range="1h")
 
     assert summary.models.text_model.model_name == "qwen2.5:7b"
-    assert summary.models.vision_model.model_name == "qwen2.5vl:7b"
+    assert summary.models.vision_model.model_name == "Qwen3-VL-2B-Instruct"
     assert summary.models.vision_model.requests_count == 1
     assert summary.models.vision_model.visual_pages_detected == 1
 

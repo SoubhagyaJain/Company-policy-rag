@@ -276,6 +276,169 @@
     border-radius: 47% 53% 45% 55%;
     animation: emblem-orbit 18s linear infinite;
   }
+
+  /* Progressive Three.js knowledge map used in the empty chat state. */
+  .policy-graph {
+    position: relative;
+    min-height: 300px;
+    overflow: hidden;
+    border: 1px solid rgba(197, 90, 50, 0.18);
+    border-radius: 28px;
+    background:
+      radial-gradient(circle at 49% 46%, rgba(231, 166, 116, 0.2), transparent 24%),
+      linear-gradient(145deg, rgba(255, 251, 242, 0.78), rgba(239, 231, 214, 0.74));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.75),
+      0 26px 70px rgba(88, 62, 34, 0.12);
+    isolation: isolate;
+  }
+
+  .dark .policy-graph {
+    border-color: rgba(224, 125, 83, 0.18);
+    background:
+      radial-gradient(circle at 49% 46%, rgba(181, 92, 54, 0.16), transparent 26%),
+      linear-gradient(145deg, rgba(36, 33, 28, 0.92), rgba(23, 22, 19, 0.9));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 28px 74px rgba(0, 0, 0, 0.3);
+  }
+
+  .policy-graph::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgba(248, 243, 232, 0.18), transparent 22%, transparent 78%, rgba(248, 243, 232, 0.2));
+  }
+
+  .dark .policy-graph::after {
+    background: linear-gradient(90deg, rgba(24, 22, 19, 0.2), transparent 22%, transparent 78%, rgba(24, 22, 19, 0.24));
+  }
+
+  .policy-graph__mount,
+  .policy-graph__canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .policy-graph__canvas {
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .policy-graph__grid {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.36;
+    background-image:
+      linear-gradient(rgba(111, 103, 88, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(111, 103, 88, 0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(circle at center, black 15%, transparent 76%);
+  }
+
+  .policy-graph__label {
+    position: absolute;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border: 1px solid rgba(200, 90, 50, 0.2);
+    border-radius: 999px;
+    background: rgba(255, 251, 242, 0.78);
+    color: #655e53;
+    box-shadow: 0 8px 22px rgba(71, 53, 32, 0.08);
+    backdrop-filter: blur(10px);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .dark .policy-graph__label {
+    border-color: rgba(224, 125, 83, 0.18);
+    background: rgba(31, 29, 25, 0.76);
+    color: #b8afa1;
+  }
+
+  .policy-graph__label--documents { top: 17%; left: 7%; }
+  .policy-graph__label--retrieval { top: 44%; right: 6%; }
+  .policy-graph__label--answer { left: 35%; bottom: 17%; }
+
+  .policy-graph__caption {
+    position: absolute;
+    right: 18px;
+    bottom: 15px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #766e61;
+    font-family: var(--font-jetbrains-mono), monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .dark .policy-graph__caption { color: #8d8578; }
+
+  .policy-graph__live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #10b981;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
+  }
+
+  .welcome-proof {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    border: 1px solid rgba(202, 193, 177, 0.72);
+    border-radius: 999px;
+    background: rgba(255, 252, 245, 0.58);
+    color: #5f594f;
+    font-size: 10px;
+    font-weight: 600;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  }
+
+  .dark .welcome-proof {
+    border-color: rgba(65, 61, 53, 0.8);
+    background: rgba(34, 32, 28, 0.62);
+    color: #b9b1a5;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .policy-prompt-card {
+    border: 1px solid rgba(255, 255, 255, 0.68);
+    background: rgba(250, 247, 239, 0.84);
+    box-shadow: 0 12px 35px rgba(74, 58, 37, 0.055);
+  }
+
+  .policy-prompt-card:hover {
+    border-color: rgba(200, 90, 50, 0.45);
+    background: #fff9ef;
+    box-shadow: 0 18px 45px rgba(74, 58, 37, 0.09);
+  }
+
+  .dark .policy-prompt-card {
+    border-color: rgba(63, 59, 51, 0.9);
+    background: rgba(33, 31, 27, 0.96);
+    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.22);
+  }
+
+  .dark .policy-prompt-card:hover {
+    border-color: rgba(224, 125, 83, 0.42);
+    background: #292620;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+  }
 }
 
 @keyframes atlas-clay-drift {
@@ -348,6 +511,10 @@
 
   .knowledge-node__halo {
     animation-duration: 8s;
+  }
+
+  .policy-graph {
+    min-height: 260px;
   }
 }
 

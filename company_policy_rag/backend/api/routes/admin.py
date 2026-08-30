@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.api.dependencies import get_document_service, get_telemetry_service
 from backend.models.api_dto import (
-    ObservabilityMetrics,
     TraceDetailResponse,
     TraceSummary,
 )

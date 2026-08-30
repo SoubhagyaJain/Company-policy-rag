@@ -20,16 +20,24 @@ import {
   Search,
   X,
   Check,
+  LoaderCircle,
+  AlertCircle,
 } from 'lucide-react';
-import { ChatMessageData, Citation, FilterOptions, DocumentItem } from '../lib/types';
+import { ChatMessageData, Citation, FilterOptions, DocumentItem, ResponseMode } from '../lib/types';
 import { ChatMessage } from './ChatMessage';
 import { AmbientKnowledgeField } from './AmbientKnowledgeField';
+import { PolicyKnowledgeScene } from './PolicyKnowledgeScene';
 import { apiClient } from '../lib/api-client';
 
 interface ChatWindowProps {
   messages: ChatMessageData[];
   isStreaming: boolean;
-  onSendMessage: (content: string, filters?: FilterOptions, model?: string) => void;
+  onSendMessage: (
+    content: string,
+    filters?: FilterOptions,
+    model?: string,
+    responseMode?: ResponseMode
+  ) => void;
   onCancelStream: () => void;
   onClearChat: () => void;
   onOpenCitation: (citation: Citation) => void;
@@ -49,6 +57,23 @@ const MODEL_OPTIONS = [
   { id: 'llama3.2:3b', label: 'Llama 3.2 3B', desc: 'Ultra-fast compact model' },
   { id: 'gemma4-policy-fast:latest', label: 'Gemma 4 Policy Fast', desc: 'Policy specialized model' },
   { id: 'gemma4:12b', label: 'Gemma 4 12B', desc: 'High capability model' },
+];
+
+type ModelOption = {
+  id: string;
+  label: string;
+  desc: string;
+  badges?: string[];
+};
+
+const RESPONSE_MODE_OPTIONS: Array<{
+  id: ResponseMode;
+  label: string;
+  description: string;
+}> = [
+  { id: 'compact', label: 'Compact', description: 'Quick answer with essentials.' },
+  { id: 'standard', label: 'Standard', description: 'Balanced explanation.' },
+  { id: 'detailed', label: 'Detailed', description: 'Deep explanation with examples and broader evidence.' },
 ];
 
 const SUGGESTED_PROMPTS = [
@@ -84,12 +109,15 @@ export function ChatWindow({
 }: ChatWindowProps) {
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedDoc, setSelectedDoc] = useState<string>('All');
+  const [selectedDocId, setSelectedDocId] = useState<string>('All');
   const [availableDocs, setAvailableDocs] = useState<DocumentItem[]>([]);
   const [filterTab, setFilterTab] = useState<'documents' | 'categories'>('documents');
   const [filterSearch, setFilterSearch] = useState('');
-  const [modelsList, setModelsList] = useState<Array<{ id: string; label: string; desc: string }>>(MODEL_OPTIONS);
+  const [modelsList, setModelsList] = useState<ModelOption[]>(MODEL_OPTIONS);
   const [selectedModel, setSelectedModel] = useState('qwen2.5:7b');
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
+  const [modelSwitchError, setModelSwitchError] = useState<string | null>(null);
+  const [responseMode, setResponseMode] = useState<ResponseMode>('standard');
   const [showFilters, setShowFilters] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -100,6 +128,7 @@ export function ChatWindow({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const filterRef = useRef<HTMLDivElement | null>(null);
   const modelPickerRef = useRef<HTMLDivElement | null>(null);
+  const modelSelectionInitializedRef = useRef(false);
 
   // Load available models from backend API
   const loadModels = useCallback(async () => {
@@ -111,21 +140,34 @@ export function ChatWindow({
           .map((m) => ({
             id: m.id,
             label: m.name || m.id,
-            desc: m.id.includes('coder') || m.id.includes('policy') ? 'Policy Model (7.0 GB)' : m.id.includes('3b') ? 'Compact & Fast (2.0 GB)' : m.id.includes('7b') ? 'Balanced (4.7 GB)' : m.id.includes('8b') ? 'Reasoning (5.2 GB)' : 'Installed model',
+            desc: [m.parameter_size, m.quantization, m.family]
+              .filter(Boolean)
+              .join(' · ') || 'Installed model',
+            badges: m.badges || [],
           }));
         if (chatModels.length > 0) {
           setModelsList(chatModels);
-          if (res.active_model && chatModels.some((m) => m.id === res.active_model)) {
-            setSelectedModel(res.active_model);
-          } else if (!chatModels.some((m) => m.id === selectedModel)) {
-            setSelectedModel(chatModels[0].id);
-          }
+          setSelectedModel((currentModel) => {
+            if (!modelSelectionInitializedRef.current) {
+              modelSelectionInitializedRef.current = true;
+              const storedModel = localStorage.getItem('rag_model');
+              if (storedModel && chatModels.some((m) => m.id === storedModel)) {
+                return storedModel;
+              }
+              if (res.active_model && chatModels.some((m) => m.id === res.active_model)) {
+                return res.active_model;
+              }
+            }
+            return chatModels.some((m) => m.id === currentModel)
+              ? currentModel
+              : (res.active_model || chatModels[0].id);
+          });
         }
       }
     } catch {
       // fallback to MODEL_OPTIONS
     }
-  }, [selectedModel]);
+  }, []);
 
   useEffect(() => {
     loadModels();
@@ -184,17 +226,41 @@ export function ChatWindow({
   }, []);
 
   useEffect(() => {
-    const storedModel = localStorage.getItem('rag_model');
-    if (storedModel) {
-      setSelectedModel(storedModel);
+    const storedMode = localStorage.getItem('rag_response_mode');
+    if (storedMode === 'compact' || storedMode === 'standard' || storedMode === 'detailed') {
+      setResponseMode(storedMode);
     }
   }, []);
 
-  const handleSelectModel = (modelId: string) => {
+  const handleSelectResponseMode = (mode: ResponseMode) => {
+    setResponseMode(mode);
+    localStorage.setItem('rag_response_mode', mode);
+  };
+
+  const handleSelectModel = async (modelId: string) => {
+    if (pendingModel || modelId === selectedModel) {
+      setShowModelPicker(false);
+      return;
+    }
+
+    const previousModel = selectedModel;
+    setPendingModel(modelId);
+    setModelSwitchError(null);
     setSelectedModel(modelId);
-    setShowModelPicker(false);
-    localStorage.setItem('rag_model', modelId);
-    apiClient.selectModel(modelId).catch(() => {});
+    try {
+      const result = await apiClient.selectModel(modelId);
+      setSelectedModel(result.active_model);
+      localStorage.setItem('rag_model', result.active_model);
+      setShowModelPicker(false);
+    } catch (error) {
+      setSelectedModel(previousModel);
+      setShowModelPicker(false);
+      setModelSwitchError(
+        error instanceof Error ? error.message : `Unable to switch to ${modelId}`
+      );
+    } finally {
+      setPendingModel(null);
+    }
   };
 
 
@@ -226,8 +292,31 @@ export function ChatWindow({
     return categoriesList.filter((c) => c.toLowerCase().includes(q));
   }, [categoriesList, filterSearch]);
 
+  const selectedDocument = useMemo(
+    () => availableDocs.find((doc) => doc.id === selectedDocId),
+    [availableDocs, selectedDocId]
+  );
+  const selectedDoc = selectedDocument?.filename ?? 'All';
+
+  useEffect(() => {
+    if (messages.length === 0 && scrollContainerRef.current) {
+      isUserScrolledUp.current = false;
+      setShowScrollBottom(false);
+      const resetScroll = () => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+      };
+      resetScroll();
+      const frame = window.requestAnimationFrame(resetScroll);
+      const timer = window.setTimeout(resetScroll, 120);
+      return () => {
+        window.cancelAnimationFrame(frame);
+        window.clearTimeout(timer);
+      };
+    }
+  }, [messages.length]);
+
   // Check if any filter is active
-  const isFilterActive = selectedDoc !== 'All' || selectedCategory !== 'All';
+  const isFilterActive = selectedDocId !== 'All' || selectedCategory !== 'All';
 
   // Filter label to display in the button
   const filterButtonLabel = useMemo(() => {
@@ -242,13 +331,18 @@ export function ChatWindow({
 
   const clearAllFilters = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setSelectedDoc('All');
+    setSelectedDocId('All');
     setSelectedCategory('All');
   };
 
   // Scroll detection handler
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
+    if (messages.length === 0) {
+      isUserScrolledUp.current = false;
+      setShowScrollBottom(false);
+      return;
+    }
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
@@ -259,7 +353,7 @@ export function ChatWindow({
       isUserScrolledUp.current = false;
       setShowScrollBottom(false);
     }
-  }, []);
+  }, [messages.length]);
 
   // Smooth scroll to bottom function
   const scrollToBottom = useCallback((smooth = true) => {
@@ -284,8 +378,9 @@ export function ChatWindow({
     if (!input.trim() || isStreaming) return;
 
     const filters: FilterOptions = {};
-    if (selectedDoc !== 'All') {
-      filters.source_file = selectedDoc;
+    if (selectedDocument) {
+      filters.source_file = selectedDocument.filename;
+      filters.document_id = selectedDocument.id;
     }
     if (selectedCategory !== 'All') {
       filters.category = selectedCategory;
@@ -296,7 +391,8 @@ export function ChatWindow({
     onSendMessage(
       input.trim(),
       Object.keys(filters).length > 0 ? filters : undefined,
-      selectedModel
+      selectedModel,
+      responseMode
     );
     setInput('');
 
@@ -317,19 +413,23 @@ export function ChatWindow({
   const handlePromptClick = (promptText: string) => {
     isUserScrolledUp.current = false;
     const filters: FilterOptions = {};
-    if (selectedDoc !== 'All') filters.source_file = selectedDoc;
+    if (selectedDocument) {
+      filters.source_file = selectedDocument.filename;
+      filters.document_id = selectedDocument.id;
+    }
     if (selectedCategory !== 'All') filters.category = selectedCategory;
 
     onSendMessage(
       promptText,
       Object.keys(filters).length > 0 ? filters : undefined,
-      selectedModel
+      selectedModel,
+      responseMode
     );
     setTimeout(() => scrollToBottom(true), 50);
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-57px)] bg-[#F7F3EA] dark:bg-[#151512] relative overflow-hidden font-sans isolation-isolate">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-[#F7F3EA] dark:bg-[#151512] relative overflow-hidden font-sans isolation-isolate">
       <AmbientKnowledgeField />
       {/* Top Bar - Minimalist Anthropic Header */}
       <div className="px-4 py-2.5 border-b border-[#E8E2D5]/60 dark:border-[#302D27]/60 flex items-center justify-between bg-[#FAF8F5]/90 dark:bg-[#161513]/90 z-20">
@@ -441,11 +541,11 @@ export function ChatWindow({
                       {/* All Documents Option */}
                       <button
                         onClick={() => {
-                          setSelectedDoc('All');
+                          setSelectedDocId('All');
                           setShowFilters(false);
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors ${
-                          selectedDoc === 'All'
+                          selectedDocId === 'All'
                             ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-800 dark:text-terracotta-300 font-semibold border border-terracotta-500/30'
                             : 'hover:bg-[#F3EFE6] dark:hover:bg-[#262420] text-[#332F2A] dark:text-[#DCD5C9]'
                         }`}
@@ -454,7 +554,7 @@ export function ChatWindow({
                           <Layers className="w-3.5 h-3.5 text-terracotta-600" />
                           <span>All Documents (Unfiltered)</span>
                         </div>
-                        {selectedDoc === 'All' && (
+                        {selectedDocId === 'All' && (
                           <Check className="w-3.5 h-3.5 text-terracotta-600" />
                         )}
                       </button>
@@ -468,11 +568,11 @@ export function ChatWindow({
                           <button
                             key={doc.id || doc.filename}
                             onClick={() => {
-                              setSelectedDoc(doc.filename);
+                              setSelectedDocId(doc.id);
                               setShowFilters(false);
                             }}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors ${
-                              selectedDoc === doc.filename
+                              selectedDocId === doc.id
                                 ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-800 dark:text-terracotta-300 font-semibold border border-terracotta-500/30'
                                 : 'hover:bg-[#F3EFE6] dark:hover:bg-[#262420] text-[#332F2A] dark:text-[#DCD5C9]'
                             }`}
@@ -489,7 +589,7 @@ export function ChatWindow({
                                 </div>
                               </div>
                             </div>
-                            {selectedDoc === doc.filename && (
+                            {selectedDocId === doc.id && (
                               <Check className="w-3.5 h-3.5 shrink-0 text-terracotta-600" />
                             )}
                           </button>
@@ -555,11 +655,20 @@ export function ChatWindow({
           <div className="relative" ref={modelPickerRef}>
             <button
               onClick={() => setShowModelPicker((prev) => !prev)}
+              disabled={Boolean(pendingModel)}
+              aria-busy={Boolean(pendingModel)}
+              aria-label={`Inference model: ${selectedModel}`}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#EFECE2]/80 hover:bg-[#E8E3D5] dark:bg-[#23211E] dark:hover:bg-[#2B2925] border border-[#E0D9CB] dark:border-[#33302B] text-xs text-[#38342F] dark:text-[#E2DDD5] transition-colors"
             >
-              <Cpu className="w-3 h-3 text-terracotta-600 dark:text-terracotta-400" />
+              {pendingModel ? (
+                <LoaderCircle className="h-3 w-3 animate-spin text-terracotta-600 dark:text-terracotta-400" />
+              ) : (
+                <Cpu className="w-3 h-3 text-terracotta-600 dark:text-terracotta-400" />
+              )}
               <span className="font-medium">
-                {modelsList.find((m) => m.id === selectedModel)?.label || selectedModel}
+                {pendingModel
+                  ? `Switching to ${modelsList.find((m) => m.id === pendingModel)?.label || pendingModel}`
+                  : modelsList.find((m) => m.id === selectedModel)?.label || selectedModel}
               </span>
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
@@ -574,6 +683,7 @@ export function ChatWindow({
                   <button
                     key={m.id}
                     onClick={() => handleSelectModel(m.id)}
+                    disabled={Boolean(pendingModel)}
                     className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-xl text-left transition-colors ${
                       selectedModel === m.id
                         ? 'bg-terracotta-600/10 dark:bg-terracotta-600/20 text-terracotta-700 dark:text-terracotta-400 font-medium'
@@ -597,9 +707,27 @@ export function ChatWindow({
                       <div className="text-[10px] text-[#8C867B] dark:text-[#7A756C] truncate">
                         {m.desc}
                       </div>
+                      {m.badges && m.badges.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {m.badges.map((badge) => (
+                            <span key={badge} className="rounded-full bg-[#EFE8DC] px-1.5 py-0.5 text-[8px] font-semibold text-[#766D61] dark:bg-[#302D27] dark:text-[#AAA399]">
+                              {badge}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+            {modelSwitchError && (
+              <div
+                role="alert"
+                className="absolute right-0 top-full z-50 mt-1.5 flex w-72 items-start gap-2 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-[11px] text-rose-700 shadow-lg dark:border-rose-900/70 dark:bg-rose-950/80 dark:text-rose-300"
+              >
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{modelSwitchError}</span>
               </div>
             )}
           </div>
@@ -620,44 +748,81 @@ export function ChatWindow({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
+        style={{ willChange: 'transform, scroll-position', transform: 'translateZ(0)' }}
         className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-8 py-6 space-y-4 custom-scrollbar"
       >
         {messages.length === 0 ? (
-          /* Anthropic-Style Elegant Welcome Screen */
-          <div className="max-w-2xl mx-auto py-10 sm:py-16 text-center space-y-8 animate-in fade-in duration-300">
-            {/* Claude-style warm sun / star emblem */}
-            <div className="knowledge-emblem w-16 h-16 mx-auto rounded-full bg-[#F8F3E8]/88 dark:bg-[#201E1A]/88 text-terracotta-600 dark:text-terracotta-400 flex items-center justify-center border border-terracotta-500/30 shadow-sm">
-              <Sparkles className="w-8 h-8 stroke-[1.8]" />
+          <div className="welcome-stage max-w-6xl mx-auto py-5 sm:py-8 lg:py-10 animate-in fade-in duration-300">
+            <div className="grid items-center gap-7 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
+              <section className="text-left">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-terracotta-500/25 bg-[#FFF9F1]/70 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-terracotta-700 shadow-sm dark:bg-[#201D18]/75 dark:text-terracotta-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,.12)]" />
+                  Grounded policy intelligence
+                </div>
+
+                <h1 className="max-w-xl font-serif text-4xl font-normal leading-[1.04] tracking-[-0.035em] text-[#211E1A] dark:text-[#FAF8F5] sm:text-5xl lg:text-[3.45rem]">
+                  Answers you can trace back to policy.
+                </h1>
+                <p className="mt-5 max-w-xl text-sm leading-7 text-[#635E54] dark:text-[#AAA397] sm:text-[15px]">
+                  Ask a workplace question and get a concise answer grounded in your indexed
+                  handbook, benefits, travel, finance, and security documents.
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-2.5">
+                  <div className="welcome-proof">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                    Page-level citations
+                  </div>
+                  <div className="welcome-proof">
+                    <Search className="h-3.5 w-3.5 text-terracotta-600" />
+                    Hybrid search
+                  </div>
+                  <div className="welcome-proof">
+                    <FileText className="h-3.5 w-3.5 text-amber-600" />
+                    {availableDocs.length > 0
+                      ? `${availableDocs.length} indexed ${availableDocs.length === 1 ? 'source' : 'sources'}`
+                      : 'Indexed knowledge base'}
+                  </div>
+                </div>
+              </section>
+
+              <PolicyKnowledgeScene />
             </div>
 
-            <div className="space-y-2.5">
-              <h1 className="font-serif font-normal text-3xl sm:text-4xl text-[#23201C] dark:text-[#FAF8F5] tracking-tight">
-                Company Policy & Guidebook
-              </h1>
-              <p className="text-sm text-[#635E54] dark:text-[#A8A295] max-w-md mx-auto leading-relaxed">
-                Ask anything about employee benefits, leave rollover, travel policies, or IT
-                security compliance.
-              </p>
+            <div className="mt-8 flex items-end justify-between gap-4 border-t border-[#DDD5C5]/70 pt-5 dark:border-[#35322C]/70">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-terracotta-700 dark:text-terracotta-400">
+                  Start with a common question
+                </p>
+                <p className="mt-1 text-xs text-[#777064] dark:text-[#8F897E]">
+                  Select a prompt or write your own below.
+                </p>
+              </div>
+              <Sparkles className="hidden h-5 w-5 text-terracotta-600/50 sm:block" />
             </div>
 
-            {/* Prompt Suggestion Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left pt-2">
+            <div className="mt-3 grid grid-cols-1 gap-3 text-left sm:grid-cols-2 xl:grid-cols-4">
               {SUGGESTED_PROMPTS.map((item, idx) => {
                 const Icon = item.icon;
                 return (
                   <button
                     key={idx}
                     onClick={() => handlePromptClick(item.prompt)}
-                    className="p-4 rounded-2xl bg-[#F8F4EA]/88 dark:bg-[#1E1D1A]/88 border border-white/55 dark:border-[#3A3730]/65 hover:border-terracotta-500/50 hover:bg-[#F3EBDD]/95 dark:hover:bg-[#252420]/95 transition-all duration-200 group shadow-[0_12px_35px_rgba(74,58,37,0.06)]"
+                    className="policy-prompt-card group rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5"
                   >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Icon className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400 group-hover:scale-105 transition-transform" />
-                      <h3 className="text-xs font-semibold text-[#2D2A26] dark:text-[#E8E4DD]">
-                        {item.title}
-                      </h3>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-terracotta-500/20 bg-terracotta-500/10 text-terracotta-600 transition-transform group-hover:scale-105 dark:text-terracotta-400">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="text-[10px] font-medium text-[#9A9386] transition-colors group-hover:text-terracotta-600 dark:text-[#716C63]">
+                        Ask →
+                      </span>
                     </div>
-                    <p className="text-xs text-[#6B655B] dark:text-[#A8A295] leading-relaxed line-clamp-2">
-                      "{item.prompt}"
+                    <h3 className="text-xs font-semibold text-[#2D2A26] dark:text-[#E8E4DD]">
+                      {item.title}
+                    </h3>
+                    <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-[#6B655B] dark:text-[#A8A295]">
+                      {item.prompt}
                     </p>
                   </button>
                 );
@@ -721,6 +886,36 @@ export function ChatWindow({
               rows={1}
               className="w-full bg-transparent border-none text-sm text-[#1E1C1A] dark:text-[#FAF8F5] placeholder:text-[#8E887D] dark:placeholder:text-[#7A756C] focus:outline-none resize-none px-2 py-1 custom-scrollbar min-h-[38px] max-h-[180px] leading-relaxed font-sans"
             />
+
+            <div
+              role="radiogroup"
+              aria-label="Answer depth"
+              className="mx-1 mb-1.5 flex items-center gap-1 overflow-x-auto rounded-xl border border-[#E1D9CB]/80 bg-[#EEE9DE]/65 p-1 dark:border-[#39362F] dark:bg-[#191815]/70"
+            >
+              <span className="hidden shrink-0 px-1.5 text-[10px] font-semibold uppercase tracking-[0.11em] text-[#7A7468] dark:text-[#8C867B] sm:inline">
+                Answer depth
+              </span>
+              {RESPONSE_MODE_OPTIONS.map((mode) => {
+                const selected = responseMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => handleSelectResponseMode(mode.id)}
+                    title={mode.description}
+                    className={`min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta-500/70 sm:flex-none ${
+                      selected
+                        ? 'bg-white text-terracotta-800 shadow-sm ring-1 ring-terracotta-500/25 dark:bg-[#302D27] dark:text-terracotta-300'
+                        : 'text-[#6F695E] hover:bg-white/60 hover:text-[#2D2A26] dark:text-[#9D978C] dark:hover:bg-[#272520] dark:hover:text-[#EEE9DF]'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Bottom Toolbar inside the Input Box */}
             <div className="flex items-center justify-between pt-1 px-1">

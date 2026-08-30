@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { ChatMessageData, Citation, QueryTrace, FilterOptions, ThinkingEvent, ThinkingDetailLevel, ReasoningSummary } from '../lib/types';
+import { ChatMessageData, Citation, QueryTrace, FilterOptions, ThinkingEvent, ThinkingDetailLevel, ReasoningSummary, ResponseMode } from '../lib/types';
 import { apiClient } from '../lib/api-client';
 import { generateId } from '../lib/utils';
 
@@ -102,7 +102,8 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
       sessionId: string,
       filters?: FilterOptions,
       model = 'FastAPI RAG',
-      thinkingDetailLevel: ThinkingDetailLevel = 'standard'
+      thinkingDetailLevel: ThinkingDetailLevel = 'standard',
+      responseMode: ResponseMode = 'standard'
     ) => {
       if (!content.trim() || isStreaming) return;
 
@@ -113,6 +114,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
         role: 'user',
         content,
         timestamp: new Date().toISOString(),
+        response_mode: responseMode,
       };
 
       const assistantMsgId = generateId('msg_assistant');
@@ -130,6 +132,8 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
         citations: [],
         thinking_events: thinkingDetailLevel === 'off' ? [] : [initialProgress],
         thinking_detail_level: thinkingDetailLevel,
+        response_mode: responseMode,
+        model,
         isStreaming: true,
       };
 
@@ -146,9 +150,15 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
           let changed = false;
           const next = prev.map((msg) => {
             if (msg.id !== assistantMsgId) return msg;
-            const currentEvents = msg.thinking_events || [];
+
+            const currentEvents = (msg.thinking_events || []).map(e => {
+              if (e.status === 'running' && e.stage !== event.stage) {
+                return { ...e, status: 'completed' as const };
+              }
+              return e;
+            });
+
             const nextEvents = mergeThinkingEvent(currentEvents, event);
-            if (nextEvents === currentEvents) return msg;
             changed = true;
             return { ...msg, thinking_events: nextEvents };
           });
@@ -227,6 +237,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
             if (msg.id !== assistantMsgId) return msg;
             let thinkingEvents = msg.thinking_events || [];
             if (includeGenerationProgress) {
+              thinkingEvents = thinkingEvents.map(e => (e.status === 'running' ? { ...e, status: 'completed' as const } : e));
               thinkingEvents = mergeThinkingEvent(
                 thinkingEvents,
                 createProgressEvent({
@@ -331,14 +342,16 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
                   prev.map((msg) => {
                     if (msg.id !== assistantMsgId) return msg;
                     const finalContent = msg.content || doneData?.answer || '';
+                    const finalThinkingEvents =
+                      doneData?.thinking_events && doneData.thinking_events.length > 0
+                        ? normalizeThinkingEvents(doneData.thinking_events)
+                        : (msg.thinking_events || []).map(e => (e.status === 'running' ? { ...e, status: 'completed' as const } : e));
                     return {
                       ...msg,
                       content: finalContent || 'I am unable to answer based on the provided documents.',
-                      thinking_events:
-                        doneData?.thinking_events && doneData.thinking_events.length > 0
-                          ? normalizeThinkingEvents(doneData.thinking_events)
-                          : msg.thinking_events,
+                      thinking_events: finalThinkingEvents,
                       reasoning_summary: doneData?.reasoning_summary || msg.reasoning_summary,
+                      model: doneData?.model || msg.trace?.model || msg.model || model,
                       isStreaming: false,
                     };
                   })
@@ -378,7 +391,8 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
               },
             },
             controller.signal,
-            thinkingDetailLevel
+            thinkingDetailLevel,
+            responseMode
           );
           // Success — exit retry loop
           break;

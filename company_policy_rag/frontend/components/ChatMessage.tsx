@@ -62,16 +62,13 @@ function VerificationScorePill({ trace }: { trace: QueryTrace }) {
 
   if (!hasVerification) return null;
 
-  const score =
-    trace.verification_score ??
-    trace.verification?.composite_score ??
-    (trace.faithfulness_passed !== false ? 0.95 : 0.5);
-
-  const passed =
-    trace.faithfulness_passed !== false &&
-    (trace.verification ? trace.verification.passed : score >= 0.75);
-
-  const scorePct = Math.round(Math.min(100, Math.max(0, score * 100)));
+  const score = trace.verification_score ?? trace.verification?.composite_score;
+  const passed = trace.faithfulness_passed === false
+    ? false
+    : score !== undefined
+    ? score >= 0.75
+    : trace.verification?.passed ?? trace.faithfulness_passed ?? false;
+  const scorePct = score === undefined ? null : Math.round(Math.min(100, Math.max(0, score * 100)));
 
   return (
     <span
@@ -81,14 +78,14 @@ function VerificationScorePill({ trace }: { trace: QueryTrace }) {
           ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 dark:border-emerald-500/30'
           : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 dark:border-amber-500/30'
       )}
-      title={`Self-Reflection Verification: ${scorePct}% composite score (${passed ? 'Passed' : 'Review needed'})`}
+      title={`Self-Reflection Verification: ${scorePct === null ? 'score not recorded' : `${scorePct}% composite score`} (${passed ? 'Passed' : 'Review needed'})`}
     >
       {passed ? (
         <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
       ) : (
         <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
       )}
-      <span>{scorePct}% {passed ? 'Verified' : 'Review'}</span>
+      <span>{scorePct === null ? '' : `${scorePct}% `}{passed ? 'Verified' : 'Review'}</span>
     </span>
   );
 }
@@ -205,6 +202,14 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
                   minute: '2-digit',
                 })}
               </span>
+              {message.model && (
+                <span
+                  className="rounded-full border border-[#DDD5C5] bg-[#F4F0E7] px-2 py-0.5 font-mono text-[9px] text-[#6E675D] dark:border-[#3A3731] dark:bg-[#25231F] dark:text-[#AAA399]"
+                  title={`Generated with ${message.model}`}
+                >
+                  {message.model}
+                </span>
+              )}
             </div>
 
             {!message.isStreaming && message.content && (
@@ -428,12 +433,12 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
                       const retryCount = message.trace.retry_count || message.trace.verification?.retry_count || 0;
                       const retryReasons = Array.isArray(message.trace.retry_reasons) ? message.trace.retry_reasons : [];
 
-                      const faithfulnessScore =
-                        message.trace.verification?.faithfulness ??
-                        (message.trace.faithfulness_passed !== false ? 0.95 : 0.5);
-                      const completenessScore = message.trace.verification?.completeness ?? 0.92;
-                      const citationCoverageScore = message.trace.verification?.citation_coverage ?? 0.95;
-                      const coherenceScore = message.trace.verification?.coherence ?? 0.96;
+                      const measuredDimensions = [
+                        ['Faithfulness', message.trace.verification?.faithfulness],
+                        ['Completeness', message.trace.verification?.completeness],
+                        ['Citation Coverage', message.trace.verification?.citation_coverage],
+                        ['Coherence', message.trace.verification?.coherence],
+                      ].filter((item): item is [string, number] => typeof item[1] === 'number');
 
                       return (
                         <div className="space-y-2 pt-2 border-t border-[#E0D8CB] dark:border-[#2B2925]">
@@ -457,12 +462,13 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
                             )}
                           </div>
 
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-0.5">
-                            <VerificationDimensionBar label="Faithfulness" score={faithfulnessScore} />
-                            <VerificationDimensionBar label="Completeness" score={completenessScore} />
-                            <VerificationDimensionBar label="Citation Coverage" score={citationCoverageScore} />
-                            <VerificationDimensionBar label="Coherence" score={coherenceScore} />
-                          </div>
+                          {measuredDimensions.length > 0 && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-0.5">
+                              {measuredDimensions.map(([label, score]) => (
+                                <VerificationDimensionBar key={label} label={label} score={score} />
+                              ))}
+                            </div>
+                          )}
 
                           {message.trace.verification?.critique && (
                             <p className="text-[10px] italic text-[#5C564C] dark:text-[#A8A196] bg-[#EAE4D6]/50 dark:bg-[#161513] p-2 rounded-lg border border-[#DDD5C5] dark:border-[#282622]">
@@ -495,12 +501,12 @@ export function ChatMessage({ message, onOpenCitation }: ChatMessageProps) {
                       <div>
                         <span className="text-[10px] text-charcoal-muted dark:text-cream-500 block">Rerank Score</span>
                         <span className="font-bold text-amber-600 dark:text-amber-400">
-                          {(message.trace.top_rerank_score * 100).toFixed(0)}%
+                          {message.trace.top_rerank_score === undefined ? 'Not measured' : `${(message.trace.top_rerank_score * 100).toFixed(0)}%`}
                         </span>
                       </div>
                       <div>
                         <span className="text-[10px] text-charcoal-muted dark:text-cream-500 block">Rerank Time</span>
-                        <span className="font-bold">{formatLatency(message.trace.rerank_latency_ms)}</span>
+                        <span className="font-bold">{message.trace.rerank_latency_ms === undefined ? 'Not measured' : formatLatency(message.trace.rerank_latency_ms)}</span>
                       </div>
                       <div>
                         <span className="text-[10px] text-charcoal-muted dark:text-cream-500 block">Tokens</span>

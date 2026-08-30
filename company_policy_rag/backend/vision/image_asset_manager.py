@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import shutil
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -577,6 +578,22 @@ class ImageAssetManager:
             for doc_assets in self._assets_index.values():
                 all_assets.extend(doc_assets.values())
         return all_assets
+
+    def delete_document_assets(self, document_id: str) -> int:
+        """Delete one document's asset index and files without touching other documents."""
+        if not re.fullmatch(r"doc_[0-9a-f]{12}", document_id):
+            raise ValueError(f"Invalid document ID: {document_id}")
+
+        with self._lock:
+            removed_count = len(self._assets_index.pop(document_id, {}))
+
+        storage_root = self.storage_dir.resolve()
+        document_dir = (storage_root / document_id).resolve()
+        if document_dir.parent != storage_root:
+            raise ValueError(f"Document asset path escaped storage root: {document_dir}")
+        if document_dir.is_dir():
+            shutil.rmtree(document_dir)
+        return removed_count
 
     def get_global_visual_stats(self) -> dict[str, Any]:
         """Return comprehensive visual asset and page statistics across all ingested documents."""

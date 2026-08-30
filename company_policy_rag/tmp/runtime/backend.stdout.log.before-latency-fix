@@ -1,0 +1,638 @@
+2026-08-27 18:31:06 | INFO     | backend | ==========================================================
+2026-08-27 18:31:06 | INFO     | backend |   STARTING RAG SYSTEM PRELOADING & MODEL WARM-UP          
+2026-08-27 18:31:06 | INFO     | backend | ==========================================================
+2026-08-27 18:31:07 | INFO     | backend | ChromaVectorStore initialized collection 'company_policy' at storage\chroma
+2026-08-27 18:31:07 | INFO     | backend | SemanticCacheManager initialized collection 'semantic_cache' at storage\chroma
+2026-08-27 18:31:16 | INFO     | backend | Loading embedding model BAAI/bge-small-en-v1.5
+2026-08-27 18:31:22 | INFO     | backend | [1/4] Embedding model loaded & warmed up in 14.91s
+2026-08-27 18:31:22 | INFO     | backend | Loading CrossEncoder reranker model BAAI/bge-reranker-large on device cpu
+2026-08-27 18:31:28 | INFO     | backend | [2/4] CrossEncoder reranker loaded & warmed up in 6.38s
+2026-08-27 18:31:28 | INFO     | backend | Preloaded Ollama model 'qwen2.5:7b' via keep_alive=-1
+2026-08-27 18:31:32 | INFO     | backend | [3/4] Ollama LLM 'qwen2.5:7b' preloaded & warmed up in 3.54s
+2026-08-27 18:31:32 | INFO     | backend | [4/5] Vector Store (12785 chunks) & BM25 (0 chunks) ready in 0.01s
+2026-08-27 18:31:32 | INFO     | backend | [5/5] Vision Model 'Qwen3-VL-2B-Instruct': READY (HF Vision model Qwen3-VL-2B-Instruct is available (lazy load).) in 0.00s
+2026-08-27 18:31:32 | INFO     | backend | ==========================================================
+2026-08-27 18:31:32 | INFO     | backend |   ALL RAG MODELS READY IN 26.13s — ZERO COLD START READY!  
+2026-08-27 18:31:32 | INFO     | backend | ==========================================================
+2026-08-27 18:31:32 | INFO     | backend | [HTTP] request_id=req_37a509030a10 GET /health -> 404 (26.56ms)
+INFO:     127.0.0.1:52810 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:34 | INFO     | backend | [HTTP] request_id=req_8a97dab078df GET /health -> 404 (0.39ms)
+INFO:     127.0.0.1:52811 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:36 | INFO     | backend | [HTTP] request_id=req_156b58d25e2e GET /health -> 404 (0.66ms)
+INFO:     127.0.0.1:52812 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:38 | INFO     | backend | [HTTP] request_id=req_77a4ac45bb19 GET /health -> 404 (0.80ms)
+INFO:     127.0.0.1:52813 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:40 | INFO     | backend | [HTTP] request_id=req_b91a84ec2683 GET /health -> 404 (0.71ms)
+INFO:     127.0.0.1:52814 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:42 | INFO     | backend | [HTTP] request_id=req_c2ca39057bd4 GET /health -> 404 (0.31ms)
+INFO:     127.0.0.1:52815 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:44 | INFO     | backend | [HTTP] request_id=req_f6597a7f0068 GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:52816 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:46 | INFO     | backend | [HTTP] request_id=req_719877abf3ef GET /health -> 404 (0.44ms)
+INFO:     127.0.0.1:52817 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:48 | INFO     | backend | [HTTP] request_id=req_a21c4dd85b31 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:52818 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:50 | INFO     | backend | [HTTP] request_id=req_2f48fc870ff7 GET /health -> 404 (0.34ms)
+INFO:     127.0.0.1:52819 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:52 | INFO     | backend | [HTTP] request_id=req_88fc9720caee GET /health -> 404 (0.27ms)
+INFO:     127.0.0.1:52820 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:54 | INFO     | backend | [HTTP] request_id=req_6a0412fa8ec8 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:52821 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:56 | INFO     | backend | [HTTP] request_id=req_60825d11c97d GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:52822 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:31:58 | INFO     | backend | [HTTP] request_id=req_ee7473dba00e GET /health -> 404 (0.85ms)
+INFO:     127.0.0.1:52824 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:32:00 | INFO     | backend | [HTTP] request_id=req_1263a3e13449 GET /health -> 404 (0.28ms)
+INFO:     127.0.0.1:52825 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:32:02 | INFO     | backend | [HTTP] request_id=req_f3fd4613332d GET /health -> 404 (0.29ms)
+INFO:     127.0.0.1:52827 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:32:04 | INFO     | backend | [HTTP] request_id=req_d1b2bed89b4c GET /health -> 404 (0.27ms)
+INFO:     127.0.0.1:52828 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:32:06 | INFO     | backend | [HTTP] request_id=req_bdfc977940cc GET /health -> 404 (0.30ms)
+INFO:     127.0.0.1:52829 - "GET /health HTTP/1.1" 404 Not Found
+2026-08-27 18:32:16 | INFO     | backend | [HTTP] request_id=req_798de4d888aa GET /docs -> 200 (0.20ms)
+INFO:     127.0.0.1:52832 - "GET /docs HTTP/1.1" 200 OK
+2026-08-27 18:32:16 | INFO     | backend | [HTTP] request_id=req_61155f19ed3b GET /openapi.json -> 200 (334.89ms)
+INFO:     127.0.0.1:52833 - "GET /openapi.json HTTP/1.1" 200 OK
+2026-08-27 18:32:28 | WARNING  | backend | Redis connection failed (Timeout connecting to server). Falling back to in-memory cache.
+INFO:     127.0.0.1:52836 - "GET /api/health HTTP/1.1" 200 OK
+2026-08-27 18:32:34 | INFO     | backend | [HTTP] request_id=req_0a007ea37f74 GET /api/documents -> 200 (5.32ms)
+INFO:     127.0.0.1:52661 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 18:32:34 | INFO     | backend | [HTTP] request_id=req_1658c9471347 GET /api/documents -> 200 (1.42ms)
+INFO:     127.0.0.1:52661 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54079 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52661 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:32:35 | INFO     | backend | [HTTP] request_id=req_7c96213f95e2 GET /api/models -> 200 (1253.15ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:32:35 | INFO     | backend | [HTTP] request_id=req_ddb5784faca5 GET /api/models -> 200 (9.80ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:32:35 | INFO     | backend | [HTTP] request_id=req_20fcd44b7cff GET /api/models -> 200 (21.72ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:32:35 | INFO     | backend | [HTTP] request_id=req_16e95cb4da56 GET /api/models -> 200 (8.53ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:32:41 | INFO     | backend | [HTTP] request_id=req_4257fdbc7f4e OPTIONS /api/chat/session/session_6y24t2w_1787809718666 -> 200 (0.16ms)
+INFO:     127.0.0.1:58532 - "OPTIONS /api/chat/session/session_6y24t2w_1787809718666 HTTP/1.1" 200 OK
+2026-08-27 18:32:41 | INFO     | backend | [HTTP] request_id=req_4bc2dd338039 DELETE /api/chat/session/session_6y24t2w_1787809718666 -> 200 (1.13ms)
+INFO:     127.0.0.1:58532 - "DELETE /api/chat/session/session_6y24t2w_1787809718666 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:32:43 | INFO     | backend | [HTTP] request_id=req_1e63cad7c5e9 GET /api/documents -> 200 (1.02ms)
+INFO:     127.0.0.1:58532 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 18:32:43 | INFO     | backend | [HTTP] request_id=req_10724789272f GET /api/documents -> 200 (1.22ms)
+INFO:     127.0.0.1:58532 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:04 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 file=AI Agents guidebook (1).pdf size=33580474 bytes
+2026-08-27 18:33:04 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 1: FILE SAVED status=SUCCESS
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=1 (label=1, 500x500, 34550 bytes) type=diagram_architecture -> page_1_c1d0348f5e10.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=1 (label=1, 498x500, 8499 bytes) type=code_screenshot -> page_1_8e169f60adbf.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=1 (label=1, 500x500, 25527 bytes) type=diagram_architecture -> page_1_2c4d1625425e.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=1 (label=1, 111x111, 7738 bytes) type=diagram_architecture -> page_1_94418d199ed7.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=2 (label=1, 1162x627, 143788 bytes) type=diagram_architecture -> page_2_56e3cbb66763.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=2 (label=1, 2000x2000, 86822 bytes) type=diagram_architecture -> page_2_41b741159496.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=6 (label=5, 1987x1091, 86990 bytes) type=diagram_architecture -> page_6_9e5859b1b5d3.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=7 (label=6, 2048x804, 160590 bytes) type=diagram_architecture -> page_7_e8cc7190bab2.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=7 (label=6, 2048x465, 90457 bytes) type=diagram_architecture -> page_7_8595f73ab0c7.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=7 (label=6, 1600x354, 94904 bytes) type=diagram_architecture -> page_7_80f103ea7d06.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=8 (label=7, 2048x531, 76340 bytes) type=diagram_architecture -> page_8_d9117f7858da.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=8 (label=7, 1280x1106, 170616 bytes) type=diagram_architecture -> page_8_bb6122e5af9f.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=9 (label=8, 630x211, 27781 bytes) type=diagram_architecture -> page_9_ce56cdfd8814.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=9 (label=8, 619x295, 28646 bytes) type=diagram_architecture -> page_9_a15795e17572.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=10 (label=9, 390x150, 8344 bytes) type=diagram_architecture -> page_10_978eb1386a72.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=10 (label=9, 790x382, 56054 bytes) type=diagram_architecture -> page_10_c67d1cda52a9.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=11 (label=10, 2048x658, 135074 bytes) type=diagram_architecture -> page_11_498d1fd20190.png
+2026-08-27 18:33:05 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=12 (label=11, 2048x1122, 237819 bytes) type=diagram_architecture -> page_12_5cae8da6f7f3.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=13 (label=12, 912x650, 71502 bytes) type=diagram_architecture -> page_13_7536610865ce.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=14 (label=13, 793x801, 198439 bytes) type=code_screenshot -> page_14_29ada30c7d31.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=15 (label=14, 475x226, 41740 bytes) type=code_screenshot -> page_15_dc36c74b0be8.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=15 (label=14, 778x304, 49580 bytes) type=code_screenshot -> page_15_9d486f691211.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=15 (label=14, 559x360, 66396 bytes) type=code_screenshot -> page_15_686b34346c58.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=15 (label=14, 891x217, 64444 bytes) type=code_screenshot -> page_15_4134df21725b.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=16 (label=15, 889x261, 66402 bytes) type=code_screenshot -> page_16_31b6fddfe0f2.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=16 (label=15, 889x409, 88970 bytes) type=code_screenshot -> page_16_2e884b80154e.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=16 (label=15, 888x409, 86621 bytes) type=code_screenshot -> page_16_ad651011c100.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=17 (label=16, 885x526, 111323 bytes) type=code_screenshot -> page_17_45deb471178e.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=17 (label=16, 753x471, 84412 bytes) type=code_screenshot -> page_17_ebcfc6d539f5.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=17 (label=16, 862x235, 76722 bytes) type=code_screenshot -> page_17_12b75c6c6de5.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=18 (label=17, 1944x676, 144127 bytes) type=code_screenshot -> page_18_c62fa245353e.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=18 (label=17, 1648x676, 150040 bytes) type=code_screenshot -> page_18_7cefda428216.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=18 (label=17, 1620x724, 146888 bytes) type=code_screenshot -> page_18_cb0e87e25ec7.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=19 (label=18, 2048x774, 208062 bytes) type=code_screenshot -> page_19_d460d37049e6.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=19 (label=18, 2048x1429, 338489 bytes) type=code_screenshot -> page_19_b3c6ab90e07b.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=19 (label=18, 1344x676, 151745 bytes) type=code_screenshot -> page_19_7f76131dd83d.png
+2026-08-27 18:33:06 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=20 (label=19, 1720x748, 174339 bytes) type=code_screenshot -> page_20_ad1256e83841.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=20 (label=19, 1688x796, 174201 bytes) type=code_screenshot -> page_20_504fce4fd8c9.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=21 (label=20, 2048x1152, 336264 bytes) type=code_screenshot -> page_21_e8df423b99c1.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=21 (label=20, 2048x982, 286291 bytes) type=code_screenshot -> page_21_8e2a176806db.png
+INFO:     127.0.0.1:49867 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=21 (label=20, 2048x950, 233497 bytes) type=code_screenshot -> page_21_e46e92888764.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=21 (label=20, 582x207, 8699 bytes) type=code_screenshot -> page_21_434118a71c68.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=22 (label=21, 716x526, 59605 bytes) type=diagram_architecture -> page_22_a59f76e4a02b.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=23 (label=22, 1600x594, 138257 bytes) type=diagram_architecture -> page_23_0ca5829a581c.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=24 (label=23, 1600x628, 169487 bytes) type=diagram_architecture -> page_24_309058fc6799.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=25 (label=24, 800x908, 164426 bytes) type=code_screenshot -> page_25_76e41c2d1035.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=26 (label=25, 673x512, 38539 bytes) type=diagram_architecture -> page_26_933c9418a0b6.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=26 (label=25, 673x519, 42750 bytes) type=diagram_architecture -> page_26_02f833aa8cf0.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=27 (label=26, 673x519, 45901 bytes) type=code_screenshot -> page_27_ad4a9785a847.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=28 (label=27, 1600x516, 123607 bytes) type=code_screenshot -> page_28_181195d9d1b7.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=28 (label=27, 1000x797, 549563 bytes) type=code_screenshot -> page_28_58b66a93d66e.png
+2026-08-27 18:33:07 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=29 (label=28, 673x492, 44729 bytes) type=code_screenshot -> page_29_b511c7315a93.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=30 (label=29, 673x492, 42023 bytes) type=diagram_architecture -> page_30_4cf1b3ec4cf1.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=31 (label=30, 988x1122, 819887 bytes) type=code_screenshot -> page_31_29913c13c04f.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=32 (label=31, 846x644, 60518 bytes) type=code_screenshot -> page_32_6b339635a6db.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=32 (label=31, 846x652, 66028 bytes) type=code_screenshot -> page_32_4f3c7d58114d.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=33 (label=32, 846x652, 72068 bytes) type=diagram_architecture -> page_33_c9a566cdc0c4.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=33 (label=32, 846x618, 82697 bytes) type=diagram_architecture -> page_33_7d938cf04d57.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=34 (label=33, 846x618, 64084 bytes) type=diagram_architecture -> page_34_a09b38b4a891.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=36 (label=35, 932x758, 132971 bytes) type=code_screenshot -> page_36_7d72015b0a64.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=37 (label=36, 914x460, 95695 bytes) type=code_screenshot -> page_37_24efa7d94ffa.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=37 (label=36, 680x398, 47941 bytes) type=code_screenshot -> page_37_a24fb0c56cc1.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=38 (label=37, 680x513, 60239 bytes) type=code_screenshot -> page_38_7ee601241595.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=39 (label=38, 908x760, 166831 bytes) type=diagram_architecture -> page_39_8e39fe9385c5.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=39 (label=38, 926x656, 105810 bytes) type=diagram_architecture -> page_39_6692340a16c9.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=40 (label=39, 1028x726, 121921 bytes) type=code_screenshot -> page_40_53076b6fb330.png
+2026-08-27 18:33:08 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=40 (label=39, 680x462, 33639 bytes) type=code_screenshot -> page_40_83ef3da4f7cc.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=41 (label=40, 986x856, 168973 bytes) type=code_screenshot -> page_41_80e08ba377c7.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=41 (label=40, 500x500, 11385 bytes) type=code_screenshot -> page_41_b88094b77e56.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=42 (label=41, 1280x984, 228379 bytes) type=diagram_architecture -> page_42_d65195313bb7.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=43 (label=42, 900x598, 74733 bytes) type=diagram_architecture -> page_43_90ee0b049f7f.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=44 (label=43, 900x775, 112461 bytes) type=diagram_architecture -> page_44_3783179791d4.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=44 (label=43, 900x536, 62138 bytes) type=diagram_architecture -> page_44_54a58d065f5a.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=45 (label=44, 900x838, 121193 bytes) type=diagram_architecture -> page_45_22c574069079.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=46 (label=45, 801x900, 78379 bytes) type=code_screenshot -> page_46_f84b280509ce.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=46 (label=45, 500x500, 11664 bytes) type=code_screenshot -> page_46_cace8f0dfe06.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=47 (label=46, 1280x962, 193502 bytes) type=code_screenshot -> page_47_da3901eb6329.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=48 (label=47, 900x624, 228665 bytes) type=code_screenshot -> page_48_60da571c861c.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=48 (label=47, 900x617, 344124 bytes) type=code_screenshot -> page_48_fd86dc7fe216.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=49 (label=48, 900x624, 317380 bytes) type=diagram_architecture -> page_49_45a67fbfb468.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=50 (label=49, 900x519, 167672 bytes) type=diagram_architecture -> page_50_d2b6a7075b7e.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=50 (label=49, 900x619, 386537 bytes) type=diagram_architecture -> page_50_514afdb0feff.png
+2026-08-27 18:33:09 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=51 (label=50, 725x900, 372545 bytes) type=code_screenshot -> page_51_189a3b831898.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=52 (label=51, 900x530, 206288 bytes) type=code_screenshot -> page_52_ed0353f81a96.png
+INFO:     127.0.0.1:49867 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=53 (label=52, 900x779, 228169 bytes) type=diagram_architecture -> page_53_d3c8a064fe86.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=54 (label=53, 900x496, 109521 bytes) type=diagram_architecture -> page_54_b13a7392ed34.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=54 (label=53, 500x500, 12236 bytes) type=diagram_architecture -> page_54_54c38a508dd0.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=55 (label=54, 800x666, 113120 bytes) type=code_screenshot -> page_55_ba3899d0bc47.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=56 (label=55, 900x427, 145680 bytes) type=code_screenshot -> page_56_3792683d4f0f.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=56 (label=55, 900x659, 468379 bytes) type=code_screenshot -> page_56_294b5541b21c.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=57 (label=56, 900x500, 273129 bytes) type=code_screenshot -> page_57_6aa07ab0746f.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=57 (label=56, 900x571, 306352 bytes) type=code_screenshot -> page_57_f58ad3ef51dd.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=58 (label=57, 900x890, 323145 bytes) type=code_screenshot -> page_58_c82f17e672ec.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=58 (label=57, 884x900, 474300 bytes) type=code_screenshot -> page_58_d64d7a83af11.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=59 (label=58, 900x889, 310491 bytes) type=diagram_architecture -> page_59_ebc897fd9b2c.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=59 (label=58, 500x500, 12341 bytes) type=diagram_architecture -> page_59_cfc719f8aa78.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=60 (label=59, 1752x914, 271901 bytes) type=code_screenshot -> page_60_7122fc79fbdc.png
+2026-08-27 18:33:10 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=61 (label=60, 680x673, 75190 bytes) type=code_screenshot -> page_61_2df7275a76cf.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=62 (label=61, 900x777, 78710 bytes) type=code_screenshot -> page_62_16d5d1161960.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=63 (label=62, 900x537, 45703 bytes) type=code_screenshot -> page_63_b50bfee3806e.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=63 (label=62, 1280x486, 146536 bytes) type=code_screenshot -> page_63_b904c322190b.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=64 (label=63, 900x695, 94564 bytes) type=code_screenshot -> page_64_de238ee166ec.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=65 (label=64, 900x695, 106658 bytes) type=code_screenshot -> page_65_e59b2d8305a5.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=66 (label=65, 900x845, 94021 bytes) type=diagram_architecture -> page_66_5dca9da9e98c.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=67 (label=66, 1456x991, 289457 bytes) type=diagram_architecture -> page_67_8e8a7323f488.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=67 (label=66, 500x500, 12035 bytes) type=diagram_architecture -> page_67_c15904067664.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=68 (label=67, 1280x964, 209998 bytes) type=code_screenshot -> page_68_150ce447842a.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=69 (label=68, 900x624, 55582 bytes) type=code_screenshot -> page_69_2ced92f3adbd.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=70 (label=69, 900x714, 371993 bytes) type=diagram_architecture -> page_70_9e1569f51d25.png
+2026-08-27 18:33:11 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=71 (label=70, 900x698, 376327 bytes) type=diagram_architecture -> page_71_ddb1b9cff8ea.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=72 (label=71, 900x519, 167672 bytes) type=diagram_architecture -> page_72_d2b6a7075b7e.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=72 (label=71, 900x552, 331075 bytes) type=diagram_architecture -> page_72_0b0630a74642.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=73 (label=72, 725x900, 372545 bytes) type=code_screenshot -> page_73_189a3b831898.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=74 (label=73, 900x530, 215522 bytes) type=code_screenshot -> page_74_a0ede7ee493a.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=74 (label=73, 900x779, 237616 bytes) type=code_screenshot -> page_74_271ee28e6b11.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=75 (label=74, 900x553, 127332 bytes) type=code_screenshot -> page_75_0692218ea15e.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=75 (label=74, 500x500, 11851 bytes) type=code_screenshot -> page_75_70d6889a0126.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=76 (label=75, 1258x994, 180372 bytes) type=code_screenshot -> page_76_23af13f36b20.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=77 (label=76, 900x582, 46276 bytes) type=diagram_architecture -> page_77_4392c1e9fee7.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=78 (label=77, 900x751, 115355 bytes) type=code_screenshot -> page_78_4417ea48bdb3.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=78 (label=77, 900x635, 89497 bytes) type=code_screenshot -> page_78_72e981f5040e.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=79 (label=78, 900x597, 80242 bytes) type=code_screenshot -> page_79_a1188218ec47.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=79 (label=78, 900x600, 73661 bytes) type=code_screenshot -> page_79_9e4bb3a25cec.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=80 (label=79, 777x900, 110003 bytes) type=code_screenshot -> page_80_7705ffa30438.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=81 (label=80, 900x823, 83578 bytes) type=diagram_architecture -> page_81_01c032adff68.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=82 (label=81, 900x820, 77914 bytes) type=diagram_architecture -> page_82_fb8a48ef55ed.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=82 (label=81, 900x446, 57057 bytes) type=diagram_architecture -> page_82_aae6ef993806.png
+2026-08-27 18:33:12 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=82 (label=81, 500x500, 11641 bytes) type=diagram_architecture -> page_82_5982ebf12e81.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=83 (label=82, 1276x1260, 280217 bytes) type=diagram_architecture -> page_83_d9b5c5287930.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=84 (label=83, 900x654, 75052 bytes) type=diagram_architecture -> page_84_531c95661311.png
+INFO:     127.0.0.1:49867 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=84 (label=83, 900x335, 43555 bytes) type=diagram_architecture -> page_84_cb29b0b987f9.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=85 (label=84, 900x799, 165420 bytes) type=diagram_architecture -> page_85_84bf8358d58d.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=86 (label=85, 670x900, 157386 bytes) type=code_screenshot -> page_86_eedda204371e.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=87 (label=86, 900x860, 160111 bytes) type=diagram_architecture -> page_87_cec4bac42120.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=87 (label=86, 900x516, 88762 bytes) type=diagram_architecture -> page_87_0fe8c900d2fb.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=88 (label=87, 900x461, 21651 bytes) type=diagram_architecture -> page_88_bc3cbbb10540.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=89 (label=88, 900x803, 80112 bytes) type=diagram_architecture -> page_89_a6b61b5fe566.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=89 (label=88, 500x500, 11993 bytes) type=diagram_architecture -> page_89_c598344673de.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=90 (label=89, 738x704, 129991 bytes) type=code_screenshot -> page_90_8bf023e58300.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=92 (label=91, 900x858, 141161 bytes) type=code_screenshot -> page_92_53ce6fed3ae9.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=93 (label=92, 900x542, 60578 bytes) type=code_screenshot -> page_93_ac0ee06c5144.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=94 (label=93, 893x900, 176010 bytes) type=code_screenshot -> page_94_f9a2d9bf6466.png
+2026-08-27 18:33:13 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=95 (label=94, 893x900, 170382 bytes) type=code_screenshot -> page_95_92538e86dd24.png
+2026-08-27 18:33:14 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=96 (label=95, 900x795, 120580 bytes) type=code_screenshot -> page_96_f250217ecc1b.png
+2026-08-27 18:33:14 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=97 (label=96, 900x805, 111777 bytes) type=code_screenshot -> page_97_0c2baf484c6a.png
+2026-08-27 18:33:14 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=98 (label=97, 2048x1525, 1896839 bytes) type=diagram_architecture -> page_98_33e46334fdb5.png
+2026-08-27 18:33:14 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=98 (label=97, 500x500, 12531 bytes) type=diagram_architecture -> page_98_8a8687bf1e83.png
+2026-08-27 18:33:14 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=99 (label=98, 1630x1502, 272291 bytes) type=diagram_architecture -> page_99_e5b79285a87c.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=101 (label=100, 900x866, 131181 bytes) type=diagram_architecture -> page_101_d364950a334a.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=102 (label=101, 811x900, 113011 bytes) type=code_screenshot -> page_102_8f4377aa47b2.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=103 (label=102, 865x900, 129505 bytes) type=code_screenshot -> page_103_07ac446132f5.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=104 (label=103, 788x900, 128919 bytes) type=code_screenshot -> page_104_97c63bb647f0.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=105 (label=104, 900x867, 142868 bytes) type=diagram_architecture -> page_105_46d9388ed41f.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=106 (label=105, 900x577, 103218 bytes) type=diagram_architecture -> page_106_0ac71fd05e45.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=106 (label=105, 500x500, 11604 bytes) type=diagram_architecture -> page_106_9c0866e3a6b3.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=107 (label=106, 932x737, 89715 bytes) type=code_screenshot -> page_107_e2dfce6d9ff8.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=108 (label=107, 1200x754, 80564 bytes) type=code_screenshot -> page_108_64e5aec8f162.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=108 (label=107, 1200x1184, 159216 bytes) type=code_screenshot -> page_108_bfe2560beba5.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=109 (label=108, 1200x1095, 220530 bytes) type=code_screenshot -> page_109_4e0147cc4d66.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=110 (label=109, 1200x1017, 224140 bytes) type=code_screenshot -> page_110_e2560a062b1a.png
+2026-08-27 18:33:15 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=111 (label=110, 1200x1081, 214273 bytes) type=diagram_architecture -> page_111_a82cea704a41.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=112 (label=111, 1200x1391, 212745 bytes) type=code_screenshot -> page_112_93ae039e20cd.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=112 (label=111, 500x500, 11627 bytes) type=diagram_architecture -> page_112_e05a9f202d35.png
+INFO:     127.0.0.1:49867 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=113 (label=112, 900x699, 277879 bytes) type=code_screenshot -> page_113_062239e98d9d.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=114 (label=113, 900x851, 281789 bytes) type=code_screenshot -> page_114_98d6e6f565ba.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=115 (label=114, 900x576, 410537 bytes) type=code_screenshot -> page_115_e99f7dbdb46a.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=115 (label=114, 900x637, 414157 bytes) type=code_screenshot -> page_115_4d09e42744c6.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=116 (label=115, 900x566, 316647 bytes) type=code_screenshot -> page_116_f4eed80a578c.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=116 (label=115, 900x591, 354873 bytes) type=code_screenshot -> page_116_df5b3ee1b5bf.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=117 (label=116, 900x590, 311554 bytes) type=code_screenshot -> page_117_94c2ab4d33a9.png
+2026-08-27 18:33:16 | INFO     | backend | [IMAGE ASSET] Saved original visual asset doc=doc_3a31ba0b4424 p=117 (label=116, 500x500, 12185 bytes) type=code_screenshot -> page_117_386e8f51d7a0.png
+2026-08-27 18:33:16 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 2: TEXT EXTRACTION pages=117 duration=12136.77ms status=SUCCESS
+2026-08-27 18:33:17 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 3: SECTION DETECTION sections=117 duration=178.28ms status=SUCCESS
+2026-08-27 18:33:17 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 4: CHUNKING chunks_created=120 strategy=heading_aware duration=12.20ms status=SUCCESS
+INFO:     127.0.0.1:49867 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:20 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 Embedding batch: 1/4 (chunks 1-32), duration=3235.47ms
+2026-08-27 18:33:21 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 Embedding batch: 2/4 (chunks 33-64), duration=828.33ms
+INFO:     127.0.0.1:49867 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:21 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 Embedding batch: 3/4 (chunks 65-96), duration=746.15ms
+2026-08-27 18:33:22 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 Embedding batch: 4/4 (chunks 97-120), duration=437.92ms
+2026-08-27 18:33:22 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 5: EMBEDDINGS processed=120/120 duration=5252.94ms status=SUCCESS
+2026-08-27 18:33:22 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 6: VECTOR INDEX duration=517.74ms status=SUCCESS
+2026-08-27 18:33:22 | INFO     | backend | BM25 index built with 120 chunks
+2026-08-27 18:33:22 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 7: BM25 INDEX duration=6.03ms status=SUCCESS
+2026-08-27 18:33:22 | INFO     | backend | [INGESTION] document_id=doc_3a31ba0b4424 STAGE 8: FINALIZATION status=SUCCESS DOCUMENT STATUS=READY PROGRESS=100 (total=18122.77ms)
+2026-08-27 18:33:22 | INFO     | backend | [HTTP] request_id=req_fa8450448662 POST /api/documents/upload -> 201 (18463.11ms)
+INFO:     127.0.0.1:58532 - "POST /api/documents/upload HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:27 | INFO     | backend | [HTTP] request_id=req_f03ffb6bd5c6 GET /api/models -> 200 (9.02ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:33:27 | INFO     | backend | [HTTP] request_id=req_4b0d84c9e223 GET /api/documents -> 200 (1.94ms)
+INFO:     127.0.0.1:58532 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 18:33:27 | INFO     | backend | [HTTP] request_id=req_954e50ee77bc GET /api/models -> 200 (8.06ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:33:27 | INFO     | backend | [HTTP] request_id=req_19d9d03b3e24 GET /api/documents -> 200 (0.79ms)
+INFO:     127.0.0.1:58532 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 18:33:27 | INFO     | backend | [HTTP] request_id=req_15a37084609c GET /api/models -> 200 (9.75ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:33:27 | INFO     | backend | [HTTP] request_id=req_67767e3a7110 GET /api/models -> 200 (9.74ms)
+INFO:     127.0.0.1:58532 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58532 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:30 | INFO     | backend | [HTTP] request_id=req_fb3f25ead95b OPTIONS /api/chat/stream -> 200 (0.15ms)
+INFO:     127.0.0.1:58532 - "OPTIONS /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 18:33:30 | INFO     | backend | [HTTP] request_id=req_8deea917d1f0 POST /api/chat/stream -> 200 (1.62ms)
+INFO:     127.0.0.1:53792 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 18:33:30 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=1 is_followup=False topic_shift=False topic='hi' entities=[]
+2026-08-27 18:33:30 | INFO     | backend | [QUERY_RESOLUTION] query='hi' resolved='hi' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-27 18:33:30 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+2026-08-27 18:33:30 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    hi
+INTENT:                   conversational
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Conversational Bypass
+TEXT_CANDIDATES:          0
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      0
+FINAL_VISUAL_EVIDENCE:    0
+PAGE_IDENTITY:            N/A
+VISUAL_ASSET:             NONE
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          SUFFICIENT
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            1.60 ms
+======================================================================
+
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:57 | INFO     | backend | [HTTP] request_id=req_9ee7e7d0ad9c POST /api/chat/stream -> 200 (1.14ms)
+INFO:     127.0.0.1:53792 - "POST /api/chat/stream HTTP/1.1" 200 OK
+2026-08-27 18:33:57 | INFO     | backend | [CONVERSATION] session_id=session_0k2k8r3_1787835761540 turn_count=2 is_followup=False topic_shift=False topic='how can i make voice rag agent' entities=['make voice agent']
+2026-08-27 18:33:57 | INFO     | backend | [QUERY_RESOLUTION] query='how can i make voice rag agent' resolved='how can i make voice rag agent' confidence=1.00 cues='Initial query establishing conversation topic'
+2026-08-27 18:33:57 | INFO     | backend | [ANSWER_MODE] mode=DIRECT directives='Mode: DIRECT EXTRACTION - Extract and present factual, concise answers addressing the exact user question based strictly on the retrieved context.'
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:33:58 | INFO     | backend | Executing dense retrieval for query: how can i make voice rag agent Agentic RAG retriever agent workflow vector DB context
+2026-08-27 18:33:58 | INFO     | backend | Dense retrieve: computing embedding for how can i make voice rag agent Agentic RAG retriever agent workflow vector DB context
+2026-08-27 18:33:58 | INFO     | backend | Dense retrieve: embedding computed, querying vector store
+2026-08-27 18:33:58 | INFO     | backend | Dense retrieve: vector store query complete
+2026-08-27 18:33:58 | INFO     | backend | Executing BM25 retrieval for query: how can i make voice rag agent Agentic RAG retriever agent workflow vector DB context
+2026-08-27 18:33:58 | INFO     | backend | BM25 retrieval complete
+2026-08-27 18:33:58 | INFO     | backend | Starting CrossEncoder prediction for 16 pairs...
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:34:03 | INFO     | backend | CrossEncoder prediction complete.
+2026-08-27 18:34:03 | INFO     | backend | Evidence Sufficiency Gate: Missing required evidence types (code_implementation) for intent 'implementation'. Continuation cues detected: none. -> Inspecting pages [35, 36, 37, 38]
+2026-08-27 18:34:03 | INFO     | backend | Evidence sufficiency check failed for query 'how can i make voice rag agent' (intent=QueryCategory.IMPLEMENTATION). Inspecting pages [35, 36, 37, 38]
+2026-08-27 18:34:03 | INFO     | backend | [VISION] Processing visual content: model=Qwen3-VL-2B-Instruct, doc=doc_3a31ba0b4424, page=36 (label=35, idx=35), type=code_screenshot, hash=7d72015b, attempt=1/1, timeout=30.0s
+2026-08-27 18:34:03 | INFO     | backend | Loading HF Vision Model from C:\Users\jains\Qwen3-VL-2B-Instruct on cpu
+2026-08-27 18:34:03 | INFO     | backend | HF Vision Model loaded successfully on cpu.
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:35:00 | INFO     | backend | [HTTP] request_id=req_1605f656f88b GET /api/documents -> 200 (1.46ms)
+INFO:     127.0.0.1:49526 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 18:35:00 | INFO     | backend | [HTTP] request_id=req_1ee78dbde2af GET /api/documents -> 200 (1.17ms)
+INFO:     127.0.0.1:49526 - "GET /api/documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:35:20 | INFO     | backend | [HTTP] request_id=req_3f745b22dc8e GET /api/documents -> 200 (25.33ms)
+INFO:     127.0.0.1:62109 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 18:35:20 | INFO     | backend | [HTTP] request_id=req_f2c005c388e1 GET /api/documents -> 200 (3.58ms)
+INFO:     127.0.0.1:62109 - "GET /api/documents HTTP/1.1" 200 OK
+2026-08-27 18:35:20 | INFO     | backend | [HTTP] request_id=req_88703b773956 GET /api/models -> 200 (108.75ms)
+INFO:     127.0.0.1:49526 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:35:20 | INFO     | backend | [HTTP] request_id=req_66b936ba3ea0 GET /api/models -> 200 (73.14ms)
+INFO:     127.0.0.1:49526 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:35:20 | INFO     | backend | [HTTP] request_id=req_62b7d2a6fede GET /api/models -> 200 (68.65ms)
+INFO:     127.0.0.1:49526 - "GET /api/models HTTP/1.1" 200 OK
+2026-08-27 18:35:21 | INFO     | backend | [HTTP] request_id=req_6c60301b4324 GET /api/models -> 200 (50.04ms)
+INFO:     127.0.0.1:49526 - "GET /api/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:35:45 | INFO     | backend | [HTTP] request_id=req_cf2a61cecdf2 GET /docs -> 200 (0.45ms)
+INFO:     127.0.0.1:63704 - "GET /docs HTTP/1.1" 200 OK
+2026-08-27 18:35:45 | INFO     | backend | [HTTP] request_id=req_c329ce6f4011 GET /openapi.json -> 200 (3.50ms)
+INFO:     127.0.0.1:63704 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:35:50 | WARNING  | backend | [VISION] Query-level vision budget exhausted (107.8s/40.0s). Skipping remaining pages.
+2026-08-27 18:35:50 | INFO     | backend | [EVIDENCE_STATUS] prev=NONE current=RELATED monotonic=RELATED rationale='Single turn evaluation'
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49526 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:37:28 | INFO     | backend | 
+======================================================================
+[RAG TRACE]
+QUERY:                    how can i make voice rag agent
+INTENT:                   implementation
+DOCUMENT_SCOPE:           global
+ANCHOR_SECTION:           Levels of Agentic AI Systems
+TEXT_CANDIDATES:          49
+VISUAL_CANDIDATES:        0
+FINAL_TEXT_EVIDENCE:      7
+FINAL_VISUAL_EVIDENCE:    1
+PAGE_IDENTITY:            internal_page_index=35 physical_page_number=36 display_page_number=35
+VISUAL_ASSET:             FOUND
+VISION_STATUS:            READY
+EVIDENCE_STATUS:          RELATED
+GROUNDING:                PASS
+GENERATION_MODEL:         qwen2.5:7b
+TOTAL LATENCY:            211033.71 ms
+======================================================================
+
+2026-08-27 18:37:28 | INFO     | backend | Successfully stored entry in semantic cache (id: 62a04b53)
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:38:07 | INFO     | backend | [HTTP] request_id=req_c6e363a365aa GET /api/documents/doc_3a31ba0b4424/visual-assets/ast_7d72015b0a64 -> 200 (4.07ms)
+INFO:     127.0.0.1:62093 - "GET /api/documents/doc_3a31ba0b4424/visual-assets/ast_7d72015b0a64 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:38:32 | INFO     | backend | [HTTP] request_id=req_6a747d0a5531 GET /api/admin/observability/queries -> 200 (12.74ms)
+INFO:     127.0.0.1:62108 - "GET /api/admin/observability/queries?limit=10 HTTP/1.1" 200 OK
+2026-08-27 18:38:32 | INFO     | backend | [HTTP] request_id=req_2f59a030749a GET /api/admin/observability/summary -> 200 (67.48ms)
+INFO:     127.0.0.1:62109 - "GET /api/admin/observability/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+2026-08-27 18:40:00 | INFO     | backend | [HTTP] request_id=req_76aebaa0bb83 GET /api/admin/observability/queries -> 200 (7.30ms)
+INFO:     127.0.0.1:61132 - "GET /api/admin/observability/queries?page=1&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53792 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62858 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51594 - "GET /api/admin/observability?time_range=24h HTTP/1.1" 200 OK

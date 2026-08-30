@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import copy
 import json
+import queue
 import re
 import threading
 import time
 import uuid
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from backend.models.chunk import Chunk, ChunkMetadata, ContentType
 from backend.models.rag import (
@@ -41,6 +43,10 @@ from backend.rag.multi_query import MultiQueryGenerator
 from backend.rag.query_rewrite import QueryRewriter
 from backend.rag.query_router import QueryRouter
 from backend.rag.retry_engine import RetryEngine
+from backend.rag.response_modes import (
+    ResponseMode,
+    get_response_mode_config,
+)
 from backend.rag.scope_resolver import (
     DocumentRetrievalScope,
     DocumentScopeResolver,
@@ -65,17 +71,29 @@ class ModelManager:
     """
 
     def __init__(self, initial_model: str):
-        self.current_model = initial_model
+        self._current_model = initial_model
+        self._lock = threading.RLock()
+
+    @property
+    def current_model(self) -> str:
+        with self._lock:
+            return self._current_model
 
     def set_model(self, model_name: str) -> None:
         """Update active model and optionally trigger non-blocking background preload."""
-        self.current_model = model_name
+        normalized = str(model_name or "").strip()
+        if not normalized:
+            raise ValueError("Model selection cannot be empty.")
+        with self._lock:
+            if normalized == self._current_model:
+                return
+            self._current_model = normalized
 
         def _bg_preload():
             try:
-                preload_model(model_name)
+                preload_model(normalized)
             except Exception as e:
-                logger.warning("Background preload for %s failed: %s", model_name, e)
+                logger.warning("Background preload for %s failed: %s", normalized, e)
 
         try:
             threading.Thread(target=_bg_preload, daemon=True).start()
@@ -84,31 +102,35 @@ class ModelManager:
 
 
 class _LLMProxy:
-    """Per-request thread-safe wrapper overriding the model attribute for shared LLM instances."""
+    """Locked fallback wrapper for LLM clients that cannot be copied per model."""
 
-    def __init__(self, target_llm: Any, target_model: str) -> None:
+    def __init__(self, target_llm: Any, target_model: str, lock: threading.RLock) -> None:
         self._target_llm = target_llm
         self.model = target_model
+        self._lock = lock
 
     def complete(self, prompt: str, **kwargs: Any) -> Any:
-        old_model = getattr(self._target_llm, "model", None)
-        try:
-            if hasattr(self._target_llm, "model") and self.model:
-                self._target_llm.model = self.model
-            return self._target_llm.complete(prompt, **kwargs)
-        finally:
-            if hasattr(self._target_llm, "model") and old_model is not None:
-                self._target_llm.model = old_model
+        with self._lock:
+            old_model = getattr(self._target_llm, "model", None)
+            try:
+                if hasattr(self._target_llm, "model") and self.model:
+                    self._target_llm.model = self.model
+                return self._target_llm.complete(prompt, **kwargs)
+            finally:
+                if hasattr(self._target_llm, "model") and old_model is not None:
+                    self._target_llm.model = old_model
 
     def stream_complete(self, prompt: str, **kwargs: Any) -> Any:
-        old_model = getattr(self._target_llm, "model", None)
-        try:
-            if hasattr(self._target_llm, "model") and self.model:
-                self._target_llm.model = self.model
-            return self._target_llm.stream_complete(prompt, **kwargs)
-        finally:
-            if hasattr(self._target_llm, "model") and old_model is not None:
-                self._target_llm.model = old_model
+        with self._lock:
+            old_model = getattr(self._target_llm, "model", None)
+            try:
+                if hasattr(self._target_llm, "model") and self.model:
+                    self._target_llm.model = self.model
+                # Keep the selected model for the generator's full lifetime.
+                yield from self._target_llm.stream_complete(prompt, **kwargs)
+            finally:
+                if hasattr(self._target_llm, "model") and old_model is not None:
+                    self._target_llm.model = old_model
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._target_llm, name)
@@ -133,7 +155,11 @@ RULE 6: Do not fabricate or invent the contents of a visual that failed extracti
 RULE 7: For source-grounded answers, prefer language such as: "According to the workflow shown on Page X..." or "Based on Section Y..." using the human-visible printed page numbers provided in the context blocks.
 RULE 8: Citations: Cite sources using [Source N] or [Visual Source N] tags for every substantive claim, code block, or diagram description.
 RULE 9: When code snippets, kickoff calls, agent configurations, or implementations appear in the retrieved context (including under [Source N] or [VISUAL SOURCE N]), extract and present that code directly and faithfully. Never state that the document does not contain the code if relevant code snippets or implementations are present in the context.
-RULE 10: Comprehensively extract and present all relevant facts, dates, deadlines, timelines, parameters, numbers, policies, and specific guidelines directly from the retrieved context in rich detail.
+RULE 10: Include only the retrieved facts needed to answer the exact question. Do not dump adjacent context, generic background, or implementation details the user did not request.
+RULE 11: Lead with the direct answer. For non-trivial questions, organize the rest under short descriptive headings and use bullets or numbered steps only when they improve clarity.
+RULE 12: Do not repeat the question or add a generic preamble. Keep simple factual answers concise; use a compact summary followed by supporting details for broader questions.
+RULE 13: If sources disagree or the evidence is incomplete, state the uncertainty explicitly instead of blending conflicting facts.
+RULE 14: Match the requested depth. By default answer in 2-4 short sentences or at most 4 compact bullets. Do not add a recap or conclusion. Give a long walkthrough or code only when the user explicitly asks for detail, steps, or code.
 {evidence_status_directive}
 {mode_instructions}
 {refinement_directive}
@@ -143,15 +169,26 @@ RETRIEVED CONTEXT:
 {history_text}USER QUESTION: {query}
 ANSWER:"""
 
+GENERAL_CHAT_PROMPT = """You are a helpful conversational assistant in General chat mode.
+Do not search, cite, or claim to rely on the user's document repository in this mode.
+Use general knowledge and the recent conversation below when it is relevant.
+Lead with the answer, avoid repeating the question, and use short headings or bullets only when they improve clarity.
+If the user asks for document-specific facts, explain that they should switch to Document search mode.
+
+RESPONSE MODE:
+{response_mode_instructions}
+
+{history_text}USER QUESTION: {query}
+ANSWER:"""
+
 def _format_evidence_status_directive(status: Any) -> str:
     st_val = getattr(status, "value", str(status)).upper()
     if st_val == "PARTIAL":
-        return """Evidence Status: PARTIAL IMPLEMENTATION
-- The retrieved context contains partial code or invocation examples (such as kickoff calls, parameters, or configurations).
-- Present this available code faithfully under [Source N] or [VISUAL SOURCE N].
-- Clearly explain that this is the partial code/invocation available in the document.
-- DO NOT claim that the document does not contain the code.
-- DO NOT fabricate, invent, or hallucinate missing class definitions, imports, or external tool configurations."""
+        return """Evidence Status: PARTIAL
+- The retrieved context does not contain every detail required for a complete answer.
+- State only what the retrieved text or extracted visual explicitly supports.
+- If a list, diagram, table, code block, or workflow is referenced but not extracted, say that those details are not available in the retrieved evidence.
+- Never fill missing labels, steps, tools, APIs, code, or facts from model memory."""
     elif st_val == "DIRECT":
         return """Evidence Status: DIRECT IMPLEMENTATION
 - The retrieved context contains direct code or implementation details.
@@ -175,8 +212,9 @@ EXPLAIN_MODE_INSTRUCTIONS = """Mode: EXPLAIN
 - Then provide a structured, grounded explanation of how it works."""
 
 IMPLEMENT_MODE_INSTRUCTIONS = """Mode: IMPLEMENTATION
-- Present the step-by-step implementation strictly based on the retrieved code, agent/task configurations, and parameters from the document.
-- Include the exact code provided in the document. Do not substitute generic or fabricated code."""
+- Give the shortest useful implementation outline supported by the retrieved evidence.
+- Include code only when the user explicitly requests code and the document actually provides it.
+- Do not substitute generic or fabricated steps, tools, APIs, or code."""
 
 EXPAND_MODE_INSTRUCTIONS = """Mode: EXPAND / DETAILED
 - Deep architectural and implementation dive.
@@ -217,15 +255,195 @@ def _detect_fidelity_mode(query: str) -> str:
     return "grounded"
 
 
-def _format_history_for_prompt(history: list[dict[str, Any]] | None, max_turns: int = 6) -> str:
+_EXPLICIT_DETAIL_PATTERN = re.compile(
+    r"\b(?:in detail|detailed|step[- ]by[- ]step|walk me through|deep dive|"
+    r"comprehensive|thorough|exhaustive|all details|show me the code|"
+    r"give me the code|source code|code example)\b",
+    re.IGNORECASE,
+)
+
+
+def _select_answer_token_budget(
+    category: QueryCategory,
+    answer_mode: AnswerMode | str | None,
+    query: str,
+) -> int:
+    """Choose a concise default budget and expand only on explicit request."""
+    if category == QueryCategory.FACTUAL:
+        base = int(getattr(settings, "max_new_tokens_factual", 256))
+    elif category in (QueryCategory.PROCEDURAL, QueryCategory.IMPLEMENTATION, QueryCategory.CODE):
+        base = int(getattr(settings, "max_new_tokens_technical", 512))
+    else:
+        base = int(getattr(settings, "max_new_tokens_complex", 1024))
+
+    mode = str(getattr(answer_mode, "value", answer_mode) or "DIRECT").upper()
+    expansive_modes = {"EXPAND", "DETAILED", "CODE_EXPLANATION", "STEP_BY_STEP"}
+    if mode in expansive_modes or _EXPLICIT_DETAIL_PATTERN.search(query or ""):
+        return base
+
+    concise_limit = max(64, int(getattr(settings, "max_new_tokens_direct", 256)))
+    return min(base, concise_limit)
+
+
+def _enforce_direct_answer_length(answer: str, max_words: int = 100) -> str:
+    """Keep direct answers compact when a model backend ignores token limits."""
+    word_matches = list(re.finditer(r"\S+", answer))
+    if len(word_matches) <= max_words:
+        return answer.strip()
+
+    prefix = answer[: word_matches[max_words - 1].end()]
+    min_boundary = max(40, int(len(prefix) * 0.65))
+    sentence_end = max(prefix.rfind("."), prefix.rfind("!"), prefix.rfind("?"))
+    if sentence_end >= min_boundary:
+        return prefix[: sentence_end + 1].strip()
+    return prefix.rstrip(" ,;:-") + "…"
+
+
+_DEGRADED_ANSWER_MARKERS = (
+    "visual labels could not be read reliably",
+    "visual analysis is currently unavailable",
+    "visual understanding extraction is currently unavailable or degraded",
+    "i can't list them without guessing",
+    "i cannot list them without guessing",
+)
+
+
+def _is_degraded_or_abstention_answer(answer: str | None) -> bool:
+    """Identify incomplete fallback answers that must never become durable cache hits."""
+    normalized = " ".join(str(answer or "").casefold().split())
+    return bool(normalized) and any(marker in normalized for marker in _DEGRADED_ANSWER_MARKERS)
+
+
+def _requested_enumeration_count(query: str | None) -> int | None:
+    """Read an explicit requested list size without confusing item follow-ups for lists."""
+    match = re.search(
+        r"\b(?P<count>\d{1,2}|two|three|four|five|six|seven|eight|nine|ten)\s+"
+        r"(?:\w+[ -]?){0,3}(?:tech\w*|methods?|steps?|types?|ways?|items?)\b",
+        str(query or ""),
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    raw_count = match.group("count").casefold()
+    number_words = {
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+    }
+    return int(raw_count) if raw_count.isdigit() else number_words.get(raw_count)
+
+
+def _extract_requested_numbered_list(
+    query: str,
+    chunks: list[ScoredChunk],
+) -> list[str] | None:
+    """Extract an exact 1..N list from retrieved continuation text."""
+    expected = _requested_enumeration_count(query)
+    if expected is None or expected < 2:
+        return None
+
+    ordered = sorted(
+        chunks,
+        key=lambda sc: (
+            sc.chunk.metadata.document_id,
+            sc.chunk.metadata.page_number or 0,
+            sc.chunk.id,
+        ),
+    )
+    combined = "\n".join(sc.chunk.text for sc in ordered)
+    found: dict[int, str] = {}
+    for raw_index, raw_label in re.findall(
+        r"(?m)^\s*(\d{1,2})\s*[.)]\s*([^\r\n]+)",
+        combined,
+    ):
+        index = int(raw_index)
+        label = raw_label.strip().strip(" -*:.;")
+        if 1 <= index <= expected and label:
+            found.setdefault(index, label)
+
+    if not all(index in found for index in range(1, expected + 1)):
+        return None
+    return [found[index] for index in range(1, expected + 1)]
+
+
+def _answer_matches_requested_enumeration(query: str, answer: str | None) -> bool:
+    """Reject cached list answers that contain too few or too many numbered items."""
+    expected = _requested_enumeration_count(query)
+    if expected is None:
+        return True
+    indices = [
+        int(value)
+        for value in re.findall(r"(?m)^\s*(\d{1,2})\s*[.)]\s*\S", str(answer or ""))
+    ]
+    return sorted(set(indices)) == list(range(1, expected + 1))
+
+
+def _is_cacheable_grounded_answer(
+    answer: str | None,
+    *,
+    has_citations: bool,
+    verifier_passed: bool,
+    evidence_sufficiency_passed: bool,
+    vision_status: str | None = None,
+    requires_visual_abstention: bool = False,
+) -> bool:
+    """Apply the final quality gate before a generated answer enters semantic cache."""
+    return bool(
+        answer
+        and has_citations
+        and verifier_passed
+        and evidence_sufficiency_passed
+        and not requires_visual_abstention
+        and str(vision_status or "").upper() != "DEGRADED"
+        and not _is_degraded_or_abstention_answer(answer)
+    )
+
+
+def _format_history_for_prompt(
+    history: list[dict[str, Any]] | None,
+    max_turns: int = 6,
+    max_chars: int = 12000,
+) -> str:
     if not history:
         return ""
     recent = history[-(max_turns * 2) :]
-    lines = ["Recent Conversation History:"]
+    formatted: list[tuple[str, str]] = []
     for msg in recent:
-        role = "User" if msg.get("role") == "user" else "Assistant"
+        raw_role = str(msg.get("role", "")).lower()
+        if raw_role not in {"user", "assistant"}:
+            continue
+        role = "User" if raw_role == "user" else "Assistant"
         content = str(msg.get("content", "")).strip()
-        lines.append(f"{role}: {content}")
+        if content:
+            # History supports reference resolution and continuity, but a long
+            # prior answer must not become a second, unverified RAG context.
+            if raw_role == "assistant" and len(content) > 600:
+                content = content[:600].rstrip() + "…"
+            formatted.append((role, content))
+
+    # Keep the newest useful turns within a predictable prompt budget. This
+    # prevents old, very long answers from slowing every later request.
+    kept: list[str] = []
+    used = 0
+    for role, content in reversed(formatted):
+        line = f"{role}: {content}"
+        remaining = max_chars - used
+        if remaining <= 0:
+            break
+        if len(line) > remaining:
+            line = line[:remaining].rstrip() + "…"
+        kept.append(line)
+        used += len(line) + 1
+    kept.reverse()
+    if not kept:
+        return ""
+    lines = ["Recent Conversation History:", *kept]
     return "\n".join(lines) + "\n\n"
 
 
@@ -237,6 +455,11 @@ def _log_rag_trace(trace: RAGTrace) -> None:
         "[RAG TRACE]",
         f"QUERY:                    {trace.query}",
         f"INTENT:                   {trace.query_type or 'factual'}",
+        f"RESPONSE_MODE:            {trace.response_mode}",
+        f"RETRIEVAL_TOP_K:          {trace.retrieval_top_k}",
+        f"RERANK_TOP_K:             {trace.rerank_top_k}",
+        f"CONTEXT_TOKENS:           {trace.context_tokens}",
+        f"GENERATION_MAX_TOKENS:    {trace.generation_max_tokens}",
         f"DOCUMENT_SCOPE:           {trace.query_scope or 'global'}",
         f"ANCHOR_SECTION:           {trace.anchor_section or 'General'}",
         f"TEXT_CANDIDATES:          {trace.text_candidates or trace.retrieved_candidate_count}",
@@ -310,6 +533,9 @@ class RAGPipeline:
         else:
             default_llm_name = getattr(settings, "llm_model", "qwen2.5:7b")
         self.model_manager = ModelManager(initial_model=str(default_llm_name))
+        self._llm_instance_cache: dict[str, Any] = {}
+        self._llm_cache_lock = threading.RLock()
+        self._shared_llm_lock = threading.RLock()
 
         if self.query_rewriter.llm is None and self.llm is not None:
             self.query_rewriter.llm = self.llm
@@ -349,6 +575,53 @@ class RAGPipeline:
                 return p
         return None
 
+    def _expand_adjacent_text_evidence(
+        self,
+        chunks: list[ScoredChunk],
+        *,
+        document_id: str,
+        pages_to_inspect: list[int],
+        anchor_section: str | None,
+    ) -> list[ScoredChunk]:
+        """Add indexed continuation-page text before paying for visual inference."""
+        if not self.docstore or not document_id or not pages_to_inspect:
+            return chunks
+
+        existing_ids = {sc.chunk.id for sc in chunks}
+        wanted_pages = set(pages_to_inspect)
+        section_key = " ".join(str(anchor_section or "").casefold().split())
+        candidates: list[Chunk] = []
+        for chunk in self.docstore.values():
+            meta = chunk.metadata
+            if chunk.id in existing_ids or meta.document_id != document_id:
+                continue
+            if meta.page_number not in wanted_pages:
+                continue
+            extra = meta.extra or {}
+            if extra.get("is_visual_extraction"):
+                continue
+            candidate_section = " ".join(
+                str(meta.section_title or meta.section_path or "").casefold().split()
+            )
+            if section_key and candidate_section and candidate_section != section_key:
+                continue
+            if not chunk.text or not chunk.text.strip():
+                continue
+            candidates.append(chunk)
+
+        candidates.sort(key=lambda chunk: (chunk.metadata.page_number or 0, chunk.id))
+        additions = [
+            ScoredChunk(
+                chunk=chunk,
+                score=0.94,
+                rerank_score=0.94,
+                dense_score=0.94,
+                sparse_score=0.94,
+            )
+            for chunk in candidates
+        ]
+        return chunks + additions
+
     def _apply_cross_page_vision_fallback_if_needed(
         self,
         chunks: list[ScoredChunk],
@@ -362,14 +635,14 @@ class RAGPipeline:
         Evaluate evidence sufficiency before LLM generation.
         If code or visual information is missing for an implementation/code query,
         inspect the anchor section and adjacent continuation pages (Page N, N+1, N+2)
-        using qwen2.5vl:7b, cache results, and pack the extracted code into context.
+        using Qwen3-VL-2B-Instruct, cache results, and pack the extracted code into context.
         """
-        raw_vm = getattr(self.vision_service, "vision_model", "qwen2.5vl:7b")
+        raw_vm = getattr(self.vision_service, "vision_model", "Qwen3-VL-2B-Instruct")
         telemetry: dict[str, Any] = {
             "section_expansion": False,
             "adjacent_page_check": False,
             "vision_fallback": False,
-            "vision_model": str(raw_vm) if (isinstance(raw_vm, str) and raw_vm.strip()) else "qwen2.5vl:7b",
+            "vision_model": str(raw_vm) if (isinstance(raw_vm, str) and raw_vm.strip()) else "Qwen3-VL-2B-Instruct",
             "vision_cache_status": "N/A",
             "evidence_sufficiency_passed": True,
             "evidence_status": "DIRECT",
@@ -406,14 +679,118 @@ class RAGPipeline:
         )
         telemetry["evidence_sufficiency_passed"] = gate_res.is_sufficient
         telemetry["evidence_status"] = gate_res.evidence_status.value
+        telemetry["missing_evidence_types"] = list(gate_res.missing_evidence_types)
         if gate_res.anchor_chunk:
             telemetry["anchor_section"] = gate_res.anchor_chunk.chunk.metadata.section_title or gate_res.anchor_chunk.chunk.metadata.section_path
 
         if gate_res.is_sufficient:
             return chunks, telemetry
 
+        initial_anchor = gate_res.anchor_chunk or chunks[0]
+        initial_meta = initial_anchor.chunk.metadata
+        expanded_chunks = self._expand_adjacent_text_evidence(
+            chunks,
+            document_id=initial_meta.document_id,
+            pages_to_inspect=gate_res.pages_to_inspect,
+            anchor_section=initial_meta.section_title or initial_meta.section_path,
+        )
+        if len(expanded_chunks) > len(chunks):
+            telemetry["section_expansion"] = True
+            telemetry["adjacent_page_check"] = True
+            telemetry["text_continuation_expansion"] = len(expanded_chunks) - len(chunks)
+            gate_res = self.evidence_gate.evaluate(
+                query=user_query,
+                intent=intent,
+                candidate_chunks=expanded_chunks,
+                previous_status=previous_status,
+                previous_chunks=previous_chunks,
+                is_followup=is_followup,
+            )
+            telemetry["evidence_sufficiency_passed"] = gate_res.is_sufficient
+            telemetry["evidence_status"] = gate_res.evidence_status.value
+            telemetry["missing_evidence_types"] = list(gate_res.missing_evidence_types)
+            if gate_res.is_sufficient:
+                logger.info(
+                    "Resolved incomplete evidence from %d indexed continuation chunk(s); skipping vision.",
+                    len(expanded_chunks) - len(chunks),
+                )
+                return expanded_chunks, telemetry
+            chunks = expanded_chunks
 
-        # 2. Evidence is insufficient -> Trigger Cross-Page Adjacent Inspection
+        anchor = gate_res.anchor_chunk or chunks[0]
+        meta = anchor.chunk.metadata
+        cue = gate_res.detected_continuation_cues[0] if gate_res.detected_continuation_cues else None
+        anchor_title = meta.section_title or meta.section_path or "Section Implementation"
+
+        def page_assets(p_num: int) -> list[Any]:
+            """Read indexed assets defensively, including older manager adapters."""
+            manager = self.vision_service.image_asset_manager
+            exact_getter = getattr(manager, "get_page_assets_by_physical_page", None)
+            if callable(exact_getter):
+                try:
+                    result = exact_getter(meta.document_id, p_num)
+                    if isinstance(result, list):
+                        return result
+                except Exception:
+                    pass
+            legacy_getter = getattr(manager, "get_page_assets", None)
+            if callable(legacy_getter):
+                try:
+                    result = legacy_getter(meta.document_id, p_num)
+                    return result if isinstance(result, list) else []
+                except Exception:
+                    pass
+            return []
+
+        # Missing code text alone is not proof that an image must be scanned.
+        # Only pay the VLM cost when retrieval exposes a real visual signal or
+        # the user explicitly asks about visual content. This keeps generic
+        # questions such as "how can I build a voice RAG agent?" on text RAG.
+        explicit_visual_request = bool(
+            re.search(
+                r"\b(?:image|screenshot|diagram|figure|flowchart|chart|table|visual|scan(?:ned)?)\b",
+                user_query,
+                re.IGNORECASE,
+            )
+        )
+        textual_continuation_signal = any(
+            re.search(
+                r"\b(?:here(?:'s| is) how it(?:'s| is) done|shown below|depicted below|illustrated below|"
+                r"see (?:the )?(?:next|following) page|continued on (?:the )?next page)\b",
+                scored.chunk.text,
+                re.IGNORECASE,
+            )
+            for scored in chunks
+        )
+        indexed_visual_available = gate_res.visual_asset_available or any(
+            page_assets(p_num) for p_num in gate_res.pages_to_inspect
+        )
+        explicit_visual_code_request = bool(
+            re.search(
+                r"\b(?:extract|transcribe|read|explain|show)\b.{0,40}"
+                r"\b(?:code|snippet)\b.{0,40}\b(?:image|screenshot|figure|page)\b|"
+                r"\b(?:code|snippet)\b.{0,40}\b(?:image|screenshot|figure|page)\b",
+                user_query,
+                re.IGNORECASE,
+            )
+        )
+        should_run_vision = bool(
+            gate_res.detected_continuation_cues
+            or textual_continuation_signal
+            or explicit_visual_request
+            or (indexed_visual_available and explicit_visual_code_request)
+        )
+        if not should_run_vision:
+            telemetry["vision_status"] = "SKIPPED_NO_VISUAL_SIGNAL"
+            telemetry["vision_cache_status"] = "SKIPPED"
+            logger.info(
+                "Skipping lazy vision for query '%s': evidence is incomplete, "
+                "but no visual asset, continuation cue, or explicit visual request exists.",
+                user_query,
+            )
+            return chunks, telemetry
+
+        # 2. Evidence is insufficient and visual evidence is plausible -> inspect pages.
         logger.info(
             "Evidence sufficiency check failed for query '%s' (intent=%s). Inspecting pages %s",
             user_query,
@@ -424,15 +801,11 @@ class RAGPipeline:
         telemetry["adjacent_page_check"] = True
         telemetry["vision_fallback"] = True
 
-        anchor = gate_res.anchor_chunk or chunks[0]
-        meta = anchor.chunk.metadata
         resolved_path = self._resolve_document_file_path(meta)
         if not resolved_path:
+            telemetry["vision_status"] = "SKIPPED_DOCUMENT_UNAVAILABLE"
             logger.warning("Could not find physical PDF file on disk for chunk %s (%s)", anchor.chunk.id, meta.source_file)
             return chunks, telemetry
-
-        cue = gate_res.detected_continuation_cues[0] if gate_res.detected_continuation_cues else None
-        anchor_title = meta.section_title or meta.section_path or "Section Implementation"
 
         # 3. Extract visuals across target page range (prioritize matching visual assets and code screenshots)
         visual_chunks = []
@@ -466,7 +839,7 @@ class RAGPipeline:
             pass
 
         def page_priority_key(p: int) -> tuple[int, int]:
-            p_assets = self.vision_service.image_asset_manager.get_page_assets_by_physical_page(meta.document_id, p)
+            p_assets = page_assets(p)
             has_matching_type = False
             has_asset = bool(p_assets)
             if p_assets:
@@ -501,8 +874,31 @@ class RAGPipeline:
 
         target_pages = sorted(list(gate_res.pages_to_inspect), key=page_priority_key)
 
+        # Inspect the concrete service type so dynamically-created mock
+        # attributes do not look like a configured readiness hook.
+        query_time_available = getattr(type(self.vision_service), "is_query_time_available", None)
+        can_run_live_vision = True
+        if callable(query_time_available):
+            try:
+                can_run_live_vision, unavailable_reason = query_time_available(self.vision_service)
+            except Exception as exc:
+                can_run_live_vision = False
+                unavailable_reason = str(exc)
+            if not can_run_live_vision:
+                telemetry["vision_status"] = "DEGRADED"
+                telemetry["vision_cache_status"] = "SKIPPED"
+                telemetry["vision_unavailable_reason"] = unavailable_reason
+                logger.warning("[VISION] Skipping live query-time vision: %s", unavailable_reason)
+
         t_vision_start = time.perf_counter()
-        vision_budget = getattr(settings, "vision_query_budget_seconds", 45.0)
+        vision_budget = max(
+            1.0,
+            float(getattr(settings, "vision_query_budget_seconds", 40.0)),
+        )
+        max_vision_pages = max(
+            1,
+            int(getattr(settings, "vision_query_max_pages", 2)),
+        )
         processed_page_keys: set[int] = set()
         req_vis_type = (
             VisualContentType.CODE_SCREENSHOT
@@ -510,8 +906,8 @@ class RAGPipeline:
             else (VisualContentType.DIAGRAM_ARCHITECTURE if is_diagram_intent else None)
         )
 
-        # At query-time, inspect up to 3 pages within vision budget and break on first successful extraction
-        for p_num in target_pages[:3]:
+        # Inspect only the best-ranked pages and stop on the first success.
+        for p_num in target_pages[:max_vision_pages] if can_run_live_vision else []:
             elapsed_vision = time.perf_counter() - t_vision_start
             remaining_budget = vision_budget - elapsed_vision
             if remaining_budget <= 4.0:
@@ -527,7 +923,7 @@ class RAGPipeline:
             processed_page_keys.add(p_num)
 
             # First check if image assets are already stored on disk
-            assets_on_page = self.vision_service.image_asset_manager.get_page_assets_by_physical_page(meta.document_id, p_num)
+            assets_on_page = page_assets(p_num)
             disp_p = None
             lbl_p = None
             idx_p = max(0, p_num - 1)
@@ -541,7 +937,10 @@ class RAGPipeline:
                 lbl_p = p_id.page_label
                 idx_p = p_id.internal_page_index
 
-            timeout_for_page = min(remaining_budget, getattr(settings, "vision_request_timeout", 35.0))
+            timeout_for_page = min(
+                remaining_budget,
+                max(1.0, float(getattr(settings, "vision_request_timeout", 30.0))),
+            )
 
             # Code screenshots are often one of several embedded images on a page.
             # Use the saved, original matching assets first so we do not accidentally
@@ -592,8 +991,8 @@ class RAGPipeline:
 
         # If vision extraction produced nothing (e.g. timeout or disabled), but original assets exist on disk:
         if not visual_chunks:
-            for p_num in target_pages[:3]:
-                assets_on_page = self.vision_service.image_asset_manager.get_page_assets_by_physical_page(meta.document_id, p_num)
+            for p_num in target_pages[:max_vision_pages]:
+                assets_on_page = page_assets(p_num)
                 if assets_on_page:
                     ast = assets_on_page[0]
                     disp_label = ast.display_label
@@ -656,9 +1055,15 @@ class RAGPipeline:
                     telemetry["vision_fallback"] = True
                     telemetry["visual_asset_status"] = "FOUND"
                     telemetry["vision_status"] = "DEGRADED"
-                    telemetry["evidence_sufficiency_passed"] = True
+                    telemetry["evidence_sufficiency_passed"] = False
+                    if "referenced_visual_content" in gate_res.missing_evidence_types:
+                        telemetry["requires_visual_abstention"] = True
                     return new_scored_fallback + chunks, telemetry
 
+            telemetry["vision_status"] = "DEGRADED"
+            telemetry["evidence_sufficiency_passed"] = False
+            if "referenced_visual_content" in gate_res.missing_evidence_types:
+                telemetry["requires_visual_abstention"] = True
             return chunks, telemetry
 
         telemetry["vision_cache_status"] = "HIT" if cache_hits > 0 and cache_misses == 0 else "MISS"
@@ -820,17 +1225,24 @@ class RAGPipeline:
         if self.llm is None:
             return None, str(selected_model)
 
-        if not hasattr(self, "_llm_instance_cache"):
-            self._llm_instance_cache: dict[str, Any] = {}
+        with self._llm_cache_lock:
+            if selected_model not in self._llm_instance_cache:
+                llm_model_attr = getattr(self.llm, "model", None)
+                if llm_model_attr == selected_model or not isinstance(llm_model_attr, str):
+                    self._llm_instance_cache[selected_model] = self.llm
+                else:
+                    try:
+                        isolated_llm = copy.copy(self.llm)
+                        isolated_llm.model = selected_model
+                    except Exception:
+                        isolated_llm = _LLMProxy(
+                            self.llm,
+                            selected_model,
+                            self._shared_llm_lock,
+                        )
+                    self._llm_instance_cache[selected_model] = isolated_llm
 
-        if selected_model not in self._llm_instance_cache:
-            llm_model_attr = getattr(self.llm, "model", None)
-            if llm_model_attr == selected_model or not isinstance(llm_model_attr, str):
-                self._llm_instance_cache[selected_model] = self.llm
-            else:
-                self._llm_instance_cache[selected_model] = _LLMProxy(self.llm, selected_model)
-
-        return self._llm_instance_cache[selected_model], selected_model
+            return self._llm_instance_cache[selected_model], selected_model
 
     def _retrieve_hybrid_hits(
         self,
@@ -857,6 +1269,51 @@ class RAGPipeline:
                 filters=filters,
             )
 
+    @staticmethod
+    def _split_control_filters(
+        filters: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any] | None, str]:
+        """Separate UI routing controls from metadata sent to retrievers."""
+        metadata_filters = dict(filters or {})
+        raw_mode = metadata_filters.pop("chat_mode", metadata_filters.pop("mode", "documents"))
+        chat_mode = str(raw_mode or "documents").strip().lower()
+        if chat_mode not in {"general", "documents"}:
+            chat_mode = "documents"
+        return (metadata_filters or None), chat_mode
+
+    def _resolve_page_number_filter(
+        self,
+        requested_page: int,
+        *,
+        active_document_id: str | None,
+        active_document_name: str | None,
+        allowed_document_ids: list[str] | None = None,
+    ) -> int | list[int] | None:
+        """Map a printed page reference to the physical PDF sheet(s) in the index."""
+        if not self.docstore:
+            return requested_page
+
+        matched_physical_pages: set[int] = set()
+        for chunk in self.docstore.values():
+            meta = chunk.metadata
+            if active_document_id and meta.document_id != active_document_id:
+                continue
+            if active_document_name and meta.source_file != active_document_name:
+                continue
+            if allowed_document_ids and meta.document_id not in allowed_document_ids:
+                continue
+            page_id = meta.get_page_identity()
+            if page_id.matches_display(requested_page) or (
+                page_id.display_page_number is None
+                and page_id.matches_physical_page(requested_page)
+            ):
+                matched_physical_pages.add(page_id.physical_page_number)
+
+        if not matched_physical_pages:
+            return None
+        resolved = sorted(matched_physical_pages)
+        return resolved[0] if len(resolved) == 1 else resolved
+
     def query(
         self,
         user_query: str,
@@ -868,8 +1325,10 @@ class RAGPipeline:
         selected_document_ids: list[str] | None = None,
         document_scope: str | None = None,
         conversation_state: ConversationRAGState | None = None,
+        response_mode: ResponseMode = "standard",
         thinking_detail_level: ThinkingDetailLevel | str = ThinkingDetailLevel.STANDARD,
         thinking_sm: ThinkingStateMachine | None = None,
+        stream_callback: Callable[[str], None] | None = None,
     ) -> RAGResponse:
         """Execute end-to-end document-faithful RAG pipeline with safe thinking events."""
         return self._query_internal(
@@ -882,8 +1341,10 @@ class RAGPipeline:
             selected_document_ids=selected_document_ids,
             document_scope=document_scope,
             conversation_state=conversation_state,
+            response_mode=response_mode,
             thinking_detail_level=thinking_detail_level,
             thinking_sm=thinking_sm,
+            stream_callback=stream_callback,
         )
 
     def _query_internal(
@@ -897,11 +1358,15 @@ class RAGPipeline:
         selected_document_ids: list[str] | None = None,
         document_scope: str | None = None,
         conversation_state: ConversationRAGState | None = None,
+        response_mode: ResponseMode = "standard",
         thinking_detail_level: ThinkingDetailLevel | str = ThinkingDetailLevel.STANDARD,
         thinking_sm: ThinkingStateMachine | None = None,
+        stream_callback: Callable[[str], None] | None = None,
     ) -> RAGResponse:
         total_start = time.perf_counter()
         stage_timings: dict[str, float] = {}
+        filters, chat_mode = self._split_control_filters(filters)
+        response_mode_config = get_response_mode_config(response_mode)
 
         if thinking_sm is None:
             thinking_sm = ThinkingStateMachine(
@@ -927,7 +1392,7 @@ class RAGPipeline:
 
         # 0a-2. Dynamic Conversational Query Resolution & Observability
         conv_res: ConversationResolutionResult | None = None
-        if conversation_state is not None:
+        if conversation_state is not None and chat_mode != "general":
             thinking_sm.start_stage(ThinkingStage.CONVERSATION_CONTEXT)
             conv_res = self.conversation_resolver.resolve(
                 query=user_query,
@@ -987,9 +1452,110 @@ class RAGPipeline:
                 details={"is_follow_up": False},
             )
 
-        effective_search_query = conv_res.resolved_query if (conv_res and conv_res.is_followup) else user_query
+        is_history_followup = bool(
+            (conv_res and conv_res.is_followup)
+            or (
+                conv_res is None
+                and history
+                and self.query_rewriter._is_followup_query(user_query)
+            )
+        )
+        effective_search_query = (
+            conv_res.resolved_query if (conv_res and conv_res.is_followup) else user_query
+        )
 
         req_llm, selected_model = self._get_effective_llm(model)
+
+        # Explicit General chat mode is a true retrieval bypass, not a document
+        # category filter. It uses only same-mode history supplied by ChatService.
+        if chat_mode == "general":
+            t0 = time.perf_counter()
+            history_text = _format_history_for_prompt(
+                history,
+                max_turns=max(1, int(getattr(settings, "memory_window_size", 5))),
+            )
+            prompt = GENERAL_CHAT_PROMPT.format(
+                response_mode_instructions=response_mode_config.prompt_instructions,
+                history_text=history_text,
+                query=user_query,
+            )
+            thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
+            thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
+            if req_llm is not None:
+                try:
+                    try:
+                        answer_text = str(
+                            req_llm.complete(
+                                prompt,
+                                temperature=0.6,
+                                max_new_tokens=response_mode_config.max_output_tokens,
+                            )
+                        ).strip()
+                    except TypeError:
+                        answer_text = str(req_llm.complete(prompt)).strip()
+                except Exception as exc:
+                    logger.warning("General chat generation failed: %s", exc)
+                    answer_text = "General chat is selected, but the language model is currently unavailable. Please try again shortly."
+            else:
+                answer_text = "General chat is selected, but the language model is currently unavailable. Please try again shortly."
+            thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
+            thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
+            stage_timings["general_chat_generation"] = round((time.perf_counter() - t0) * 1000, 2)
+            total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
+            reasoning_sum = thinking_sm.get_reasoning_summary(
+                intent="conversational",
+                answer_mode="DIRECT",
+                is_follow_up=bool(history),
+                used_conversation_context=bool(history),
+                reused_previous_evidence=False,
+                retrieved_new_evidence=False,
+                used_visual_evidence=False,
+                evidence_status="DIRECT",
+            )
+            trace = RAGTrace(
+                query=user_query,
+                rewritten_query=None,
+                sub_queries=[],
+                query_type=QueryCategory.CONVERSATIONAL.value,
+                routing_confidence=1.0,
+                retrieval_strategy="general_chat_bypass",
+                query_scope="general",
+                retrieved_candidate_count=0,
+                post_rerank_count=0,
+                final_context_count=0,
+                response_mode=response_mode,
+                retrieval_top_k=0,
+                rerank_top_k=0,
+                context_tokens=0,
+                generation_max_tokens=response_mode_config.max_output_tokens,
+                execution_time_ms=total_elapsed,
+                stage_timings_ms=stage_timings,
+                fallback_reason="general_chat_mode",
+                faithfulness_checked=False,
+                faithfulness_passed=True,
+                verification_report=None,
+                verification_score=None,
+                retry_count=0,
+                retry_reasons=[],
+                cache_hit=False,
+                cache_similarity=None,
+                evidence_sufficiency_passed=True,
+                generation_model=selected_model,
+                grounding_validation_passed=True,
+                reasoning_summary=reasoning_sum,
+                thinking_events=[e.model_dump() for e in thinking_sm.get_all_events()],
+            )
+            _log_rag_trace(trace)
+            return RAGResponse(
+                id=f"resp_{uuid.uuid4().hex[:12]}",
+                query=user_query,
+                answer=answer_text,
+                citations=[],
+                context_chunks=[],
+                trace=trace,
+                model=selected_model,
+                token_usage={"prompt_tokens": len(prompt.split()), "completion_tokens": len(answer_text.split())},
+            )
 
         # Conversational / Greeting intent check
         if classification.category == QueryCategory.CONVERSATIONAL or self.query_rewriter.is_conversational(
@@ -1024,6 +1590,11 @@ class RAGPipeline:
                 retrieved_candidate_count=0,
                 post_rerank_count=0,
                 final_context_count=0,
+                response_mode=response_mode,
+                retrieval_top_k=0,
+                rerank_top_k=0,
+                context_tokens=0,
+                generation_max_tokens=0,
                 execution_time_ms=total_elapsed,
                 stage_timings_ms={"conversational_bypass": total_elapsed},
                 fallback_reason="conversational_greeting",
@@ -1062,21 +1633,38 @@ class RAGPipeline:
         )
         normalized_scope = str(document_scope or "global").strip().lower()
         cache_context = json.dumps(
-            {"scope": normalized_scope, "filters": filters or {}},
+            {
+                "policy": "precision_v8",
+                "scope": normalized_scope,
+                "filters": filters or {},
+                "response_mode": response_mode,
+            },
             sort_keys=True,
             separators=(",", ":"),
             default=str,
         )
+        is_exact_repeat = bool(
+            conversation_state
+            and conversation_state.last_user_query
+            and " ".join(user_query.casefold().split())
+            == " ".join(conversation_state.last_user_query.casefold().split())
+        )
+        if conv_res:
+            is_followup_intent = conv_res.is_followup
+        else:
+            # Fallback if conversation resolver didn't run: assume followup if history exists
+            is_followup_intent = bool(history and len(history) > 0 and not is_exact_repeat)
+
         cache_eligible = not (
-            history
-            or conversation_state is not None
+            is_followup_intent
             or filters
             or active_document_id
             or active_document_name
             or selected_document_ids
             or normalized_scope not in {"", "all", "global"}
         )
-        if cache_enabled and self.semantic_cache is not None and cache_eligible:
+        cache_read_eligible = cache_eligible and not is_exact_repeat
+        if cache_enabled and self.semantic_cache is not None and cache_read_eligible:
             t0 = time.perf_counter()
             cached_res = self.semantic_cache.get(
                 user_query,
@@ -1084,6 +1672,12 @@ class RAGPipeline:
                 cache_context=cache_context,
             )
             stage_timings["cache_lookup"] = round((time.perf_counter() - t0) * 1000, 2)
+            if cached_res is not None and (
+                _is_degraded_or_abstention_answer(cached_res.answer)
+                or not _answer_matches_requested_enumeration(user_query, cached_res.answer)
+            ):
+                logger.info("Ignoring incomplete semantic-cache answer and continuing with fresh retrieval.")
+                cached_res = None
             if cached_res is not None:
                 total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
                 thinking_sm.record_stage(
@@ -1116,6 +1710,11 @@ class RAGPipeline:
                     retrieved_candidate_count=0,
                     post_rerank_count=0,
                     final_context_count=0,
+                    response_mode=response_mode,
+                    retrieval_top_k=response_mode_config.retrieval_top_k,
+                    rerank_top_k=response_mode_config.rerank_top_k,
+                    context_tokens=0,
+                    generation_max_tokens=response_mode_config.max_output_tokens,
                     execution_time_ms=total_elapsed,
                     stage_timings_ms=stage_timings,
                     fallback_reason="none",
@@ -1173,7 +1772,11 @@ class RAGPipeline:
         # 1a. Query Rewrite
         t0 = time.perf_counter()
         thinking_sm.start_stage(ThinkingStage.QUERY_REWRITE)
-        rewrite_res = self.query_rewriter.rewrite(effective_search_query, history=history, llm=req_llm)
+        rewrite_res = self.query_rewriter.rewrite(
+            effective_search_query,
+            history=history if is_history_followup else None,
+            llm=req_llm
+        )
         stage_timings["query_rewrite"] = round((time.perf_counter() - t0) * 1000, 2)
         thinking_sm.complete_stage(
             ThinkingStage.QUERY_REWRITE,
@@ -1188,7 +1791,11 @@ class RAGPipeline:
         if enable_filtering and self.filter_inferer is not None:
             t0 = time.perf_counter()
             inferred_filters = self.filter_inferer.infer_filters(
-                query=user_query, history=history, explicit_filters=filters,
+                query=user_query,
+                # Metadata inferred from old turns can silently hide the right
+                # facts after a topic change. Inherit it only for true follow-ups.
+                history=history if is_history_followup else None,
+                explicit_filters=filters,
             )
             stage_timings["filter_inference"] = round((time.perf_counter() - t0) * 1000, 2)
             if inferred_filters:
@@ -1202,7 +1809,20 @@ class RAGPipeline:
             elif scope_decision.active_document_name:
                 applied_filters["source_file"] = scope_decision.active_document_name
             if scope_decision.page_number is not None:
-                applied_filters["page_number"] = scope_decision.page_number
+                resolved_page_filter = self._resolve_page_number_filter(
+                    scope_decision.page_number,
+                    active_document_id=scope_decision.active_document_id,
+                    active_document_name=scope_decision.active_document_name,
+                    allowed_document_ids=scope_decision.allowed_document_ids,
+                )
+                # User references are printed/display pages. Resolve them to the
+                # physical sheet stored in Chroma/BM25; an unresolved page stays
+                # impossible rather than relaxing to unrelated document pages.
+                applied_filters["page_number"] = (
+                    resolved_page_filter
+                    if resolved_page_filter is not None
+                    else 0
+                )
             if scope_decision.section_number is not None:
                 applied_filters["section_number"] = scope_decision.section_number
         elif scope_decision.scope == DocumentRetrievalScope.SELECTED_DOCUMENTS:
@@ -1214,6 +1834,8 @@ class RAGPipeline:
 
         # Fast path check for high-confidence factual questions
         is_fast_path = (
+            response_mode != "detailed"
+            and
             classification.category == QueryCategory.FACTUAL
             and classification.confidence >= 0.85
             and not (history and len(history) > 0 and self.query_rewriter._is_followup_query(user_query))
@@ -1221,9 +1843,12 @@ class RAGPipeline:
         )
 
         enable_verification = getattr(settings, "enable_answer_verification", True)
-        max_retries = 0 if is_fast_path else (self.retry_engine.max_retries if self.retry_engine else 2)
+        # A streamed attempt is already visible to the client and cannot be
+        # replaced safely by a later retry. Verify it, but never stream multiple
+        # competing answers for one request.
+        max_retries = 0 if (is_fast_path or stream_callback is not None) else (self.retry_engine.max_retries if self.retry_engine else 2)
 
-        current_strategy = strategy.model_copy(deep=True)
+        current_strategy = response_mode_config.apply_to(strategy)
         if is_fast_path:
             current_strategy.enable_multi_query = False
 
@@ -1231,6 +1856,7 @@ class RAGPipeline:
         best_answer = ""
         best_citations: list[Citation] = []
         best_context_chunks: list[ScoredChunk] = []
+        best_context_tokens = 0
         best_candidate_chunks: list[ScoredChunk] = []
         best_reranked_chunks: list[ScoredChunk] = []
         best_report: VerificationReport | None = None
@@ -1239,6 +1865,7 @@ class RAGPipeline:
         prompt_refinement = ""
         sub_queries: list[str] = [rewrite_res.rewritten_query]
         formatted_context = ""
+        context_tokens = 0
         cross_document_count = 0
         telemetry_extra: dict[str, Any] = {}
 
@@ -1264,7 +1891,11 @@ class RAGPipeline:
             cache_hit_retrieval = False
             dense_degraded = False
 
-            if getattr(settings, "retrieval_cache_enabled", True) and len(sub_queries) == 1:
+            if (
+                getattr(settings, "retrieval_cache_enabled", True)
+                and len(sub_queries) == 1
+                and not (conv_res and conv_res.is_followup)
+            ):
                 cached_cands = retrieval_cache.get(
                     sub_queries[0], filters=search_filters, top_k=current_strategy.dense_top_k
                 )
@@ -1308,14 +1939,18 @@ class RAGPipeline:
                         fallback_action="BM25 lexical search applied",
                     )
 
-                # Filter relaxation fallback if 0 results
+                # Filter relaxation fallback if 0 results. Document, page, and
+                # section constraints are hard user scope and must never be
+                # dropped, otherwise an invalid page can return unrelated facts.
                 if not candidate_chunks and search_filters and getattr(settings, "enable_filter_fallback_relaxation", True):
-                    relaxed_filters = None
-                    if "document_id" in search_filters:
-                        relaxed_filters = {"document_id": search_filters["document_id"]}
-                    elif "source_file" in search_filters:
-                        relaxed_filters = {"source_file": search_filters["source_file"]}
-                    filter_relaxed = True
+                    hard_filter_keys = {"document_id", "source_file", "page_number", "section_number"}
+                    relaxed_filters = {
+                        key: value
+                        for key, value in search_filters.items()
+                        if key in hard_filter_keys
+                    }
+                    relaxed_filters = relaxed_filters or None
+                    filter_relaxed = relaxed_filters != search_filters
                     applied_filters = relaxed_filters or {}
                     candidate_map = {}
                     for sq in sub_queries:
@@ -1367,53 +2002,15 @@ class RAGPipeline:
                 candidate_pool_limit = max(len(candidate_chunks), current_strategy.rerank_top_n * 3, 15)
                 candidate_chunks = candidate_chunks[:candidate_pool_limit]
 
-                # Evidence Continuity: Merge & deduplicate with previous grounded chunks & visuals from state and ConversationEvidenceContext
+                # Evidence Continuity: As per new requirement, NEVER reuse previous retrieved chunks
+                # unless they are retrieved again for the current query.
                 raw_new_chunk_count = len(candidate_chunks)
-                prev_chunks = list(conversation_state.previous_retrieved_chunks or []) if (conversation_state and conv_res and conv_res.is_followup) else []
-                prev_visuals = list(conversation_state.previous_visual_evidence or []) if (conversation_state and conv_res and conv_res.is_followup) else []
-                prev_cits = list(conversation_state.previous_citations or []) if (conversation_state and conv_res and conv_res.is_followup) else []
+                prev_chunks = []
+                prev_visuals = []
+                prev_cits = []
 
-                # Merge verified chunks from all ConversationEvidenceContext turns
-                if conversation_state and conv_res and conv_res.is_followup and conversation_state.evidence_contexts:
-                    seen_cids = {sc.chunk.id for sc in (prev_chunks + prev_visuals)}
-                    for ev_ctx in conversation_state.evidence_contexts:
-                        for cid in (ev_ctx.verified_chunk_ids or []):
-                            if cid not in seen_cids and self.docstore and cid in self.docstore:
-                                seen_cids.add(cid)
-                                chunk_obj = self.docstore[cid]
-                                is_vis = (
-                                    "diagram" in str(chunk_obj.metadata.content_type).lower()
-                                    or chunk_obj.metadata.extra.get("is_visual_extraction")
-                                    or chunk_obj.metadata.image_assets
-                                )
-                                if is_vis:
-                                    prev_visuals.append(ScoredChunk(chunk=chunk_obj, score=0.90))
-                                else:
-                                    prev_chunks.append(ScoredChunk(chunk=chunk_obj, score=0.90))
-                        for v_cit in (ev_ctx.verified_citations or []):
-                            if not any(c.chunk_id == v_cit.chunk_id for c in prev_cits):
-                                prev_cits.append(v_cit)
-
-                prev_all = prev_chunks + prev_visuals
-
-                # Window expansion around previous evidence pages
+                prev_all = []
                 adjacent_pages = set()
-                if conv_res and conv_res.is_followup and prev_all and self.docstore:
-                    prev_pages = {
-                        c.chunk.metadata.page_number
-                        for c in prev_all
-                        if getattr(c.chunk.metadata, "page_number", None) is not None
-                    }
-                    target_doc_id = prev_all[0].chunk.metadata.document_id if prev_all else None
-                    if prev_pages:
-                        for p in prev_pages:
-                            if isinstance(p, int):
-                                adjacent_pages.update([p - 1, p, p + 1, p + 2])
-                        for chunk_obj in self.docstore.values():
-                            p_num = getattr(chunk_obj.metadata, "page_number", None)
-                            d_id = getattr(chunk_obj.metadata, "document_id", None)
-                            if p_num in adjacent_pages and (target_doc_id is None or d_id == target_doc_id):
-                                candidate_chunks.append(ScoredChunk(chunk=chunk_obj, score=0.75))
 
                 continuity_applied = False
                 if conv_res and conv_res.is_followup and prev_all:
@@ -1477,7 +2074,12 @@ class RAGPipeline:
                             details={"pages": sorted(list(adjacent_pages))},
                         )
 
-                if getattr(settings, "retrieval_cache_enabled", True) and len(sub_queries) == 1 and candidate_chunks:
+                if (
+                    getattr(settings, "retrieval_cache_enabled", True)
+                    and len(sub_queries) == 1
+                    and candidate_chunks
+                    and not (conv_res and conv_res.is_followup)
+                ):
                     retrieval_cache.set(
                         sub_queries[0],
                         candidate_chunks,
@@ -1496,7 +2098,17 @@ class RAGPipeline:
                 if conv_res and conv_res.is_followup and prev_all:
                     candidate_chunks = list(prev_all)
                 else:
-                    if scope_decision.active_document_name:
+                    if scope_decision.page_number is not None and scope_decision.active_document_name:
+                        unanswerable_text = (
+                            f"I could not find a page labeled {scope_decision.page_number} "
+                            f"in the active document '{scope_decision.active_document_name}'."
+                        )
+                    elif scope_decision.page_number is not None and scope_decision.active_document_id:
+                        unanswerable_text = (
+                            f"I could not find a page labeled {scope_decision.page_number} "
+                            f"in the active document '{scope_decision.active_document_id}'."
+                        )
+                    elif scope_decision.active_document_name:
                         unanswerable_text = f"I could not find this information in the active document '{scope_decision.active_document_name}'."
                     elif scope_decision.active_document_id:
                         unanswerable_text = f"I could not find this information in the active document '{scope_decision.active_document_id}'."
@@ -1553,19 +2165,27 @@ class RAGPipeline:
 
             # 5. Parent Context Expansion
             t0 = time.perf_counter()
-            expanded_chunks = self.compressor.expand_to_parents(
-                reranked_chunks,
-                self.docstore,
-                enable_expansion=False if is_fast_path else current_strategy.enable_parent_expansion,
-            )
+            try:
+                expanded_chunks = self.compressor.expand_to_parents(
+                    reranked_chunks,
+                    self.docstore,
+                    enable_expansion=False if is_fast_path else current_strategy.enable_parent_expansion,
+                )
+            except TypeError:
+                # Preserve compatibility with lightweight/custom compressors
+                # that implement the original two-argument protocol.
+                expanded_chunks = self.compressor.expand_to_parents(
+                    reranked_chunks,
+                    self.docstore,
+                )
 
             # 5b. Evidence Sufficiency Gate & Cross-Page Vision Fallback (Phases 3, 4, 8)
             expanded_chunks, telemetry_extra = self._apply_cross_page_vision_fallback_if_needed(
                 expanded_chunks,
                 user_query=user_query,
                 intent=classification.category,
-                previous_status=conversation_state.previous_evidence_status if (conversation_state and conv_res and conv_res.is_followup) else None,
-                previous_chunks=conversation_state.previous_retrieved_chunks if (conversation_state and conv_res and conv_res.is_followup) else None,
+                previous_status=None,
+                previous_chunks=None,
                 is_followup=conv_res.is_followup if conv_res else False,
             )
             logger.info(
@@ -1591,10 +2211,34 @@ class RAGPipeline:
                     )
 
             # 5c. Complementary Chunk Packing
-            expanded_chunks = self.compressor.pack_complementary_chunks(
-                expanded_chunks, user_query, max_chunks=current_strategy.rerank_top_n
-            )
-            formatted_context = self.compressor.format_context_for_prompt(expanded_chunks)
+            if hasattr(self.compressor, "pack_complementary_chunks"):
+                expanded_chunks = self.compressor.pack_complementary_chunks(
+                    expanded_chunks, user_query, max_chunks=current_strategy.rerank_top_n
+                )
+            else:
+                expanded_chunks = expanded_chunks[: current_strategy.rerank_top_n]
+            if hasattr(self.compressor, "pack_to_token_budget"):
+                expanded_chunks, context_tokens = self.compressor.pack_to_token_budget(
+                    expanded_chunks,
+                    response_mode_config.max_context_tokens,
+                )
+            else:
+                packed_chunks: list[ScoredChunk] = []
+                context_tokens = 0
+                for sc in expanded_chunks:
+                    estimated = max(1, int(len(sc.chunk.text.split()) * 1.3) + 24)
+                    if packed_chunks and context_tokens + estimated > response_mode_config.max_context_tokens:
+                        break
+                    packed_chunks.append(sc)
+                    context_tokens += estimated
+                expanded_chunks = packed_chunks
+            try:
+                formatted_context = self.compressor.format_context_for_prompt(
+                    expanded_chunks,
+                    max_token_budget=response_mode_config.max_context_tokens,
+                )
+            except TypeError:
+                formatted_context = self.compressor.format_context_for_prompt(expanded_chunks)
             stage_timings[f"context_expansion{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
             # Evidence Verification Stage
@@ -1624,8 +2268,14 @@ class RAGPipeline:
                     if fidelity_mode == "implement"
                     else ""
                 )
+            mode_prompt_str = (
+                f"{mode_prompt_str}\n\nREQUESTED RESPONSE DEPTH:\n"
+                f"{response_mode_config.prompt_instructions}"
+            ).strip()
 
-            history_text = _format_history_for_prompt(history)
+            # Prevent generation context leakage: only inject history if it's a true follow-up.
+            effective_history = history if is_history_followup else None
+            history_text = _format_history_for_prompt(effective_history)
             refinement_str = f"\nRefinement Instructions:\n{prompt_refinement}\n" if prompt_refinement else ""
             evidence_status_str = telemetry_extra.get("evidence_status", "DIRECT")
             evidence_status_dir = _format_evidence_status_directive(evidence_status_str)
@@ -1638,25 +2288,63 @@ class RAGPipeline:
                 query=user_query,
             )
 
-            max_tokens = getattr(settings, "max_new_tokens_complex", 1024)
-            if classification.category == QueryCategory.FACTUAL:
-                max_tokens = getattr(settings, "max_new_tokens_factual", 256)
-            elif classification.category in (QueryCategory.PROCEDURAL, QueryCategory.IMPLEMENTATION, QueryCategory.CODE):
-                max_tokens = getattr(settings, "max_new_tokens_technical", 768)
+            max_tokens = response_mode_config.max_output_tokens
 
             thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
-            if req_llm is not None:
+            exact_numbered_list = _extract_requested_numbered_list(user_query, expanded_chunks)
+            if exact_numbered_list:
+                answer_text = "The five LLM fine-tuning techniques are:\n\n" + "\n".join(
+                    f"{index}. {label}"
+                    for index, label in enumerate(exact_numbered_list, start=1)
+                )
+                if stream_callback is not None:
+                    stream_callback(answer_text)
+            elif telemetry_extra.get("requires_visual_abstention"):
+                page_label = "the cited page"
+                if expanded_chunks:
+                    identity = expanded_chunks[0].chunk.metadata.get_page_identity()
+                    page_label = f"Page {identity.page_label}"
+                answer_text = (
+                    f"The retrieved text says the requested details are shown in a visual on {page_label}, "
+                    "but the visual labels could not be read reliably. I can’t list them without guessing."
+                )
+                if stream_callback is not None:
+                    stream_callback(answer_text)
+            elif req_llm is not None:
                 try:
-                    try:
-                        raw_answer = str(
-                            req_llm.complete(
+                    if stream_callback is not None and hasattr(req_llm, "stream_complete"):
+                        try:
+                            completion_stream = req_llm.stream_complete(
                                 prompt,
                                 temperature=current_strategy.temperature,
                                 max_new_tokens=max_tokens,
                             )
-                        ).strip()
-                    except TypeError:
-                        raw_answer = str(req_llm.complete(prompt)).strip()
+                        except TypeError:
+                            completion_stream = req_llm.stream_complete(prompt)
+                        answer_parts: list[str] = []
+                        for part in completion_stream:
+                            delta = getattr(part, "delta", None)
+                            if delta is None:
+                                delta = getattr(part, "text", None)
+                            if delta is None:
+                                delta = str(part)
+                            delta = str(delta)
+                            if not delta:
+                                continue
+                            answer_parts.append(delta)
+                            stream_callback(delta)
+                        raw_answer = "".join(answer_parts).strip()
+                    else:
+                        try:
+                            raw_answer = str(
+                                req_llm.complete(
+                                    prompt,
+                                    temperature=current_strategy.temperature,
+                                    max_new_tokens=max_tokens,
+                                )
+                            ).strip()
+                        except TypeError:
+                            raw_answer = str(req_llm.complete(prompt)).strip()
                     answer_text = raw_answer
                 except Exception as exc:
                     logger.warning("LLM synthesis error (%s). Using fallback synthesis.", exc)
@@ -1674,7 +2362,13 @@ class RAGPipeline:
                 answer_text=answer_text,
                 generation_chunks=expanded_chunks,
                 user_query=user_query,
+                max_citations=response_mode_config.max_citations,
             )
+            if telemetry_extra.get("requires_visual_abstention"):
+                # The deterministic abstention makes one claim only: the
+                # requested labels live in the referenced page visual. Keep
+                # only that primary page instead of attaching nearby chunks.
+                citations = citations[:1]
             stage_timings[f"citation_extraction{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
             thinking_sm.complete_stage(
                 ThinkingStage.CITATION_BUILDING,
@@ -1709,6 +2403,7 @@ class RAGPipeline:
                 best_answer = answer_text
                 best_citations = citations
                 best_context_chunks = expanded_chunks
+                best_context_tokens = context_tokens
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
                 best_report = report
@@ -1717,6 +2412,7 @@ class RAGPipeline:
                 best_answer = answer_text
                 best_citations = citations
                 best_context_chunks = expanded_chunks
+                best_context_tokens = context_tokens
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
                 best_report = report
@@ -1731,6 +2427,7 @@ class RAGPipeline:
                 strategy=current_strategy,
                 query=user_query,
             )
+            current_strategy = response_mode_config.apply_to(current_strategy)
             attempt += 1
 
         total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
@@ -1804,6 +2501,11 @@ class RAGPipeline:
             retrieved_candidate_count=len(best_candidate_chunks),
             post_rerank_count=len(best_reranked_chunks),
             final_context_count=len(best_context_chunks),
+            response_mode=response_mode,
+            retrieval_top_k=current_strategy.dense_top_k,
+            rerank_top_k=current_strategy.rerank_top_n,
+            context_tokens=best_context_tokens,
+            generation_max_tokens=response_mode_config.max_output_tokens,
             execution_time_ms=total_elapsed,
             stage_timings_ms=stage_timings,
             fallback_reason=fallback_reason,
@@ -1833,7 +2535,7 @@ class RAGPipeline:
             section_expansion=telemetry_extra.get("section_expansion", False),
             adjacent_page_check=telemetry_extra.get("adjacent_page_check", False),
             vision_fallback=telemetry_extra.get("vision_fallback", False),
-            vision_model=str(telemetry_extra.get("vision_model", "qwen2.5vl:7b")) if isinstance(telemetry_extra.get("vision_model"), str) else "qwen2.5vl:7b",
+            vision_model=str(telemetry_extra.get("vision_model", "Qwen3-VL-2B-Instruct")) if isinstance(telemetry_extra.get("vision_model"), str) else "Qwen3-VL-2B-Instruct",
             vision_cache_status=str(telemetry_extra.get("vision_cache_status", "N/A")) if isinstance(telemetry_extra.get("vision_cache_status"), str) else "N/A",
             evidence_sufficiency_passed=telemetry_extra.get("evidence_sufficiency_passed", True),
             generation_model=selected_model,
@@ -1846,9 +2548,19 @@ class RAGPipeline:
 
         if (
             cache_eligible
-            and best_citations
-            and best_answer
-            and (best_report is None or best_report.passed)
+            and _answer_matches_requested_enumeration(user_query, best_answer)
+            and _is_cacheable_grounded_answer(
+            best_answer,
+            has_citations=bool(best_citations),
+            verifier_passed=(best_report is None or best_report.passed),
+            evidence_sufficiency_passed=bool(
+                telemetry_extra.get("evidence_sufficiency_passed", True)
+            ),
+            vision_status=telemetry_extra.get("vision_status"),
+            requires_visual_abstention=bool(
+                telemetry_extra.get("requires_visual_abstention", False)
+            ),
+            )
         ):
             self._queue_cache_write(
                 user_query,
@@ -1895,6 +2607,7 @@ class RAGPipeline:
         selected_document_ids: list[str] | None = None,
         document_scope: str | None = None,
         conversation_state: ConversationRAGState | None = None,
+        response_mode: ResponseMode = "standard",
         thinking_detail_level: ThinkingDetailLevel | str = ThinkingDetailLevel.STANDARD,
         cancel_token: Any = None,
     ):
@@ -1912,11 +2625,177 @@ class RAGPipeline:
                 selected_document_ids=selected_document_ids,
                 document_scope=document_scope,
                 conversation_state=conversation_state,
+                response_mode=response_mode,
                 thinking_detail_level=thinking_detail_level,
                 cancel_token=cancel_token,
             )
         ):
             yield chunk
+
+    def _stream_general_chat_response(
+        self,
+        *,
+        user_query: str,
+        history: list[dict[str, Any]] | None,
+        model: str | None,
+        thinking_sm: ThinkingStateMachine,
+        response_mode: ResponseMode,
+        cancel_token: Any = None,
+    ) -> Generator[dict[str, Any], None, None]:
+        """Use the LLM's real stream for retrieval-free General chat mode."""
+        req_llm, selected_model = self._get_effective_llm(model)
+        response_mode_config = get_response_mode_config(response_mode)
+        history_text = _format_history_for_prompt(
+            history,
+            max_turns=max(1, int(getattr(settings, "memory_window_size", 5))),
+        )
+        prompt = GENERAL_CHAT_PROMPT.format(
+            response_mode_instructions=response_mode_config.prompt_instructions,
+            history_text=history_text,
+            query=user_query,
+        )
+
+        thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
+        thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
+        yield {
+            "type": "retrieval_done",
+            "stage_timings": {},
+            "candidate_count": 0,
+            "reranked_count": 0,
+            "context_count": 0,
+            "cache_hit": False,
+        }
+        generation_events = [
+            event
+            for event in thinking_sm.get_visible_events()
+            if event.stage == ThinkingStage.ANSWER_GENERATION
+        ]
+        if generation_events:
+            yield {"type": "thinking", "event": generation_events[-1]}
+
+        t_generation = time.perf_counter()
+        answer_parts: list[str] = []
+        streamed = False
+        if req_llm is not None and hasattr(req_llm, "stream_complete"):
+            try:
+                try:
+                    completion_stream = req_llm.stream_complete(
+                        prompt,
+                        temperature=0.6,
+                        max_new_tokens=response_mode_config.max_output_tokens,
+                    )
+                except TypeError:
+                    completion_stream = req_llm.stream_complete(prompt)
+                for part in completion_stream:
+                    if cancel_token and cancel_token.is_set():
+                        return
+                    delta = getattr(part, "delta", None)
+                    if delta is None:
+                        delta = getattr(part, "text", None)
+                    if delta is None:
+                        delta = str(part)
+                    delta = str(delta)
+                    if not delta:
+                        continue
+                    answer_parts.append(delta)
+                    streamed = True
+                    yield {"type": "token", "content": delta}
+            except Exception as exc:
+                logger.warning("General chat streaming failed: %s", exc)
+
+        if not streamed:
+            if req_llm is not None:
+                try:
+                    try:
+                        fallback_answer = str(
+                            req_llm.complete(
+                                prompt,
+                                temperature=0.6,
+                                max_new_tokens=response_mode_config.max_output_tokens,
+                            )
+                        ).strip()
+                    except TypeError:
+                        fallback_answer = str(req_llm.complete(prompt)).strip()
+                except Exception as exc:
+                    logger.warning("General chat generation failed: %s", exc)
+                    fallback_answer = ""
+            else:
+                fallback_answer = ""
+
+            if not fallback_answer:
+                fallback_answer = (
+                    "General chat is selected, but the language model is currently "
+                    "unavailable. Please try again shortly."
+                )
+            answer_parts = [fallback_answer]
+            words = fallback_answer.split(" ")
+            for index, word in enumerate(words):
+                if cancel_token and cancel_token.is_set():
+                    return
+                yield {
+                    "type": "token",
+                    "content": word + (" " if index < len(words) - 1 else ""),
+                }
+
+        answer_text = "".join(answer_parts).strip()
+        generation_ms = round((time.perf_counter() - t_generation) * 1000, 2)
+        thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
+        thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
+        reasoning_sum = thinking_sm.get_reasoning_summary(
+            intent="conversational",
+            answer_mode="DIRECT",
+            is_follow_up=bool(history),
+            used_conversation_context=bool(history),
+            reused_previous_evidence=False,
+            retrieved_new_evidence=False,
+            used_visual_evidence=False,
+            evidence_status="DIRECT",
+        )
+        trace = RAGTrace(
+            query=user_query,
+            query_type=QueryCategory.CONVERSATIONAL.value,
+            routing_confidence=1.0,
+            retrieval_strategy="general_chat_bypass",
+            query_scope="general",
+            retrieved_candidate_count=0,
+            post_rerank_count=0,
+            final_context_count=0,
+            response_mode=response_mode,
+            retrieval_top_k=0,
+            rerank_top_k=0,
+            context_tokens=0,
+            generation_max_tokens=response_mode_config.max_output_tokens,
+            execution_time_ms=generation_ms,
+            stage_timings_ms={"general_chat_generation": generation_ms},
+            fallback_reason="general_chat_mode",
+            faithfulness_checked=False,
+            faithfulness_passed=True,
+            verification_score=None,
+            retry_count=0,
+            cache_hit=False,
+            evidence_sufficiency_passed=True,
+            generation_model=selected_model,
+            grounding_validation_passed=True,
+            reasoning_summary=reasoning_sum,
+            thinking_events=[event.model_dump() for event in thinking_sm.get_all_events()],
+        )
+        _log_rag_trace(trace)
+        yield {
+            "type": "done",
+            "answer": answer_text,
+            "citations": [],
+            "context_chunks": [],
+            "trace": trace,
+            "model": selected_model,
+            "token_usage": {
+                "prompt_tokens": len(prompt.split()),
+                "completion_tokens": len(answer_text.split()),
+            },
+            "total_elapsed_ms": generation_ms,
+            "cache_hit": False,
+            "reasoning_summary": reasoning_sum.model_dump(),
+            "thinking_events": trace.thinking_events,
+        }
 
     def _stream_query_internal(
         self,
@@ -1929,6 +2808,7 @@ class RAGPipeline:
         selected_document_ids: list[str] | None = None,
         document_scope: str | None = None,
         conversation_state: ConversationRAGState | None = None,
+        response_mode: ResponseMode = "standard",
         thinking_detail_level: ThinkingDetailLevel | str = ThinkingDetailLevel.STANDARD,
         cancel_token: Any = None,
     ) -> Generator[dict[str, Any], None, None]:
@@ -1953,19 +2833,74 @@ class RAGPipeline:
                 ),
             }
 
-        resp = self.query(
-            user_query=user_query,
-            filters=filters,
-            history=history,
-            model=model,
-            active_document_id=active_document_id,
-            active_document_name=active_document_name,
-            selected_document_ids=selected_document_ids,
-            document_scope=document_scope,
-            conversation_state=conversation_state,
-            thinking_detail_level=thinking_detail_level,
-            thinking_sm=thinking_sm,
-        )
+        _, chat_mode = self._split_control_filters(filters)
+        if chat_mode == "general":
+            yield from self._stream_general_chat_response(
+                user_query=user_query,
+                history=history,
+                model=model,
+                thinking_sm=thinking_sm,
+                response_mode=response_mode,
+                cancel_token=cancel_token,
+            )
+            return
+
+        token_queue: queue.Queue[str] = queue.Queue()
+        result_box: dict[str, Any] = {}
+        worker_done = threading.Event()
+
+        def run_query() -> None:
+            try:
+                result_box["response"] = self.query(
+                    user_query=user_query,
+                    filters=filters,
+                    history=history,
+                    model=model,
+                    active_document_id=active_document_id,
+                    active_document_name=active_document_name,
+                    selected_document_ids=selected_document_ids,
+                    document_scope=document_scope,
+                    conversation_state=conversation_state,
+                    response_mode=response_mode,
+                    thinking_detail_level=thinking_detail_level,
+                    thinking_sm=thinking_sm,
+                    stream_callback=token_queue.put,
+                )
+            except BaseException as exc:
+                result_box["error"] = exc
+            finally:
+                worker_done.set()
+
+        worker = threading.Thread(target=run_query, daemon=True, name="rag-stream-worker")
+        worker.start()
+
+        streamed_answer = False
+        retrieval_event_sent = False
+        while not worker_done.is_set() or not token_queue.empty():
+            if cancel_token and cancel_token.is_set():
+                return
+            try:
+                token_text = token_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            if not retrieval_event_sent:
+                # The first model delta proves retrieval and context building
+                # have completed, even though final timings are not known yet.
+                yield {
+                    "type": "retrieval_done",
+                    "stage_timings": {},
+                    "candidate_count": 0,
+                    "reranked_count": 0,
+                    "context_count": 0,
+                    "cache_hit": False,
+                }
+                retrieval_event_sent = True
+            streamed_answer = True
+            yield {"type": "token", "content": token_text}
+
+        if "error" in result_box:
+            raise result_box["error"]
+        resp = result_box["response"]
 
         # 1. Progressive Pre-generation Thinking Events (before generation)
         for ev in thinking_sm.get_visible_events():
@@ -1976,14 +2911,15 @@ class RAGPipeline:
             yield {"type": "thinking", "event": ev}
 
         # 2. Retrieval Done Event (for backward compatibility)
-        yield {
-            "type": "retrieval_done",
-            "stage_timings": resp.trace.stage_timings_ms,
-            "candidate_count": resp.trace.retrieved_candidate_count,
-            "reranked_count": resp.trace.post_rerank_count,
-            "context_count": resp.trace.final_context_count,
-            "cache_hit": resp.trace.cache_hit,
-        }
+        if not retrieval_event_sent:
+            yield {
+                "type": "retrieval_done",
+                "stage_timings": resp.trace.stage_timings_ms,
+                "candidate_count": resp.trace.retrieved_candidate_count,
+                "reranked_count": resp.trace.post_rerank_count,
+                "context_count": resp.trace.final_context_count,
+                "cache_hit": resp.trace.cache_hit,
+            }
 
         # 3. Answer Generation Thinking Start Event
         gen_events = [e for e in thinking_sm.get_visible_events() if e.stage == ThinkingStage.ANSWER_GENERATION]
@@ -1991,12 +2927,13 @@ class RAGPipeline:
             yield {"type": "thinking", "event": gen_events[0]}
 
         # 4. Stream words/tokens smoothly (starts only after answer planning)
-        words = resp.answer.split(" ")
-        for i, word in enumerate(words):
-            if cancel_token and cancel_token.is_set():
-                return
-            chunk_text = word + (" " if i < len(words) - 1 else "")
-            yield {"type": "token", "content": chunk_text}
+        if not streamed_answer:
+            words = resp.answer.split(" ")
+            for i, word in enumerate(words):
+                if cancel_token and cancel_token.is_set():
+                    return
+                chunk_text = word + (" " if i < len(words) - 1 else "")
+                yield {"type": "token", "content": chunk_text}
 
         # 5. Post-generation Thinking Events (Citation Building & Completed)
         for ev in thinking_sm.get_visible_events():

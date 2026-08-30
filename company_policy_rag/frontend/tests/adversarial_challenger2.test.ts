@@ -155,11 +155,11 @@ export function runAdversarialPipelineTests(): TestResult[] {
     assert(typeof mapped.timestamp === 'string', 'generates ISO timestamp');
     assert(mapped.original_query === '', 'empty query');
     assert(mapped.total_chunks_retrieved === 0, '0 chunks retrieved');
-    assert(mapped.top_rerank_score === 0.9, 'default top_rerank_score 0.9');
+    assert(mapped.top_rerank_score === undefined, 'missing rerank score stays unmeasured');
     assert(mapped.total_latency_ms === 0, '0 latency');
     assert(mapped.prompt_tokens === 0, '0 prompt tokens');
     assert(mapped.completion_tokens === 0, '0 completion tokens');
-    assert(mapped.model === 'FastAPI RAG', 'default model name');
+    assert(mapped.model === 'Unknown', 'unknown model is labeled honestly');
   });
 
   test('C2.1.3: Non-object primitive inputs (null, undefined, number, string, array, boolean) handle safely', () => {
@@ -388,17 +388,7 @@ export function runAdversarialPipelineTests(): TestResult[] {
     assert(mapVerificationReport(123) === null, 'number input returns null');
 
     const emptyReport = mapVerificationReport({});
-    assert(emptyReport !== null, 'empty object returns default VerificationReport');
-    assert(emptyReport?.faithfulness === 1.0, 'default faithfulness 1.0');
-    assert(emptyReport?.completeness === 1.0, 'default completeness 1.0');
-    assert(emptyReport?.citation_coverage === 1.0, 'default citation_coverage 1.0');
-    assert(emptyReport?.coherence === 1.0, 'default coherence 1.0');
-    assert(emptyReport?.composite_score === 1.0, 'default composite_score 1.0');
-    assert(emptyReport?.passed === true, 'default passed true');
-    assert(emptyReport?.critique === null, 'default critique null');
-    assertEqual(emptyReport?.missing_aspects, [], 'default missing_aspects []');
-    assertEqual(emptyReport?.unsupported_claims, [], 'default unsupported_claims []');
-    assert(emptyReport?.retry_count === 0, 'default retry_count 0');
+    assert(emptyReport === null, 'empty object has no verifier measurements');
   });
 
   test('C2.2.6: Explicit top-level properties take precedence over embedded verification report', () => {
@@ -1243,6 +1233,43 @@ export async function runAdversarialPipelineAsyncTests(): Promise<TestResult[]> 
         assert(err.message.includes('500'), 'error message contains status 500');
       }
       assert(threw, 'getObservability threw on 500 status');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  await test('C2.4.4: clearTelemetry() reports backend success and never fakes a successful clear', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      let fallbackSucceeds = true;
+      globalThis.fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'POST') return new Response('primary failed', { status: 500 });
+        return new Response('', { status: fallbackSucceeds ? 200 : 500 });
+      };
+
+      const client = new ApiClient('http://mock-rag');
+      assert(await client.clearTelemetry(), 'legacy DELETE fallback success is returned');
+      fallbackSucceeds = false;
+      assert(!(await client.clearTelemetry()), 'failure from both endpoints is returned as false');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  await test('C2.4.5: deleteTrace() only reports success after a real endpoint confirms deletion', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      let fallbackSucceeds = true;
+      globalThis.fetch = async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/observability/queries/')) return new Response('not found', { status: 404 });
+        return new Response('', { status: fallbackSucceeds ? 200 : 404 });
+      };
+
+      const client = new ApiClient('http://mock-rag');
+      assert(await client.deleteTrace('tr_real_1'), 'legacy trace endpoint confirms deletion');
+      fallbackSucceeds = false;
+      assert(!(await client.deleteTrace('tr_missing')), 'missing trace is not removed optimistically');
     } finally {
       globalThis.fetch = originalFetch;
     }

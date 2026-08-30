@@ -1,0 +1,26 @@
+
+> company-policy-rag-frontend@1.0.0 dev
+> next dev --hostname 127.0.0.1 --port 3000
+
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://127.0.0.1:3000
+- Network:       http://127.0.0.1:3000
+✓ Ready in 5.8s
+✓ Running next.config.mjs took 45ms
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: "100mb"
+  · serverActions
+
+ GET / 200 in 1029ms (next.js: 721ms, application-code: 308ms)
+ GET / 200 in 180ms (next.js: 119ms, application-code: 60ms)
+✓ Compiled in 14.4s
+ GET / 200 in 102ms (next.js: 24ms, application-code: 78ms)
+ GET / 200 in 6.3s (next.js: 6.0s, application-code: 222ms)
+ GET / 200 in 305ms (next.js: 171ms, application-code: 133ms)
+ GET / 200 in 51ms (next.js: 8ms, application-code: 42ms)
+ GET / 200 in 106ms (next.js: 15ms, application-code: 92ms)
+ GET / 200 in 41ms (next.js: 7ms, application-code: 34ms)
+ GET / 200 in 47ms (next.js: 7ms, application-code: 41ms)
+ GET / 200 in 68ms (next.js: 13ms, application-code: 54ms)
+✓ Compiled in 295ms
+ GET / 200 in 76ms (next.js: 40ms, application-code: 36ms)

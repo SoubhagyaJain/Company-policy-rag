@@ -53,6 +53,7 @@ import {
   AlertItemData,
   ErrorIncidentData,
   QueryTrace,
+  SubsystemHealth,
   SubsystemStatusType,
 } from '../lib/types';
 import { QueryTraceDrawer } from './QueryTraceDrawer';
@@ -86,6 +87,14 @@ function formatFloatPercent(val?: number | null): string {
   if (val === null || val === undefined || isNaN(val)) return '0%';
   const clamped = Math.min(100, Math.max(0, val * 100));
   return `${clamped.toFixed(1)}%`;
+}
+
+function formatMeasuredLatency(ms?: number | null): string {
+  return ms === null || ms === undefined || isNaN(ms) ? 'Not measured' : formatLatency(ms);
+}
+
+function formatMeasuredPercent(val?: number | null): string {
+  return val === null || val === undefined || isNaN(val) ? 'Not measured' : formatFloatPercent(val);
 }
 
 export const AdminView: React.FC = () => {
@@ -177,21 +186,21 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  const health = summary?.health || {
-    api: 'healthy',
-    ollama: 'healthy',
+  const health: SubsystemHealth = summary?.health || {
+    api: data.health.status === 'ok' ? 'healthy' : 'unavailable',
+    ollama: 'unavailable',
     vector_db: data.health.vector_db ? 'healthy' : 'unavailable',
-    bm25: 'healthy',
-    embedding_model: 'healthy',
-    text_model: data.health.models_loaded ? 'healthy' : 'degraded',
-    vision_model: 'healthy',
-    semantic_cache: 'healthy',
-    vision_cache: 'healthy',
-    memory: 'healthy',
-    uptime_seconds: 3600,
+    bm25: 'unavailable',
+    embedding_model: 'unavailable',
+    text_model: data.health.models_loaded ? 'healthy' : 'unavailable',
+    vision_model: 'unavailable',
+    semantic_cache: 'unavailable',
+    vision_cache: 'unavailable',
+    memory: 'unavailable',
+    uptime_seconds: 0,
     error_rate: 0.0,
-    active_model_text: 'qwen2.5:7b',
-    active_model_vision: 'qwen2.5vl:7b',
+    active_model_text: 'Unknown',
+    active_model_vision: 'Unknown',
   };
 
   const qm = summary?.query_metrics;
@@ -241,10 +250,10 @@ export const AdminView: React.FC = () => {
           <tbody className="divide-y divide-sand-border/60 dark:divide-sand-darkBorder/60">
             {recentTraces.map((trace) => {
               const isExpanded = expandedTraceId === trace.trace_id;
-              const rawType = trace.query_type || 'factual';
+              const rawType = trace.query_type || 'unknown';
               const capType = rawType.charAt(0).toUpperCase() + rawType.slice(1);
               const retries = trace.retry_count ?? 0;
-              const vScore = trace.verification?.composite_score ?? trace.verification_score ?? 1.0;
+              const vScore = trace.verification?.composite_score ?? trace.verification_score;
               const isRelaxed = Boolean(trace.filter_relaxed);
               const expandedList = trace.expanded_queries || trace.sub_queries || [];
               const hasFilters = trace.inferred_filters && Object.keys(trace.inferred_filters).length > 0;
@@ -269,7 +278,7 @@ export const AdminView: React.FC = () => {
                           {capType}
                         </span>
                         <span className="text-[11px] font-mono text-charcoal-muted dark:text-cream-400">
-                          ({trace.routing_confidence !== undefined ? formatPercent(trace.routing_confidence) : '90%'})
+                          ({trace.routing_confidence !== undefined && trace.routing_confidence !== null ? formatPercent(trace.routing_confidence) : 'Not measured'})
                         </span>
                       </div>
                     </td>
@@ -277,6 +286,10 @@ export const AdminView: React.FC = () => {
                       {trace.conversational_bypass ? (
                         <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
                           Conversational
+                        </span>
+                      ) : vScore === null || vScore === undefined ? (
+                        <span className="px-2 py-0.5 rounded-full bg-cream-200 text-charcoal-muted dark:bg-sand-darkBorder dark:text-cream-400 border border-sand-border dark:border-sand-darkBorder text-[11px] font-semibold">
+                          Not measured
                         </span>
                       ) : trace.faithfulness_passed !== false ? (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
@@ -312,7 +325,7 @@ export const AdminView: React.FC = () => {
                       {trace.total_chunks_retrieved}
                     </td>
                     <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                      {trace.top_rerank_score !== undefined ? `${(trace.top_rerank_score * 100).toFixed(1)}%` : '92.0%'}
+                      {trace.top_rerank_score !== undefined && trace.top_rerank_score !== null ? `${(trace.top_rerank_score * 100).toFixed(1)}%` : 'Not measured'}
                     </td>
                     <td className="py-3 px-3 font-mono font-semibold text-charcoal dark:text-cream-100">
                       {formatLatency(trace.total_latency_ms)}
@@ -366,16 +379,16 @@ export const AdminView: React.FC = () => {
                           {/* Strategy & Anchor Chips */}
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-2.5 py-1 rounded-lg bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-200 font-mono border border-sand-border/70 dark:border-sand-darkBorder/60">
-                              Strategy: {trace.retrieval_strategy || 'balanced_hybrid'}
+                              Strategy: {trace.retrieval_strategy || 'Not recorded'}
                             </span>
                             <span className="px-2.5 py-1 rounded-lg bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-200 font-mono border border-sand-border/70 dark:border-sand-darkBorder/60">
                               Model: {trace.model}
                             </span>
                             <span className="px-2.5 py-1 rounded-lg bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-200 font-mono border border-sand-border/70 dark:border-sand-darkBorder/60">
-                              Confidence: {trace.routing_confidence !== undefined ? formatPercent(trace.routing_confidence) : '90%'}
+                              Confidence: {trace.routing_confidence !== undefined && trace.routing_confidence !== null ? formatPercent(trace.routing_confidence) : 'Not measured'}
                             </span>
                             <span className="px-2.5 py-1 rounded-lg bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-200 font-mono border border-sand-border/70 dark:border-sand-darkBorder/60">
-                              Routing: {trace.query_type || 'factual'}
+                              Routing: {trace.query_type || 'Not recorded'}
                             </span>
                           </div>
 
@@ -395,7 +408,7 @@ export const AdminView: React.FC = () => {
                                 Semantic Cache Hit
                               </div>
                               <p className="mt-1 text-emerald-700/90 dark:text-emerald-200/90 font-mono">
-                                Cache similarity: {trace.cache_similarity !== null && trace.cache_similarity !== undefined ? `${(trace.cache_similarity * 100).toFixed(1)}%` : '98.5%'}
+                                Cache similarity: {trace.cache_similarity !== null && trace.cache_similarity !== undefined ? `${(trace.cache_similarity * 100).toFixed(1)}%` : 'Not measured'}
                               </p>
                             </div>
                           )}
@@ -459,14 +472,16 @@ export const AdminView: React.FC = () => {
                           <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-sand-dark/90 border border-sand-border dark:border-sand-darkBorder space-y-2">
                             <div className="flex justify-between items-center">
                               <span className="font-semibold text-charcoal dark:text-cream-100">
-                                Self-Reflection Verification Report — {retries === 0
+                                Self-Reflection Verification Report — {vScore === null || vScore === undefined
+                                  ? 'No verifier measurement recorded'
+                                  : retries === 0
                                   ? '0 retries · Passed self-reflection on initial attempt'
                                   : retries === 1
                                   ? 'Verification Retries (1) · 1 cycle'
                                   : `Verification Retries (${retries}) · ${retries} cycles`}
                               </span>
                               <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                                Composite: {formatPercent(vScore)}
+                                Composite: {vScore === null || vScore === undefined ? 'Not measured' : formatPercent(vScore)}
                               </span>
                             </div>
 
@@ -481,10 +496,10 @@ export const AdminView: React.FC = () => {
                             {trace.verification && (
                               <div className="pt-2 border-t border-sand-border dark:border-sand-darkBorder space-y-2">
                                 <div className="grid grid-cols-4 gap-2 text-charcoal-muted dark:text-cream-400">
-                                  <div>Faithfulness: <span className="text-charcoal dark:text-cream-200 font-mono">{formatPercent(trace.verification.faithfulness)}</span></div>
-                                  <div>Completeness: <span className="text-charcoal dark:text-cream-200 font-mono">{formatPercent(trace.verification.completeness)}</span></div>
-                                  <div>Citation Coverage: <span className="text-charcoal dark:text-cream-200 font-mono">{formatPercent(trace.verification.citation_coverage)}</span></div>
-                                  <div>Coherence: <span className="text-charcoal dark:text-cream-200 font-mono">{formatPercent(trace.verification.coherence)}</span></div>
+                                  <div>Faithfulness: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.faithfulness === undefined ? 'Not measured' : formatPercent(trace.verification.faithfulness)}</span></div>
+                                  <div>Completeness: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.completeness === undefined ? 'Not measured' : formatPercent(trace.verification.completeness)}</span></div>
+                                  <div>Citation Coverage: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.citation_coverage === undefined ? 'Not measured' : formatPercent(trace.verification.citation_coverage)}</span></div>
+                                  <div>Coherence: <span className="text-charcoal dark:text-cream-200 font-mono">{trace.verification.coherence === undefined ? 'Not measured' : formatPercent(trace.verification.coherence)}</span></div>
                                 </div>
 
                                 {trace.verification.missing_aspects && trace.verification.missing_aspects.length > 0 && (
@@ -533,11 +548,11 @@ export const AdminView: React.FC = () => {
       <div className="lg:hidden space-y-3">
         {recentTraces.map((trace) => {
           const isExpanded = expandedTraceId === trace.trace_id;
-          const rawType = trace.query_type || 'factual';
+          const rawType = trace.query_type || 'unknown';
           const capType = rawType.charAt(0).toUpperCase() + rawType.slice(1);
           const expandedList = trace.expanded_queries || trace.sub_queries || [];
           const retries = trace.retry_count ?? 0;
-          const vScore = trace.verification?.composite_score ?? trace.verification_score ?? 1.0;
+          const vScore = trace.verification?.composite_score ?? trace.verification_score;
 
           return (
             <div
@@ -553,13 +568,13 @@ export const AdminView: React.FC = () => {
               <div className="flex justify-between text-charcoal-muted dark:text-cream-400 font-mono text-[11px]">
                 <span>Latency: {formatLatency(trace.total_latency_ms)}</span>
                 <span>TTFT: {formatLatency(trace.ttft_ms)}</span>
-                <span>Confidence: {trace.routing_confidence !== undefined ? formatPercent(trace.routing_confidence) : '90%'}</span>
+                <span>Confidence: {trace.routing_confidence !== undefined && trace.routing_confidence !== null ? formatPercent(trace.routing_confidence) : 'Not measured'}</span>
               </div>
 
               {isExpanded && (
                 <div className="pt-2 border-t border-sand-border dark:border-sand-darkBorder space-y-2">
                   <div className="font-mono text-charcoal dark:text-cream-300">
-                    Strategy: {trace.retrieval_strategy || 'balanced_hybrid'}
+                    Strategy: {trace.retrieval_strategy || 'Not recorded'}
                   </div>
 
                   {trace.query_rewritten && (
@@ -571,7 +586,7 @@ export const AdminView: React.FC = () => {
 
                   {trace.cache_hit && (
                     <div className="p-2 rounded bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
-                      Semantic Cache Hit ({trace.cache_similarity ? `${(trace.cache_similarity * 100).toFixed(1)}%` : '98.5%'})
+                      Semantic Cache Hit ({trace.cache_similarity !== null && trace.cache_similarity !== undefined ? `${(trace.cache_similarity * 100).toFixed(1)}%` : 'similarity not recorded'})
                     </div>
                   )}
 
@@ -605,7 +620,7 @@ export const AdminView: React.FC = () => {
                         : `Verification Retries (${retries}) · ${retries} cycles`}
                     </span>
                     <span className="font-mono text-emerald-600 dark:text-emerald-400 block mt-1 font-bold">
-                      Composite Score: {formatPercent(vScore)}
+                      Composite Score: {vScore === null || vScore === undefined ? 'Not measured' : formatPercent(vScore)}
                     </span>
                   </div>
                 </div>
@@ -721,6 +736,21 @@ export const AdminView: React.FC = () => {
           </div>
         </div>
 
+        {error && (
+          <div role="alert" className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-300 text-sm flex items-start justify-between gap-4">
+            <div>
+              <div className="font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                Telemetry is unavailable
+              </div>
+              <p className="text-xs mt-1">{error}</p>
+            </div>
+            <button onClick={() => refreshMetrics()} className="text-xs font-semibold underline underline-offset-2 shrink-0">
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* ── GLOBAL RAG HEALTH BAR (10 SUBSYSTEMS) ───────────────── */}
         <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
           <div className="flex items-center justify-between mb-3">
@@ -729,7 +759,7 @@ export const AdminView: React.FC = () => {
               Global RAG Subsystem Health (10 Subsystems)
             </span>
             <span className="text-xs font-mono text-charcoal-muted dark:text-cream-500">
-              Uptime: {health?.uptime_seconds ? `${Math.floor(health.uptime_seconds / 60)}m ${Math.floor(health.uptime_seconds % 60)}s` : 'Active'}
+              Uptime: {health?.uptime_seconds ? `${Math.floor(health.uptime_seconds / 60)}m ${Math.floor(health.uptime_seconds % 60)}s` : 'Not reported'}
             </span>
           </div>
 
@@ -740,8 +770,8 @@ export const AdminView: React.FC = () => {
               { key: 'Chroma Vector DB', status: health.vector_db, icon: Database },
               { key: 'BM25 Inverted', status: health.bm25, icon: Search },
               { key: 'Embedding Model', status: health.embedding_model, icon: Layers },
-              { key: 'Text (qwen2.5:7b)', status: health.text_model, icon: Brain },
-              { key: 'Vision (qwen2.5vl)', status: health.vision_model, icon: Eye },
+              { key: `Text (${health.active_model_text || 'unknown'})`, status: health.text_model, icon: Brain },
+              { key: `Vision (${health.active_model_vision || 'unknown'})`, status: health.vision_model, icon: Eye },
               { key: 'Semantic Cache', status: health.semantic_cache, icon: Zap },
               { key: 'Vision Cache', status: health.vision_cache, icon: ImageIcon },
               { key: 'Session Memory', status: health.memory, icon: History },
@@ -870,10 +900,10 @@ export const AdminView: React.FC = () => {
             </div>
             <div className="mt-2">
               <span className="text-2xl font-bold font-mono text-terracotta-600 dark:text-terracotta-400">
-                {formatPercent(rq?.retrieval_hit_rate ? rq.retrieval_hit_rate : 1.0)}
+                {formatPercent(rq?.retrieval_hit_rate ?? 0)}
               </span>
               <span className="text-xs text-charcoal-muted dark:text-cream-500 block mt-0.5">
-                Avg {rq?.avg_candidate_count ?? 5} candidates
+                Avg {rq?.avg_candidate_count ?? 0} candidates
               </span>
             </div>
           </div>
@@ -945,24 +975,26 @@ export const AdminView: React.FC = () => {
 
                 <div className="space-y-2 text-xs">
                   {[
-                    { name: '1. Request Intake & Classification', ms: lb?.query_classification_ms ?? 8.5 },
-                    { name: '2. Conversation Memory Resolution', ms: lb?.conversation_memory_ms ?? 3.2 },
-                    { name: '3. Query Rewrite & Expansion', ms: lb?.query_rewrite_ms ?? 14.0 },
-                    { name: '4. Dense Embedding (nomic-embed-text)', ms: lb?.embedding_ms ?? 22.0 },
-                    { name: '5. BM25 Sparse Search', ms: lb?.bm25_ms ?? 11.5 },
-                    { name: '6. Chroma Vector Search', ms: lb?.vector_search_ms ?? 18.0 },
-                    { name: '7. Hybrid RRF Fusion', ms: lb?.hybrid_fusion_ms ?? 28.5 },
-                    { name: '8. Neural Reranking', ms: lb?.reranking_ms ?? 45.0 },
-                    { name: '9. Cross-Page Section Expansion', ms: lb?.section_expansion_ms ?? 12.0 },
-                    { name: '10. Visual Detection', ms: lb?.visual_detection_ms ?? 5.0 },
-                    { name: '11. Vision Extraction (qwen2.5vl)', ms: lb?.vision_extraction_ms ?? 0.0 },
-                    { name: '12. Context Assembly & Prompt Build', ms: lb?.context_build_ms ?? 6.0 },
+                    { name: '1. Request Intake & Classification', ms: lb?.query_classification_ms },
+                    { name: '2. Conversation Memory Resolution', ms: lb?.conversation_memory_ms },
+                    { name: '3. Query Rewrite & Expansion', ms: lb?.query_rewrite_ms },
+                    { name: '4. Dense Embedding', ms: lb?.embedding_ms },
+                    { name: '5. BM25 Sparse Search', ms: lb?.bm25_ms },
+                    { name: '6. Chroma Vector Search', ms: lb?.vector_search_ms },
+                    { name: '7. Hybrid RRF Fusion', ms: lb?.hybrid_fusion_ms },
+                    { name: '8. Neural Reranking', ms: lb?.reranking_ms },
+                    { name: '9. Cross-Page Section Expansion', ms: lb?.section_expansion_ms },
+                    { name: '10. Visual Detection', ms: lb?.visual_detection_ms },
+                    { name: `11. Vision Extraction (${health.active_model_vision || 'unknown'})`, ms: lb?.vision_extraction_ms },
+                    { name: '12. Context Assembly & Prompt Build', ms: lb?.context_build_ms },
                     { name: '13. Time-to-First-Token (TTFT)', ms: lb?.ttft_ms ?? avgTtft },
-                    { name: '14. LLM Response Generation (qwen2.5:7b)', ms: lb?.generation_ms ?? 750.0 },
-                    { name: '15. SSE Token Streaming', ms: lb?.streaming_ms ?? 120.0 },
+                    { name: `14. LLM Response Generation (${health.active_model_text || 'unknown'})`, ms: lb?.generation_ms },
+                    { name: '15. SSE Token Streaming', ms: lb?.streaming_ms },
                   ].map((st, i) => {
                     const maxMs = (lb?.total_latency_ms || avgLat || 1000) * 0.8;
-                    const pct = Math.min(100, Math.max(2, (st.ms / maxMs) * 100));
+                    const stageMs = st.ms;
+                    const hasMeasurement = stageMs !== null && stageMs !== undefined;
+                    const pct = hasMeasurement ? Math.min(100, Math.max(2, (stageMs / maxMs) * 100)) : 0;
                     return (
                       <div key={i} className="flex items-center gap-3">
                         <span className="w-56 text-charcoal dark:text-cream-300 font-mono truncate">{st.name}</span>
@@ -973,7 +1005,7 @@ export const AdminView: React.FC = () => {
                           />
                         </div>
                         <span className="w-16 text-right font-mono font-semibold text-charcoal-muted dark:text-cream-400">
-                          {formatLatency(st.ms)}
+                          {formatMeasuredLatency(stageMs)}
                         </span>
                       </div>
                     );
@@ -996,25 +1028,25 @@ export const AdminView: React.FC = () => {
                     <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                       <span className="text-charcoal-muted dark:text-cream-400 block">Candidate Pool Avg</span>
                       <span className="text-lg font-bold font-mono text-purple-600 dark:text-purple-400 mt-1 block">
-                        {rq?.avg_candidate_count?.toFixed(1) ?? '5.0'} chunks
+                        {rq?.avg_candidate_count?.toFixed(1) ?? '0.0'} chunks
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                       <span className="text-charcoal-muted dark:text-cream-400 block">Final Context Chunks Avg</span>
                       <span className="text-lg font-bold font-mono text-terracotta-600 dark:text-terracotta-400 mt-1 block">
-                        {rq?.avg_final_chunk_count?.toFixed(1) ?? '3.0'} chunks
+                        {rq?.avg_final_chunk_count?.toFixed(1) ?? '0.0'} chunks
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                       <span className="text-charcoal-muted dark:text-cream-400 block">Top Rerank Score Avg</span>
                       <span className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                        {formatFloatPercent(rq?.avg_rerank_score ?? data.rerank_avg ?? 0.94)}
+                        {formatFloatPercent(rq?.avg_rerank_score ?? data.rerank_avg ?? 0)}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                       <span className="text-charcoal-muted dark:text-cream-400 block">Evidence Sufficiency Rate</span>
                       <span className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400 mt-1 block">
-                        {formatFloatPercent(rq?.evidence_sufficiency_rate ?? 1.0)}
+                        {formatFloatPercent(rq?.evidence_sufficiency_rate ?? 0)}
                       </span>
                     </div>
                   </div>
@@ -1035,7 +1067,7 @@ export const AdminView: React.FC = () => {
                       Grounding &amp; Evidence Faithfulness
                     </h2>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-semibold">
-                      {gd?.grounding_status?.toUpperCase() || 'GROUNDED'}
+                      {gd?.grounding_status?.replace(/_/g, ' ').toUpperCase() || 'NOT MEASURED'}
                     </span>
                   </div>
 
@@ -1043,19 +1075,19 @@ export const AdminView: React.FC = () => {
                     <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70 text-center">
                       <span className="text-charcoal-muted dark:text-cream-400 block text-[11px]">Supported Claims</span>
                       <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                        {formatFloatPercent(gd?.supported_claims_pct ? gd.supported_claims_pct / 100 : 0.965)}
+                        {formatMeasuredPercent(gd?.supported_claims_pct === null || gd?.supported_claims_pct === undefined ? null : gd.supported_claims_pct / 100)}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70 text-center">
                       <span className="text-charcoal-muted dark:text-cream-400 block text-[11px]">Unsupported Claims</span>
                       <span className="text-base font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 block">
-                        {formatFloatPercent(gd?.unsupported_claims_pct ? gd.unsupported_claims_pct / 100 : 0.008)}
+                        {formatMeasuredPercent(gd?.unsupported_claims_pct === null || gd?.unsupported_claims_pct === undefined ? null : gd.unsupported_claims_pct / 100)}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70 text-center">
                       <span className="text-charcoal-muted dark:text-cream-400 block text-[11px]">Citation Coverage</span>
                       <span className="text-base font-bold font-mono text-terracotta-600 dark:text-terracotta-400 mt-1 block">
-                        {formatFloatPercent(gd?.citation_coverage_pct ? gd.citation_coverage_pct / 100 : 0.982)}
+                        {formatMeasuredPercent(gd?.citation_coverage_pct === null || gd?.citation_coverage_pct === undefined ? null : gd.citation_coverage_pct / 100)}
                       </span>
                     </div>
                   </div>
@@ -1138,7 +1170,7 @@ export const AdminView: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-bold text-charcoal dark:text-cream-100 font-serif">Text Synthesis Model</h3>
-                      <span className="font-mono text-xs text-terracotta-600 dark:text-terracotta-500 font-semibold">{models?.text_model.model_name || 'qwen2.5:7b'}</span>
+                      <span className="font-mono text-xs text-terracotta-600 dark:text-terracotta-500 font-semibold">{models?.text_model.model_name || 'Unavailable'}</span>
                     </div>
                   </div>
                   {getStatusBadge(health.text_model)}
@@ -1166,13 +1198,15 @@ export const AdminView: React.FC = () => {
                   <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                     <span className="text-charcoal-muted dark:text-cream-400 block">Generation Throughput</span>
                     <span className="text-lg font-bold font-mono text-purple-600 dark:text-purple-400 mt-1 block">
-                      {models?.text_model.avg_tokens_per_second ? `${models.text_model.avg_tokens_per_second.toFixed(1)} t/s` : '38.5 t/s'}
+                      {models?.text_model.avg_tokens_per_second !== null && models?.text_model.avg_tokens_per_second !== undefined
+                        ? `${models.text_model.avg_tokens_per_second.toFixed(1)} t/s`
+                        : 'Not measured'}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Vision Model Card (qwen2.5vl:7b) */}
+              {/* Vision Model Card (Qwen3-VL-2B-Instruct) */}
               <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-4">
                 <div className="flex items-center justify-between border-b border-sand-border dark:border-sand-darkBorder pb-3">
                   <div className="flex items-center gap-2.5">
@@ -1181,12 +1215,12 @@ export const AdminView: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-bold text-charcoal dark:text-cream-100 font-serif">Vision VLM Model</h3>
-                      <span className="font-mono text-xs text-purple-600 dark:text-purple-400 font-semibold">{models?.vision_model.model_name || 'qwen2.5vl:7b'}</span>
+                      <span className="font-mono text-xs text-purple-600 dark:text-purple-400 font-semibold">{models?.vision_model.model_name || 'Unavailable'}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono px-2 py-0.5 rounded bg-cream-200 dark:bg-sand-darkBorder text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder">
-                      CB: {models?.vision_model.circuit_breaker_state || 'CLOSED'}
+                      CB: {models?.vision_model.circuit_breaker_state || 'Not reported'}
                     </span>
                     {getStatusBadge(health.vision_model)}
                   </div>
@@ -1207,7 +1241,7 @@ export const AdminView: React.FC = () => {
                   <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                     <span className="text-charcoal-muted dark:text-cream-400 block">Vision Cache Hit Rate</span>
                     <span className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                      {models?.vision_model.cache_hit_rate !== undefined ? formatPercent(models.vision_model.cache_hit_rate) : '0%'}
+                      {formatMeasuredPercent(models?.vision_model.cache_hit_rate)}
                     </span>
                     <span className="text-[10px] text-charcoal-muted dark:text-cream-500 font-mono mt-0.5 block">
                       Persistent disk cache
@@ -1216,9 +1250,7 @@ export const AdminView: React.FC = () => {
                   <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                     <span className="text-charcoal-muted dark:text-cream-400 block">Vision Avg Latency</span>
                     <span className="text-lg font-bold font-mono text-purple-600 dark:text-purple-400 mt-1 block">
-                      {models?.vision_model.avg_latency_ms && models.vision_model.avg_latency_ms > 0
-                        ? formatLatency(models.vision_model.avg_latency_ms)
-                        : 'Ready (0 ms)'}
+                      {formatMeasuredLatency(models?.vision_model.avg_latency_ms)}
                     </span>
                   </div>
                   <div className="p-3 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
@@ -1250,8 +1282,8 @@ export const AdminView: React.FC = () => {
                 <div key={i} className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-sm text-charcoal dark:text-cream-100 font-serif">{cache.title}</h3>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-xs font-mono font-semibold">
-                      Hit Rate: {formatPercent(cache.stats?.hit_rate ?? 0.8)}
+                    <span className="px-2 py-0.5 rounded-full bg-cream-200 text-charcoal-muted dark:bg-sand-darkBorder dark:text-cream-400 border border-sand-border dark:border-sand-darkBorder text-xs font-mono font-semibold">
+                      Hit Rate: {formatMeasuredPercent(cache.stats?.hit_rate)}
                     </span>
                   </div>
                   <p className="text-xs text-charcoal-muted dark:text-cream-400">{cache.desc}</p>
@@ -1265,7 +1297,7 @@ export const AdminView: React.FC = () => {
                     <div className="p-2.5 rounded-xl bg-cream-100/90 dark:bg-cream-950/90 border border-sand-border/70 dark:border-sand-darkBorder/70">
                       <span className="text-charcoal-muted dark:text-cream-400 block">Avg Hit Latency</span>
                       <span className="font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block font-semibold">
-                        {formatLatency(cache.stats?.avg_hit_latency_ms ?? 1.2)}
+                        {formatMeasuredLatency(cache.stats?.avg_hit_latency_ms)}
                       </span>
                     </div>
                   </div>
@@ -1359,7 +1391,7 @@ export const AdminView: React.FC = () => {
               {recentIncidents.length === 0 ? (
                 <div className="p-8 text-center text-charcoal-muted dark:text-cream-500 text-xs rounded-xl bg-cream-100/60 dark:bg-cream-950/60 border border-sand-border/60 dark:border-sand-darkBorder/60">
                   <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400 mx-auto mb-2" />
-                  Zero errors or incidents recorded in the selected window ({timeRange}). System operating normally.
+                  No errors or incidents were recorded in the selected window ({timeRange}).
                 </div>
               ) : (
                 <div className="space-y-3">

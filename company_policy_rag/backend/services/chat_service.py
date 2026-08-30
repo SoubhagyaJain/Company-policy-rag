@@ -23,14 +23,13 @@ from backend.models.conversation import (
     ConversationRAGState,
     ConversationStateManager,
     ConversationTurn,
-    ExpansionPlan,
-    FollowUpResolution,
 )
-from backend.models.rag import EvidenceStatus, RAGResponse
+from backend.models.rag import EvidenceStatus, RAGResponse, RAGTrace
 from backend.models.telemetry_models import SeverityLevel
 from backend.rag.pipeline import RAGPipeline
 from backend.services.telemetry_service import TelemetryService
 from backend.utils.logging import logger
+from src.config import settings
 
 
 def _safe_evidence_status(val: Any) -> EvidenceStatus:
@@ -147,6 +146,48 @@ class ChatService:
     def get_active_model(self) -> str:
         return self.pipeline.get_active_model()
 
+    @staticmethod
+    def _request_model_override(request: ChatRequest) -> str | None:
+        """Distinguish an omitted DTO default from an explicit per-request model."""
+        fields_set = getattr(request, "model_fields_set", set())
+        if "model" not in fields_set:
+            return None
+        raw_model = str(request.model or "").strip()
+        return raw_model or None
+
+    @staticmethod
+    def _request_chat_mode(request: ChatRequest) -> str:
+        filters = request.filters or {}
+        raw_mode = filters.get("chat_mode", filters.get("mode", request.chat_mode or "documents"))
+        return "general" if str(raw_mode).strip().lower() == "general" else "documents"
+
+    @staticmethod
+    def _message_chat_mode(message: dict[str, Any]) -> str:
+        return "general" if str(message.get("chat_mode", "documents")).lower() == "general" else "documents"
+
+    def _history_for_mode(
+        self,
+        history: list[dict[str, Any]],
+        chat_mode: str,
+    ) -> list[dict[str, Any]]:
+        window = max(1, int(getattr(settings, "memory_window_size", 5)))
+        same_mode = [m for m in history if self._message_chat_mode(m) == chat_mode]
+        return same_mode[-(window * 2) :]
+
+    def _trim_session_history(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Keep an independent bounded memory window for each chat mode."""
+        window = max(1, int(getattr(settings, "memory_window_size", 5))) * 2
+        documents = [m for m in history if self._message_chat_mode(m) == "documents"][-window:]
+        general = [m for m in history if self._message_chat_mode(m) == "general"][-window:]
+        return sorted(documents + general, key=lambda m: float(m.get("timestamp", 0.0)))
+
+    @staticmethod
+    def _trim_conversation_state(state: ConversationRAGState) -> ConversationRAGState:
+        window = max(1, int(getattr(settings, "memory_window_size", 5)))
+        state.turns = state.turns[-window:]
+        state.evidence_contexts = state.evidence_contexts[-window:]
+        return state
+
     def execute_query(self, request: ChatRequest) -> ChatResponse:
         """Execute synchronous RAG query and record telemetry trace."""
         if not request.message or not request.message.strip():
@@ -156,9 +197,12 @@ class ChatService:
         request_id = f"req_{uuid.uuid4().hex[:12]}"
         message_id = f"msg_{uuid.uuid4().hex[:12]}"
         t_start = time.perf_counter()
+        chat_mode = self._request_chat_mode(request)
 
         with self._session_lock:
-            history = self._sessions.get(session_id, [])
+            history = self._history_for_mode(
+                list(self._sessions.get(session_id, [])), chat_mode
+            )
             session_meta = self._session_metadata.setdefault(session_id, {})
             if request.active_document_id:
                 session_meta["active_document_id"] = request.active_document_id
@@ -176,6 +220,7 @@ class ChatService:
 
         # Get current isolated conversation state
         conv_state = self.state_manager.get_state(session_id)
+        preserved_document_state = conv_state.model_copy(deep=True) if chat_mode == "general" else None
 
         # Run pipeline with document-aware scope resolution and conversation state
         thinking_level = request.thinking_detail_level
@@ -190,12 +235,13 @@ class ChatService:
                 user_query=request.message,
                 filters=request.filters,
                 history=history,
-                model=request.model,
+                model=self._request_model_override(request),
                 active_document_id=active_doc_id,
                 active_document_name=active_doc_name,
                 selected_document_ids=selected_doc_ids,
                 document_scope=doc_scope,
                 conversation_state=conv_state,
+                response_mode=request.response_mode,
                 thinking_detail_level=thinking_level,
             )
         except TypeError:
@@ -203,7 +249,7 @@ class ChatService:
                 user_query=request.message,
                 filters=request.filters,
                 history=history,
-                model=request.model,
+                model=self._request_model_override(request),
                 active_document_id=active_doc_id,
                 active_document_name=active_doc_name,
                 selected_document_ids=selected_doc_ids,
@@ -223,13 +269,18 @@ class ChatService:
                 latency_ms=rag_res.trace.stage_timings_ms.get("query_rewrite", 3.0),
             )
 
-        self.telemetry_service.record_from_rag_response(
-            rag_res,
-            ttft_ms=None,
-            request_id=request_id,
-            conversation_id=session_id,
-            document_id=active_doc_id,
-        )
+        try:
+            self.telemetry_service.record_from_rag_response(
+                rag_res,
+                ttft_ms=None,
+                request_id=request_id,
+                conversation_id=session_id,
+                document_id=active_doc_id,
+            )
+        except TypeError:
+            # Backward compatibility for custom telemetry adapters that still
+            # implement the original minimal method signature.
+            self.telemetry_service.record_from_rag_response(rag_res, ttft_ms=None)
 
         with self._session_lock:
             if session_id not in self._sessions:
@@ -239,6 +290,8 @@ class ChatService:
                     "message_id": message_id,
                     "role": "user",
                     "content": request.message,
+                    "chat_mode": chat_mode,
+                    "response_mode": request.response_mode,
                     "timestamp": time.time(),
                 }
             )
@@ -247,8 +300,12 @@ class ChatService:
                     "message_id": rag_res.id,
                     "role": "assistant",
                     "content": rag_res.answer,
+                    "chat_mode": chat_mode,
                     "timestamp": time.time(),
                 }
+            )
+            self._sessions[session_id] = self._trim_session_history(
+                list(self._sessions[session_id])
             )
 
         # Update and persist conversation state
@@ -261,6 +318,7 @@ class ChatService:
             topic_shift=rag_res.trace.topic_shift if rag_res.trace else False,
             intent=str(rag_res.trace.query_type or "factual") if rag_res.trace else "factual",
             answer_mode=str(rag_res.trace.answer_mode or "DIRECT") if rag_res.trace else "DIRECT",
+            response_mode=request.response_mode,
             evidence_status=str(rag_res.trace.evidence_status or "DIRECT") if rag_res.trace else "DIRECT",
 
             active_topic=rag_res.trace.active_topic if (rag_res.trace and rag_res.trace.active_topic) else conv_state.active_topic,
@@ -323,7 +381,12 @@ class ChatService:
         ]
         conv_state.previous_citations = rag_res.citations
         conv_state.updated_at = time.time()
-        self.state_manager.update_state(session_id, conv_state)
+        if preserved_document_state is not None:
+            self.state_manager.update_state(session_id, preserved_document_state)
+        else:
+            self.state_manager.update_state(
+                session_id, self._trim_conversation_state(conv_state)
+            )
 
         low_confidence = (
             (not rag_res.trace.faithfulness_passed)
@@ -344,6 +407,7 @@ class ChatService:
                 "context_count": len(rag_res.context_chunks),
                 "execution_time_ms": elapsed_ms,
                 "request_id": request_id,
+                "response_mode": request.response_mode,
             },
             trace=rag_res.trace,
             low_confidence=low_confidence,
@@ -367,6 +431,7 @@ class ChatService:
                 if (rag_res.trace and rag_res.trace.thinking_events)
                 else []
             ),
+            response_mode=request.response_mode,
         )
 
     async def stream_query(
@@ -381,6 +446,7 @@ class ChatService:
         request_id = f"req_{uuid.uuid4().hex[:12]}"
         message_id = f"msg_{uuid.uuid4().hex[:12]}"
         response_id = f"resp_{uuid.uuid4().hex[:12]}"
+        chat_mode = self._request_chat_mode(request)
         raw_req_model = (request.model or "").strip()
         if not raw_req_model or raw_req_model.lower() in ("default", "fastapi rag", "none"):
             model_name = self.get_active_model() or "qwen2.5:7b"
@@ -388,7 +454,9 @@ class ChatService:
             model_name = raw_req_model
 
         with self._session_lock:
-            history = self._sessions.get(session_id, [])
+            history = self._history_for_mode(
+                list(self._sessions.get(session_id, [])), chat_mode
+            )
             session_meta = self._session_metadata.setdefault(session_id, {})
             if request.active_document_id:
                 session_meta["active_document_id"] = request.active_document_id
@@ -406,6 +474,7 @@ class ChatService:
 
         # Get conversation state from manager
         conv_state = self.state_manager.get_state(session_id)
+        preserved_document_state = conv_state.model_copy(deep=True) if chat_mode == "general" else None
 
         try:
             if not request.message or not request.message.strip():
@@ -427,6 +496,7 @@ class ChatService:
                 "active_document_id": active_doc_id,
                 "active_document_name": active_doc_name,
                 "status": "processing",
+                "response_mode": request.response_mode,
                 "timestamp": datetime.now(UTC).isoformat(),
             }
             yield f"event: start\ndata: {json.dumps(start_payload)}\n\n"
@@ -451,12 +521,13 @@ class ChatService:
                     user_query=request.message,
                     filters=request.filters,
                     history=history,
-                    model=request.model,
+                    model=self._request_model_override(request),
                     active_document_id=active_doc_id,
                     active_document_name=active_doc_name,
                     selected_document_ids=selected_doc_ids,
                     document_scope=doc_scope,
                     conversation_state=conv_state,
+                    response_mode=request.response_mode,
                     thinking_detail_level=thinking_level,
                     cancel_token=cancel_token,
                 )
@@ -465,7 +536,7 @@ class ChatService:
                     user_query=request.message,
                     filters=request.filters,
                     history=history,
-                    model=request.model,
+                    model=self._request_model_override(request),
                     active_document_id=active_doc_id,
                     active_document_name=active_doc_name,
                     selected_document_ids=selected_doc_ids,
@@ -605,6 +676,7 @@ class ChatService:
                         "document_scope": doc_scope,
                         "active_document_id": active_doc_id,
                         "active_document_name": active_doc_name,
+                        "response_mode": request.response_mode,
                     }
                     try:
                         done_json = json.dumps(done_payload)
@@ -627,6 +699,8 @@ class ChatService:
                         "message_id": message_id,
                         "role": "user",
                         "content": request.message,
+                        "chat_mode": chat_mode,
+                        "response_mode": request.response_mode,
                         "timestamp": time.time(),
                     }
                 )
@@ -635,8 +709,12 @@ class ChatService:
                         "message_id": response_id,
                         "role": "assistant",
                         "content": full_answer,
+                        "chat_mode": chat_mode,
                         "timestamp": time.time(),
                     }
+                )
+                self._sessions[session_id] = self._trim_session_history(
+                    list(self._sessions[session_id])
                 )
 
             # Persist updated turn to ConversationStateManager
@@ -650,6 +728,7 @@ class ChatService:
                 topic_shift=final_rag_trace.topic_shift if final_rag_trace else False,
                 intent=str(final_rag_trace.query_type) if (final_rag_trace and final_rag_trace.query_type) else "factual",
                 answer_mode=str(final_rag_trace.answer_mode) if (final_rag_trace and final_rag_trace.answer_mode) else "DIRECT",
+                response_mode=request.response_mode,
                 evidence_status=str(final_rag_trace.evidence_status) if (final_rag_trace and final_rag_trace.evidence_status) else "DIRECT",
                 active_topic=final_rag_trace.active_topic if (final_rag_trace and final_rag_trace.active_topic) else conv_state.active_topic,
                 active_entities=final_rag_trace.active_entities if (final_rag_trace and final_rag_trace.active_entities) else conv_state.active_entities,
@@ -707,7 +786,12 @@ class ChatService:
             conv_state.previous_retrieved_chunks = final_context_chunks
             conv_state.previous_citations = final_citations
             conv_state.updated_at = time.time()
-            self.state_manager.update_state(session_id, conv_state)
+            if preserved_document_state is not None:
+                self.state_manager.update_state(session_id, preserved_document_state)
+            else:
+                self.state_manager.update_state(
+                    session_id, self._trim_conversation_state(conv_state)
+                )
 
         except Exception as exc:
             logger.exception("Error during chat stream query: %s", exc)
