@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import threading
 import time
 import uuid
@@ -30,6 +31,7 @@ from backend.retrieval.bm25 import BM25SearchIndex
 from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
+from src.config import settings
 
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
 EMBEDDING_BATCH_SIZE = 32
@@ -62,7 +64,10 @@ class DocumentService:
         vision_cache_manager: VisionCacheManager | None = None,
         storage_dir: str = "app/storage/uploads",
     ) -> None:
-        self.vector_store = vector_store or ChromaVectorStore()
+        self.vector_store = vector_store or ChromaVectorStore(
+            collection_name=settings.chroma_collection_name,
+            persist_dir=settings.chroma_persist_dir,
+        )
         self.bm25_index = bm25_index or BM25SearchIndex()
         self.embedding_service = embedding_service or EmbeddingService()
         self.docstore = docstore if docstore is not None else {}
@@ -97,6 +102,21 @@ class DocumentService:
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return []
+
+    @staticmethod
+    def _restored_document_identity(meta: dict[str, Any]) -> tuple[str, str | None]:
+        """Return a safe ID and an optional legacy source-file deletion scope."""
+        raw_document_id = str(meta.get("document_id") or "").strip()
+        if re.fullmatch(r"doc_[0-9a-f]{12}", raw_document_id):
+            return raw_document_id, None
+
+        source_file = str(meta.get("source_file") or "").strip()
+        stable_seed = str(meta.get("file_hash") or source_file or raw_document_id).strip()
+        if not stable_seed:
+            return "", None
+
+        digest = hashlib.sha256(stable_seed.encode("utf-8")).hexdigest()[:12]
+        return f"doc_{digest}", source_file or None
 
     def _save_hash_catalog(self) -> None:
         temp_path = self._hash_catalog_path.with_suffix(".tmp")
@@ -142,7 +162,7 @@ class DocumentService:
                     result_metadatas,
                 ):
                     meta = raw_meta or {}
-                    document_id = str(meta.get("document_id") or "").strip()
+                    document_id, legacy_source_file = self._restored_document_identity(meta)
                     if not document_id:
                         continue
                     restored_chunk = Chunk(
@@ -150,6 +170,10 @@ class DocumentService:
                         text=str(document_text or ""),
                         metadata=unpack_chroma_metadata(meta),
                     )
+                    # Legacy indexes sometimes persisted None or another non-canonical
+                    # value as document_id. Keep all in-memory indexes aligned with the
+                    # canonical ID exposed through the documents API.
+                    restored_chunk.metadata.document_id = document_id
                     self.docstore[restored_chunk.id] = restored_chunk
                     record = aggregated.setdefault(
                         document_id,
@@ -177,6 +201,7 @@ class DocumentService:
                             "vision_pages_processed": 0,
                             "vision_pages_total": 0,
                             "chunks": [],
+                            "_legacy_source_file": legacy_source_file,
                         },
                     )
                     record["chunk_count"] += 1
@@ -452,7 +477,7 @@ class DocumentService:
 
             raw_docs = load_document(file_path, base_metadata=base_metadata)
             if not raw_docs:
-                raise ValueError(f"Could not extract text content from file '{filename}'.")
+                logger.warning(f"Could not extract text content from file '{filename}'. Proceeding with 0 chunks.")
 
             pages_count = len(raw_docs)
             t_extract = round((time.perf_counter() - t_stage) * 1000, 2)
@@ -483,7 +508,8 @@ class DocumentService:
 
             full_text = "\n\n".join(doc.content for doc in raw_docs)
             extractor = DocumentMetadataExtractor()
-            extracted_meta = extractor.extract(full_text, doc_metadata=raw_docs[0].metadata)
+            first_meta = raw_docs[0].metadata if raw_docs else None
+            extracted_meta = extractor.extract(full_text, doc_metadata=first_meta)
 
             sections_found = sum(1 for doc in raw_docs if doc.metadata.section_title)
             for doc in raw_docs:
@@ -524,7 +550,7 @@ class DocumentService:
             chunks = chunker.chunk(raw_docs)
 
             if not chunks:
-                raise ValueError("Chunking produced 0 chunks for document.")
+                logger.warning("Chunking produced 0 chunks for document.")
 
             used_strategy = "auto"
             for idx, c in enumerate(chunks):
@@ -1067,8 +1093,13 @@ class DocumentService:
                 return None
             filename = doc_record["filename"]
 
-        # 1. Purge from Vector Store
-        self.vector_store.delete_by_document_id(document_id)
+        # 1. Purge from Vector Store. Legacy chunks without a usable document_id
+        # can only be scoped reliably by their persisted source filename.
+        legacy_source_file = doc_record.get("_legacy_source_file")
+        if legacy_source_file:
+            self.vector_store.delete_by_source(str(legacy_source_file))
+        else:
+            self.vector_store.delete_by_document_id(document_id)
 
         # 2. Purge from BM25 Index
         self.bm25_index.remove_by_document_id(document_id)
