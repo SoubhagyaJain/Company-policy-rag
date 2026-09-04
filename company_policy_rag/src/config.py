@@ -168,6 +168,19 @@ class Settings(BaseSettings):
     verification_max_retries: int = Field(
         default=2, alias="VERIFICATION_MAX_RETRIES"
     )
+    # LLM-backed faithfulness auditing. The heuristic verifier only measures
+    # lexical overlap; an LLM judge actually checks whether each claim is
+    # supported by the retrieved context. Runs only for high-risk (policy /
+    # numeric) answers, which are already buffered before the user sees them,
+    # so it adds no latency to ordinary factual streaming. It can only make the
+    # verdict stricter (catch hallucinations), never inflate a weak answer, and
+    # falls back to the heuristic on any LLM or parse failure.
+    enable_llm_faithfulness_verification: bool = Field(
+        default=True, alias="ENABLE_LLM_FAITHFULNESS_VERIFICATION"
+    )
+    llm_verification_max_context_chars: int = Field(
+        default=6000, alias="LLM_VERIFICATION_MAX_CONTEXT_CHARS"
+    )
 
 
     # ── Ollama / Models ────────────────────────────────────────────────────
@@ -370,7 +383,6 @@ class Settings(BaseSettings):
 
     # ── Chat UI ────────────────────────────────────────────────────────────
     chainlit_port: int = Field(default=8000, alias="CHAINLIT_PORT")
-    streamlit_port: int = Field(default=8501, alias="STREAMLIT_PORT")
 
     # ── Citation display (chat UI) ─────────────────────────────────────────
     # Citations are critical for trust in policy/legal RAG — keep configurable
