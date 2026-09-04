@@ -1,251 +1,200 @@
-# 🚀 Enterprise Policy RAG AI Assistant & Observability Platform
+<div align="center">
 
-![Architecture: Microservices](https://img.shields.io/badge/Architecture-Microservices-blue)
-![Backend: FastAPI](https://img.shields.io/badge/Backend-FastAPI_|_Python_3.11-009688?logo=fastapi)
-![Frontend: Next.js](https://img.shields.io/badge/Frontend-Next.js_16_|_React_19-000000?logo=next.js)
-![VectorDB: Chroma](https://img.shields.io/badge/VectorDB-ChromaDB-FF4F00)
-![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)
-![Vision: Qwen VL](https://img.shields.io/badge/Vision-Qwen_2.5_VL_7B-00B4D8?logo=ollama)
-![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)
-![Observability: SQLite WAL](https://img.shields.io/badge/Observability-SQLite_WAL_Write--Behind-success)
-![Tests: 192/192](https://img.shields.io/badge/Tests-192%2F192_Passed_(100%25)-brightgreen)
+# Aperture RAG — Grounded Answers for High-Stakes Documents
 
-A production-grade **Retrieval-Augmented Generation (RAG)** platform designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance, technical architecture). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, an **Agentic Intelligence Layer** (query routing, self-reflection & verification, dynamic metadata filtering), **dual-model vision pipeline** (code screenshot extraction, diagram understanding, table OCR via `qwen2.5vl:7b`), **end-to-end model fine-tuning & Ollama export**, and a **Full-Screen Production Observability & Telemetry Dashboard** with persistent SQLite storage.
+**A production-grade Retrieval-Augmented Generation platform that refuses to hallucinate — with an agentic verify-and-retry loop, hybrid retrieval, verbatim code extraction, and a full-screen observability plane that accounts for every millisecond of every query.**
 
----
+![Backend](https://img.shields.io/badge/Backend-FastAPI%20·%20Python%203.11-009688?logo=fastapi&logoColor=white)
+![Frontend](https://img.shields.io/badge/Frontend-Next.js%2016%20·%20React%2019-000000?logo=next.js)
+![Vectors](https://img.shields.io/badge/Vectors-ChromaDB%20·%20BM25%20·%20RRF-FF4F00)
+![LLM](https://img.shields.io/badge/LLM-Ollama%20(local,%20private)-7C3AED?logo=ollama&logoColor=white)
+![Rerank](https://img.shields.io/badge/Rerank-BGE%20Cross--Encoder-00B4D8)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 
-## ✨ System Capabilities
-
-### 📊 Production Observability & Telemetry Platform
-- **Full-Screen Fluid Dashboard** — Edge-to-edge widescreen dashboard with interactive native fullscreen mode (`document.requestFullscreen()`), responsive multi-column layouts, and a warm paper design aesthetic (`#FAF9F5` light, `#141413` dark, Terracotta, Cream, Sand, and Charcoal).
-- **Persistent SQLite Telemetry DB** — Zero-latency async write-behind queue with a dedicated background thread, SQLite WAL mode, and indexed aggregations across `5m`, `15m`, `1h`, `6h`, `24h`, and `7d` time horizons.
-- **10-Subsystem Live Health Probes** — Continuous health monitoring across API Gateway, Ollama Daemon, Chroma Vector DB, BM25 Index, Embedding Model, Text Generation Model, Vision VLM, Semantic Cache, Vision Cache, and Session Memory.
-- **16-Stage Waterfall Latency Breakdown** — Microsecond-accurate latency accounting from request intake, memory resolution, rewrite, dense/sparse search, RRF fusion, neural reranking, vision extraction, TTFT, to SSE token streaming.
-- **Strict Multi-Model Separation** — Clear separation between Text Synthesis (`qwen2.5:7b`) and Vision VLM (`qwen2.5vl:7b`) with distinct latency percentiles, throughput counters, and circuit breaker states.
-- **Multi-Tier Cache Telemetry** — Independent metrics for Semantic Response Cache, Embedding Cache, Vision Cache, Negative Vision Cache, and Retrieval Candidates Cache.
-- **Evidence & Grounding Claims Inspection** — Classification of retrieved evidence into `TEXT`, `CODE`, `DIAGRAM`, and `TABLE`, combined with self-reflection grounding claim verifications (`SUPPORTED`, `UNSUPPORTED`, `INFERRED`).
-- **Query Trace Inspection Drawer** — Slide-over drawer visualizer for waterfall timings, extracted visual snippets, citation sources, and raw JSON export.
-
-### 🧠 Conversational Memory & Multi-Turn Reasoning
-- **Multi-turn context awareness** — Session-based conversation memory preserving multi-turn context.
-- **Pronoun & referent resolution** — Follow-up questions (*"Are there any exceptions for it?"*, *"What does it do?"*) resolve referents from past turns.
-- **Context-aware query rewriting** — Dynamic query expansion informed by prior dialogue.
-
-### 🔀 Dynamic Model Switching
-- **In-chat model selector** — Switch LLM backends dynamically directly from the UI without service restarts.
-- **Thread-safe model proxy** — Concurrent multi-user requests with different target models execute safely.
-- **Supported backends**: `qwen2.5:7b`, `qwen2.5:14b`, `llama3.1:8b`, `mistral:7b`, `gemma2:9b`, and custom fine-tuned adapters.
-
-### ⚡ Real-Time Streaming & Semantic Cache
-- **Server-Sent Events (SSE)** — Token-by-token streaming response delivery with sub-second Time-To-First-Token (TTFT).
-- **Semantic Caching** — Sub-100ms cosine similarity cache lookup in ChromaDB; cache hits stream simulated tokens smoothly for UI consistency.
-
-### 🎯 High-Precision Hybrid Retrieval & Reranking
-- **Hybrid Dense + Sparse Search** — Combines dense vector similarity (`BAAI/bge-small-en-v1.5`) with sparse BM25 keyword matching via Reciprocal Rank Fusion (RRF).
-- **Cross-Encoder Neural Reranker** — `BAAI/bge-reranker-large` on CUDA GPU re-scores candidates with high precision.
-- **Cross-Page Section Expansion** — Expands adjacent pages and sections for complete contextual grounding.
-
-### 🛡️ Agentic Self-Reflection & Grounding
-- **5-Type Query Router** — Classifies queries into `factual`, `comparison`, `enumeration`, `procedural`, or `conversational` with conversational bypass semantics (`retrieval_required=False`).
-- **4D Verifier Gate** — Evaluates **Faithfulness**, **Completeness**, **Citation Coverage**, and **Coherence**.
-- **Autonomous Retry Engine** — Automatically adjusts retrieval parameters and retries (up to 2 cycles) if unverified claims or missing aspects are detected.
-
-### 👁️ Multimodal Vision RAG
-- **Dual-Model Architecture** — `qwen2.5:7b` (Text) and `qwen2.5vl:7b` (Vision).
-- **Visual Asset Detection** — Classifies PDF pages (`CODE_SCREENSHOT`, `DIAGRAM_ARCHITECTURE`, `TABLE_DATA`) and caches OCR/diagram structures with SHA-256 content addressing.
-- **Lazy Vision Fallback** — Triggers on-demand extraction for visual pages during query execution when references are detected.
-
-### 🛠️ LoRA Fine-Tuning & Custom Ollama Registration
-- **End-to-End Fine-Tuning Pipeline** — Custom LoRA training scripts (`scripts/finetune_qwen_coder.py`, `src/finetuning/trainer.py`) for Alpaca, ShareGPT, and Messages formats.
-- **GGUF Export & Quantization** — Automatic conversion to GGUF (`q4_k_m`, `q8_0`, `f16`), `Modelfile` generation, and one-command registration into local Ollama.
+</div>
 
 ---
 
-## 📐 System Architecture
+## The problem
+
+LLMs are fluent but unfaithful. In legal, HR, compliance, and technical-architecture domains, a confident-but-wrong answer is worse than no answer — and "the model made it up" is not an acceptable failure mode. A naive RAG bolt-on (embed → top-k → stuff-the-prompt) still hallucinates: it retrieves the wrong chunks, silently drops code formatting, serves stale cached answers after a document is deleted, and gives you zero visibility into *why* a given answer came out the way it did.
+
+**Aperture RAG** is built around a single principle: **every answer must be traceable to retrieved evidence, or the system says so explicitly.** It pairs a high-precision retrieval stack with an agentic self-verification loop, treats ingestion and deletion as first-class data-lifecycle operations, and instruments the entire request path so you can inspect the 16 stages behind any response.
+
+---
+
+## What makes it interesting (engineering highlights)
+
+> These are the parts I'd want a reviewer to read. Each one is a deliberate design decision, not a library call.
+
+- **Agentic verify-and-retry loop.** After generation, a 4-dimensional verifier scores the answer on **faithfulness, completeness, citation coverage, and coherence**. If it fails, an autonomous retry engine widens retrieval parameters and regenerates (bounded cycles) instead of shipping an unsupported claim. Grounding claims are labelled `SUPPORTED` / `UNSUPPORTED` / `INFERRED`.
+
+- **Hybrid retrieval that actually reranks.** Dense vectors (`BAAI/bge-small-en-v1.5`) and sparse **BM25** are fused with **Reciprocal Rank Fusion**, then re-scored by a **cross-encoder** (`BAAI/bge-reranker-large`). Cross-page section expansion pulls adjacent context so a chunk boundary never severs an answer.
+
+- **Non-blocking ingestion for files up to 100 MB.** Uploads return in **~50 ms** and run parse → chunk → embed → index on a **single-worker background queue**; the client polls a live per-stage progress endpoint. (A 1.6 MB doc → **8,966 chunks** ingests in ~120 s of CPU embedding — the point is the request never blocks on it.) Uploads post **directly to the API**, bypassing a dev-proxy that throttled multipart bodies to ~0.6 MB/s and timed large PDFs out.
+
+- **Delete means *gone*.** Removing a document cascades across **the vector store, BM25 postings, the docstore, the stored file, image assets, the vision cache, the semantic answer cache, and conversation state** — so a deleted document can never resurface through a cached answer.
+
+- **Verbatim code extraction.** Chunking preserves code indentation (it no longer collapses whitespace), and the generation contract *requires* code to be reproduced character-for-character inside fenced ```language blocks. The UI renders those with a real code component: syntax highlighting, line numbers, and copy-to-clipboard.
+
+- **Zero-latency observability.** Every request emits a trace to an **async write-behind queue** backed by **SQLite in WAL mode** — telemetry never sits on the request's critical path. A **16-stage latency waterfall** accounts for intake, memory resolution, rewrite, dense/sparse search, RRF, reranking, vision, TTFT, and SSE streaming, bucketed across `5m…7d`.
+
+- **A UI that respects the work.** Real-time **SSE token streaming** with sub-second TTFT, a WebGL gravitational-lensing hero shared as one persistent layer across tabs (no re-mount, no black flash), and frame-rate-independent motion (magnetic-pill tabs, inertia scroll) that holds 60 fps and honors `prefers-reduced-motion`.
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart TD
-    UserClient["Next.js 16 Client (React 19 + Tailwind)"] -->|SSE / REST| FastAPIGateway["FastAPI Gateway (/api/chat, /api/admin)"]
-    FastAPIGateway --> RequestIDContext["Request ID & Telemetry Context"]
-    RequestIDContext --> MemoryResolver["Session Memory Resolver"]
-    MemoryResolver --> QueryRouter["Query Router (5-Type Classifier)"]
+    UserClient["Next.js 16 Client · React 19 · SSE"] -->|REST / SSE| Gateway["FastAPI Gateway · request-id + telemetry context"]
+    Gateway --> Memory["Session Memory Resolver"]
+    Memory --> Router["Query Router · 5-type classifier"]
 
-    QueryRouter -->|Conversational Bypass| DirectSynthesis["Direct LLM Synthesis (qwen2.5:7b)"]
-    QueryRouter -->|Retrieval Required| CacheCheck["Semantic Cache Lookup"]
+    Router -->|conversational bypass| Direct["Direct LLM synthesis"]
+    Router -->|retrieval required| Cache["Semantic Answer Cache"]
 
-    CacheCheck -->|Cache Hit| ReturnCached["Return Cached Stream + Trace"]
-    CacheCheck -->|Cache Miss| HybridSearch["Dense Embedding + BM25 Sparse Search"]
+    Cache -->|hit| Cached["Stream cached answer + trace"]
+    Cache -->|miss| Hybrid["Dense (BGE) + Sparse (BM25)"]
 
-    HybridSearch --> RRFFusion["Reciprocal Rank Fusion (RRF)"]
-    RRFFusion --> CrossEncoderRerank["Cross-Encoder Reranker (BGE-Large CUDA)"]
-    CrossEncoderRerank --> EvidenceClassifier["Evidence Gate (TEXT, CODE, DIAGRAM, TABLE)"]
+    Hybrid --> RRF["Reciprocal Rank Fusion"]
+    RRF --> Rerank["Cross-Encoder Reranker · BGE-large"]
+    Rerank --> Evidence["Evidence gate · TEXT / CODE / DIAGRAM / TABLE"]
 
-    EvidenceClassifier -->|Visual Detection| VisionExtraction["Vision VLM Fallback (qwen2.5vl:7b)"]
-    EvidenceClassifier -->|Context Ready| ContextAssembly["Context Compression & Assembly"]
-    VisionExtraction --> ContextAssembly
+    Evidence -->|visual page| Vision["Vision VLM fallback · optional"]
+    Evidence -->|context ready| Assembly["Context compression & assembly"]
+    Vision --> Assembly
 
-    ContextAssembly --> LLMStream["LLM Generation & SSE Streaming"]
-    LLMStream --> VerifierGate["4D Self-Reflection & Grounding Verifier"]
+    Assembly --> Stream["LLM generation + SSE streaming"]
+    Stream --> Verifier["4-D verifier · faithfulness · completeness · citations · coherence"]
 
-    VerifierGate -->|Failed| RetryEngine["Autonomous Retry & Precision Refinement"]
-    VerifierGate -->|Passed| TelemetryPipeline["Telemetry Event Hub"]
-    DirectSynthesis --> TelemetryPipeline
-    ReturnCached --> TelemetryPipeline
-    RetryEngine --> TelemetryPipeline
+    Verifier -->|failed| Retry["Autonomous retry & precision refinement"]
+    Verifier -->|passed| Telemetry["Telemetry event hub"]
+    Direct --> Telemetry
+    Cached --> Telemetry
+    Retry --> Telemetry
 
-    TelemetryPipeline --> WriteBehindQueue["Async Write-Behind Buffer (Queue)"]
-    WriteBehindQueue --> SQLiteWAL["SQLite Database (WAL Mode + Indices)"]
-    SQLiteWAL --> ObservabilityAPI["Admin REST APIs (/summary, /health, /queries, /errors)"]
-    ObservabilityAPI --> FullScreenUI["Full-Screen Observability UI & Drawer"]
+    Telemetry --> WriteBehind["Async write-behind queue"]
+    WriteBehind --> SQLite["SQLite · WAL + indices"]
+    SQLite --> AdminAPI["Admin REST · /summary /health /queries /errors"]
+    AdminAPI --> Dashboard["Full-screen Observability dashboard"]
 ```
+
+### The 16-stage request path
+`request intake → session-memory resolution → query rewrite → dense search → BM25 search → RRF fusion → cross-encoder rerank → cross-page expansion → evidence classification → (optional) vision extraction → context assembly → prompt construction → time-to-first-token → LLM generation → 4-D verification → SSE token streaming` — each stage is timed and surfaced in the trace drawer.
 
 ---
 
-## 💻 Tech Stack
+## Tech stack
 
-| Component | Technology | Purpose |
+| Layer | Technology | Why |
 | :--- | :--- | :--- |
-| **Frontend** | Next.js 16 (Turbopack), React 19, Tailwind CSS, Framer Motion | Full-screen liquid glass UI, real-time SSE streaming, slide-over drawer |
-| **Backend API** | FastAPI, Uvicorn, Python 3.11, Pydantic v2 | High-throughput asynchronous REST gateway and SSE streaming |
-| **Observability DB** | SQLite3 (WAL Mode, write-behind threading) | Zero-latency persistent query traces, metrics bucketing, and error tracking |
-| **Vector Store** | ChromaDB | High-speed dense vector similarity index |
-| **Embeddings** | `BAAI/bge-small-en-v1.5` | Dense document and query vector representations |
-| **Reranker** | `BAAI/bge-reranker-large` (CUDA GPU) | Neural cross-encoder reranking |
-| **Text Generation** | Ollama (`qwen2.5:7b` default) | Local, privacy-first grounded response generation |
-| **Vision VLM** | Ollama (`qwen2.5vl:7b`) | Multimodal diagram, code screenshot, and table understanding |
-| **Hardware** | NVIDIA RTX 4050 (CUDA) | Accelerated neural inference, embeddings, and reranking |
+| **Frontend** | Next.js 16 (Turbopack), React 19, Tailwind, Framer Motion, WebGL | SSE streaming UI, glass-over-hero design, 60 fps motion |
+| **API** | FastAPI, Uvicorn, Python 3.11, Pydantic v2 | Async gateway + SSE, typed contracts |
+| **Retrieval** | ChromaDB (dense) · BM25 (sparse) · RRF | Hybrid recall with precision reranking |
+| **Embeddings / Rerank** | `bge-small-en-v1.5` · `bge-reranker-large` | Dense representations + cross-encoder scoring |
+| **Generation** | Ollama (`qwen2.5:7b` default) | Local, privacy-first — no data leaves the host |
+| **Vision (optional)** | Ollama (`qwen2.5vl:7b`) | Diagram / code-screenshot / table understanding |
+| **Observability** | SQLite (WAL) + async write-behind thread | Persistent traces off the request critical path |
+
+**Runs CPU-first.** The reranker defaults to CPU and GPU is used automatically when present (`RERANKER_DEVICE=cuda`). Vision is config-gated (`VISION_ENABLED`) because VLM inference on CPU is minutes-per-page; text and code extraction work fully without it.
 
 ---
 
-## 🚀 Quick Start
+## Quick start
 
-### Prerequisites
-
-- **Python 3.11+**
-- **Node.js 18+** & `npm`
-- **Ollama** installed and running ([ollama.com](https://ollama.com))
-- **NVIDIA GPU** with CUDA (optional, falls back gracefully to CPU)
-
-### 1. Pull Required Models
+**Prerequisites:** Python 3.11+, Node 18+, and [Ollama](https://ollama.com) running.
 
 ```bash
+# 1. Models (text is required; vision is optional)
 ollama pull qwen2.5:7b
-ollama pull qwen2.5vl:7b
-ollama pull nomic-embed-text
+ollama pull qwen2.5vl:7b   # optional — only if VISION_ENABLED=true
 
-# Optional alternative models
-ollama pull llama3.1:8b
-ollama pull mistral:7b
-ollama pull gemma2:9b
-```
-
-### 2. Backend Setup
-
-```bash
- npm install -g @openai/codex
-
-# Create virtual environment
+# 2. Backend (from company_policy_rag/)
 python -m venv .venv
-
-# Activate environment
-# Windows:
-.venv\Scripts\Activate.ps1
-# Linux/macOS:
-source .venv/bin/activate
-
-# Install dependencies
+.venv\Scripts\activate            # Windows  ·  source .venv/bin/activate on Unix
 pip install -r requirements.txt
+
+# 3. Frontend
+cd frontend && npm install && cd ..
 ```
 
-### 3. Frontend Setup
-
-```bash
-cd frontend
-npm install
-```
-
-### 4. Configuration
-
-Configure your environment settings in `.env`:
+Configure `company_policy_rag/.env` (see `.env.example`):
 
 ```env
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_LLM_MODEL=qwen2.5:7b
-VISION_MODEL=qwen2.5vl:7b
-VISION_ENABLED=true
-RERANKER_DEVICE=cuda
-TELEMETRY_DB_PATH=storage/telemetry.sqlite3
+VISION_ENABLED=false          # true requires a GPU for reasonable latency
+RERANKER_DEVICE=cpu           # cuda when a GPU is available
 ```
 
-### 5. Run the Application
+**Run both servers** (from `company_policy_rag/`):
 
-Open **two terminals**:
-
-**Terminal 1 — Backend:**
 ```bash
+# Windows one-shot:
+start_dev.bat
 
-
-
+# …or manually, in two terminals:
+uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+cd frontend && npm run dev
 ```
 
-**Terminal 2 — Frontend:**
-```bash
-cd company_policy_rag/frontend
-npm run dev
-```
-
-Visit `http://localhost:3000` in your browser.
+Open **http://localhost:3000**.
 
 ---
 
-## 📡 Observability API Endpoints
+## API surface (selected)
 
-| Method | Endpoint | Description |
+| Method | Endpoint | Purpose |
 | :--- | :--- | :--- |
-| `GET` | `/api/health` | Subsystem health probe and system ready status |
-| `GET` | `/api/admin/observability/summary` | Full canonical observability summary with percentiles and metrics |
-| `GET` | `/api/admin/observability/health` | Detailed 10-subsystem live probe status report |
-| `GET` | `/api/admin/observability/queries` | Filtered list of query traces with latency and token metrics |
-| `GET` | `/api/admin/observability/queries/{id}` | Detailed trace inspection by trace ID or request ID |
-| `GET` | `/api/admin/observability/errors` | Incident and error logging center |
-| `POST` | `/api/admin/observability/clear` | Purge persistent telemetry logs and traces |
+| `POST` | `/api/chat/stream` | SSE token streaming with live reasoning trace |
+| `POST` | `/api/documents/upload` | Non-blocking ingest (returns immediately, then poll status) |
+| `GET` | `/api/documents/{id}/status` | Live per-stage ingestion progress |
+| `DELETE` | `/api/documents/{id}` | Cascade delete across DB, caches, and conversation state |
+| `GET` | `/api/admin/observability` | Canonical summary: percentiles, waterfall, health, traces |
+| `GET` | `/api/admin/observability/queries/{id}` | Full single-trace inspection |
+| `POST` | `/api/admin/observability/clear` | Purge telemetry |
 
 ---
 
-## 🧪 Test Verification & Quality Gates
+## Project structure
 
-The platform includes comprehensive end-to-end, boundary, adversarial, and unit test suites:
-
-### 1. Frontend Test Suite (`npm test`)
-```text
-================================================================================
-  TEST EXECUTION SUMMARY
-================================================================================
-  Total Suites:   6 (Tiers 1-4, Adversarial Challenger 1 & 2)
-  Total Tests:    192
-  Passed:         192
-  Failed:         0
-  Success Rate:   100.0%
-================================================================================
-✅ ALL TESTS PASSED (100% Pass Rate)
+```
+company_policy_rag/
+├── backend/
+│   ├── api/            # FastAPI gateway, routers, middleware
+│   ├── rag/            # pipeline, router, verifier, semantic cache, prompts
+│   ├── retrieval/      # hybrid search, BM25, RRF, cross-encoder reranker
+│   ├── ingestion/      # loaders (PDF/DOCX/MD/HTML/CSV/JSON/TXT) + chunkers
+│   ├── embeddings/     # ChromaDB vector store + embedding service
+│   ├── services/       # document lifecycle, telemetry (SQLite WAL)
+│   └── vision/         # optional VLM extraction + asset/vision caches
+├── frontend/           # Next.js 16 app — Space UI, SSE, observability dashboard
+└── tests/              # 128 test modules: unit, edge-case, adversarial
 ```
 
-### 2. Next.js Production Build
-```text
-▲ Next.js 16.3.0 (Turbopack)
-✓ Compiled successfully in 1304ms
-  Running TypeScript ... Finished TypeScript in 2.1s
-✓ Generating static pages (5/5) in 708ms
-```
+---
 
-### 3. Backend Pytest Suite
+## Testing & quality
+
+- **128 test modules** across unit, boundary, and adversarial tiers (`pytest`), plus a frontend suite.
+- Backend and frontend are fully type-checked (Pydantic v2 · TypeScript strict).
+
 ```bash
-pytest tests/test_production_observability_full.py -v
-# 5/5 PASSED (100%)
+cd company_policy_rag && pytest            # backend
+cd company_policy_rag/frontend && npm test # frontend
 ```
 
 ---
 
-## 📄 License
+## Roadmap
 
-This project is licensed under the Apache License 2.0.
+- GPU-gated vision path for image-embedded code/diagram extraction at query time
+- Per-document scoped cache invalidation (today deletion clears caches wholesale for correctness)
+- Evaluation harness: faithfulness / retrieval-recall regression gates in CI
+
+---
+
+## License
+
+Apache License 2.0.
