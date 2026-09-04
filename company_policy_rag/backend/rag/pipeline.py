@@ -48,6 +48,7 @@ from backend.rag.policy_reliability import (
     bind_source_indices,
     enforce_deterministic_calculations,
     expand_policy_queries,
+    extract_query_facts,
     format_policy_decision_context,
     validate_policy_answer,
 )
@@ -265,6 +266,27 @@ def _detect_fidelity_mode(query: str) -> str:
     elif any(k in q_lower for k in ("how can i make", "how do i build", "how to make", "how to implement", "how is", "implementation", "create", "build")):
         return "implement"
     return "grounded"
+
+
+def _is_high_risk_query(query: str) -> bool:
+    """True when an answer must be verified before the user sees it.
+
+    Targets the failure modes where a wrong or hallucinated figure/rule is most
+    costly: explicit amounts or times, entitlement/calculation questions, and
+    queries that match a known policy topic profile. These answers are buffered
+    and verified (with a retry budget) instead of streamed token-by-token.
+    Ordinary factual/lookup questions stay on the live-streaming path.
+    """
+    try:
+        facts = extract_query_facts(query)
+    except Exception:
+        return False
+    return bool(
+        facts.amounts
+        or facts.times
+        or facts.topic
+        or facts.intent == "calculation_or_entitlement"
+    )
 
 
 _EXPLICIT_DETAIL_PATTERN = re.compile(
@@ -1554,14 +1576,557 @@ class RAGPipeline:
         )
 
         ctx.enable_verification = getattr(settings, "enable_answer_verification", True)
-        # A streamed attempt is already visible to the client and cannot be
-        # replaced safely by a later retry. Verify it, but never stream multiple
-        # competing answers for one request.
-        ctx.max_retries = 0 if (ctx.is_fast_path or ctx.stream_callback is not None) else (self.retry_engine.max_retries if self.retry_engine else 2)
+
+        # High-risk policy/numeric answers are buffered and verified before the
+        # user sees them, so a failed check can still retry. Low-risk answers on
+        # the streaming path emit live and therefore cannot be replaced by a
+        # later retry (never stream multiple competing answers for one request).
+        ctx.is_high_risk = _is_high_risk_query(ctx.user_query)
+        streaming = ctx.stream_callback is not None
+        ctx.stream_live = streaming and not ctx.is_high_risk
+        retry_budget = self.retry_engine.max_retries if self.retry_engine else 2
+        if ctx.is_fast_path or ctx.stream_live:
+            ctx.max_retries = 0
+        else:
+            # Non-streaming requests and buffered high-risk streaming requests
+            # both keep the full retry budget.
+            ctx.max_retries = retry_budget
 
         ctx.current_strategy = ctx.response_mode_config.apply_to(ctx.strategy)
         if ctx.is_fast_path:
             ctx.current_strategy.enable_multi_query = False
+
+    def _stage_retrieve(self, ctx: QueryContext, prefix: str) -> None:
+        """Build sub-queries and run one attempt's hybrid retrieval onto ``ctx``.
+
+        Expands the query (structural / multi-part / policy sub-queries), runs
+        cached-or-hybrid retrieval with a BM25 fallback, relaxes only soft
+        filters on an empty result (hard document scope is never dropped),
+        enforces document-scope validity, trims the candidate pool, and applies
+        follow-up code/diagram prioritisation. Writes ``sub_queries``,
+        ``candidate_chunks``, ``applied_filters``, ``filter_relaxed``,
+        ``cross_document_count`` and ``raw_new_chunk_count`` back onto ``ctx``.
+        """
+        thinking_sm = ctx.thinking_sm
+        current_strategy = ctx.current_strategy
+        scope_decision = ctx.scope_decision
+        rewrite_res = ctx.rewrite_res
+        conv_res = ctx.conv_res
+
+        # 2. Multi-Query Generation & Structural Query Expansion
+        t0 = time.perf_counter()
+        if not ctx.is_fast_path and scope_decision.is_structural_query:
+            sub_queries = scope_decision.structural_subqueries
+        elif not ctx.is_fast_path and (current_strategy.enable_multi_query or rewrite_res.is_comprehensive_list):
+            sub_queries = self.multi_query_gen.generate_subqueries(rewrite_res.rewritten_query)
+        else:
+            sub_queries = [rewrite_res.rewritten_query]
+        # Every part of a multi-part message retrieves on its own terms, even
+        # when the strategy would otherwise run a single query.
+        for part in ctx.question_parts:
+            if part not in sub_queries:
+                sub_queries.append(part)
+        if not ctx.is_fast_path:
+            for policy_query in expand_policy_queries(ctx.user_query):
+                if policy_query not in sub_queries:
+                    sub_queries.append(policy_query)
+            sub_queries = sub_queries[:8]
+        ctx.sub_queries = sub_queries
+        ctx.stage_timings[f"multi_query{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+
+        # 3. Hybrid Search (Dense + BM25 with RRF)
+        t0 = time.perf_counter()
+        thinking_sm.start_stage(ThinkingStage.RETRIEVAL)
+        search_filters = ctx.applied_filters if ctx.applied_filters else None
+        retrieval_cache = get_retrieval_cache()
+        candidate_chunks: list[ScoredChunk] = []
+        cache_hit_retrieval = False
+        dense_degraded = False
+
+        if (
+            getattr(settings, "retrieval_cache_enabled", True)
+            and len(sub_queries) == 1
+            and not (conv_res and conv_res.is_followup)
+        ):
+            cached_cands = retrieval_cache.get(
+                sub_queries[0], filters=search_filters, top_k=current_strategy.dense_top_k
+            )
+            if cached_cands:
+                candidate_chunks = cached_cands
+                cache_hit_retrieval = True
+
+        if not candidate_chunks:
+            candidate_map: dict[str, ScoredChunk] = {}
+            for sq in sub_queries:
+                try:
+                    hits = self._retrieve_hybrid_hits(
+                        sq,
+                        dense_top_k=current_strategy.dense_top_k,
+                        bm25_top_k=current_strategy.bm25_top_k,
+                        filters=search_filters,
+                        rrf_k=current_strategy.rrf_k,
+                    )
+                except Exception as ret_exc:
+                    logger.warning("Dense retrieval error (%s); falling back to BM25 index.", ret_exc)
+                    dense_degraded = True
+                    try:
+                        hits = self.hybrid_retriever.bm25_index.search(
+                            sq, top_k=current_strategy.bm25_top_k, filters=search_filters
+                        )
+                    except Exception:
+                        hits = []
+
+                for sc in hits:
+                    cid = sc.chunk.id
+                    if cid not in candidate_map or (sc.score or 0.0) > (
+                        candidate_map[cid].score or 0.0
+                    ):
+                        candidate_map[cid] = sc
+            candidate_chunks = list(candidate_map.values())
+
+            if dense_degraded:
+                thinking_sm.degrade_stage(
+                    ThinkingStage.RETRIEVAL,
+                    reason="Dense vector search was unavailable; continuing with keyword search",
+                    fallback_action="BM25 lexical search applied",
+                )
+
+            # Filter relaxation fallback if 0 results. Document, page, and
+            # section constraints are hard user scope and must never be
+            # dropped, otherwise an invalid page can return unrelated facts.
+            if not candidate_chunks and search_filters and getattr(settings, "enable_filter_fallback_relaxation", True):
+                hard_filter_keys = {"document_id", "source_file", "page_number", "section_number"}
+                relaxed_filters = {
+                    key: value
+                    for key, value in search_filters.items()
+                    if key in hard_filter_keys
+                }
+                relaxed_filters = relaxed_filters or None
+                ctx.filter_relaxed = relaxed_filters != search_filters
+                ctx.applied_filters = relaxed_filters or {}
+                candidate_map = {}
+                for sq in sub_queries:
+                    try:
+                        hits = self._retrieve_hybrid_hits(
+                            sq,
+                            dense_top_k=current_strategy.dense_top_k,
+                            bm25_top_k=current_strategy.bm25_top_k,
+                            filters=relaxed_filters,
+                            rrf_k=current_strategy.rrf_k,
+                        )
+                    except Exception:
+                        hits = []
+                    for sc in hits:
+                        cid = sc.chunk.id
+                        if cid not in candidate_map or (sc.score or 0.0) > (
+                            candidate_map[cid].score or 0.0
+                        ):
+                            candidate_map[cid] = sc
+                candidate_chunks = list(candidate_map.values())
+
+            # Enforce hard document scope validation
+            if scope_decision.scope == DocumentRetrievalScope.CURRENT_DOCUMENT:
+                valid_cands = []
+                for sc in candidate_chunks:
+                    d_id = sc.chunk.metadata.document_id
+                    s_name = sc.chunk.metadata.source_file
+                    is_match = False
+                    if scope_decision.active_document_id and d_id == scope_decision.active_document_id:
+                        is_match = True
+                    elif scope_decision.active_document_name and s_name == scope_decision.active_document_name:
+                        is_match = True
+                    if is_match:
+                        valid_cands.append(sc)
+                    else:
+                        ctx.cross_document_count += 1
+                candidate_chunks = valid_cands
+            elif scope_decision.scope == DocumentRetrievalScope.SELECTED_DOCUMENTS and scope_decision.allowed_document_ids:
+                valid_cands = []
+                for sc in candidate_chunks:
+                    d_id = sc.chunk.metadata.document_id
+                    if d_id in scope_decision.allowed_document_ids:
+                        valid_cands.append(sc)
+                    else:
+                        ctx.cross_document_count += 1
+                candidate_chunks = valid_cands
+
+            candidate_chunks.sort(key=lambda x: x.score or 0.0, reverse=True)
+            candidate_pool_limit = max(len(candidate_chunks), current_strategy.rerank_top_n * 3, 15)
+            candidate_chunks = candidate_chunks[:candidate_pool_limit]
+
+            # Prioritize visual code chunks or diagram chunks for specific follow-up modes
+            if conv_res and conv_res.is_followup:
+                is_code_mode = (
+                    conv_res.answer_mode == AnswerMode.CODE_EXPLANATION
+                    or "code" in ctx.user_query.lower()
+                )
+                is_diagram_mode = (
+                    "diagram" in ctx.user_query.lower()
+                    or "workflow" in ctx.user_query.lower()
+                    or "architecture" in ctx.user_query.lower()
+                )
+                if is_code_mode:
+                    candidate_chunks.sort(
+                        key=lambda c: (
+                            2 if (str(c.chunk.metadata.content_type).lower() in ("code", "contenttype.code") or "```" in c.chunk.text or "code" in str(c.chunk.metadata.extra.get("visual_type", "")).lower()) else (
+                                1 if c.chunk.metadata.extra.get("is_visual_extraction") else 0
+                            )
+                        ),
+                        reverse=True,
+                    )
+                elif is_diagram_mode:
+                    candidate_chunks.sort(
+                        key=lambda c: (
+                            2 if ("diagram" in str(c.chunk.metadata.content_type).lower() or "diagram" in str(c.chunk.metadata.extra.get("visual_type", "")).lower() or "figure" in str(c.chunk.metadata.extra.get("visual_type", "")).lower()) else (
+                                1 if c.chunk.metadata.extra.get("is_visual_extraction") else 0
+                            )
+                        ),
+                        reverse=True,
+                    )
+
+            if (
+                getattr(settings, "retrieval_cache_enabled", True)
+                and len(sub_queries) == 1
+                and candidate_chunks
+                and not (conv_res and conv_res.is_followup)
+            ):
+                retrieval_cache.set(
+                    sub_queries[0],
+                    candidate_chunks,
+                    filters=search_filters,
+                    top_k=current_strategy.dense_top_k,
+                    ttl=getattr(settings, "retrieval_cache_ttl_seconds", 3600),
+                )
+
+        ctx.raw_new_chunk_count = len(candidate_chunks)
+        ctx.candidate_chunks = candidate_chunks
+        ctx.stage_timings[f"hybrid_retrieval{prefix}"] = 0.1 if cache_hit_retrieval else round((time.perf_counter() - t0) * 1000, 2)
+        thinking_sm.complete_stage(
+            ThinkingStage.RETRIEVAL,
+            details={"candidate_count": len(candidate_chunks)},
+        )
+
+    def _stage_rerank_and_context(self, ctx: QueryContext, prefix: str) -> None:
+        """Rerank, select the governing clause, expand parents, run the vision
+        fallback, pack to the token budget, and format the final prompt context.
+
+        Reads ``ctx.candidate_chunks`` and writes ``reranked_chunks``,
+        ``expanded_chunks``, ``policy_selection``, ``telemetry_extra``,
+        ``context_tokens`` and ``formatted_context`` back onto ``ctx``.
+        """
+        thinking_sm = ctx.thinking_sm
+        current_strategy = ctx.current_strategy
+        candidate_chunks = ctx.candidate_chunks
+        user_query = ctx.user_query
+        response_mode_config = ctx.response_mode_config
+        conv_res = ctx.conv_res
+
+        # 4. Cross-Encoder Reranking
+        t0 = time.perf_counter()
+        thinking_sm.start_stage(ThinkingStage.RERANKING)
+        try:
+            reranked_chunks = self._rerank_for_parts(
+                ctx.question_parts or [ctx.rewrite_res.rewritten_query],
+                candidate_chunks,
+                top_n=current_strategy.rerank_top_n,
+                min_ratio=current_strategy.min_score_ratio,
+            )
+        except Exception as rerank_exc:
+            logger.warning("Reranker error (%s); falling back to retrieval ranking.", rerank_exc)
+            thinking_sm.degrade_stage(
+                ThinkingStage.RERANKING,
+                reason="Cross-encoder reranking encountered an issue; falling back to retrieval ranking",
+                fallback_action="Using hybrid rank",
+            )
+            reranked_chunks = candidate_chunks[:current_strategy.rerank_top_n]
+
+        ctx.stage_timings[f"reranking{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+
+        thinking_sm.complete_stage(
+            ThinkingStage.RERANKING,
+            details={"rerank_count": len(reranked_chunks)},
+        )
+
+        # Cross-encoders rank semantic relatedness. Policy QA additionally
+        # needs a deterministic decision about which clause directly
+        # governs the user's exact actors, conditions, and thresholds.
+        t0 = time.perf_counter()
+        policy_selection = self.governing_clause_selector.select(
+            user_query,
+            reranked_chunks,
+            candidate_pool=candidate_chunks,
+        )
+        selected_context = self.governing_clause_selector.order_for_context(
+            policy_selection,
+            max_chunks=max(current_strategy.rerank_top_n, 5),
+        )
+        if selected_context:
+            reranked_chunks = selected_context
+        ctx.stage_timings[f"governing_clause_selection{prefix}"] = round(
+            (time.perf_counter() - t0) * 1000, 2
+        )
+
+        # 5. Parent Context Expansion
+        t0 = time.perf_counter()
+        try:
+            expanded_chunks = self.compressor.expand_to_parents(
+                reranked_chunks,
+                self.docstore,
+                enable_expansion=False if ctx.is_fast_path else current_strategy.enable_parent_expansion,
+            )
+        except TypeError:
+            # Preserve compatibility with lightweight/custom compressors
+            # that implement the original two-argument protocol.
+            expanded_chunks = self.compressor.expand_to_parents(
+                reranked_chunks,
+                self.docstore,
+            )
+
+        # 5b. Evidence Sufficiency Gate & Cross-Page Vision Fallback (Phases 3, 4, 8)
+        expanded_chunks, telemetry_extra = self._apply_cross_page_vision_fallback_if_needed(
+            expanded_chunks,
+            user_query=user_query,
+            intent=ctx.classification.category,
+            previous_status=None,
+            previous_chunks=None,
+            is_followup=conv_res.is_followup if conv_res else False,
+        )
+        logger.info(
+            "[EVIDENCE_STATUS] prev=%s current=%s monotonic=%s rationale='%s'",
+            str(ctx.conversation_state.previous_evidence_status) if (ctx.conversation_state and conv_res and conv_res.is_followup) else "NONE",
+            telemetry_extra.get("evidence_status", "DIRECT"),
+            telemetry_extra.get("evidence_status", "DIRECT"),
+            "Monotonic status computed across turns" if (conv_res and conv_res.is_followup) else "Single turn evaluation",
+        )
+
+        if telemetry_extra.get("section_expansion") or telemetry_extra.get("adjacent_page_check"):
+            thinking_sm.start_stage(ThinkingStage.VISUAL_ANALYSIS)
+            if telemetry_extra.get("vision_status") == "DEGRADED" or (telemetry_extra.get("vision_fallback") and not any("```" in c.chunk.text for c in expanded_chunks)):
+                thinking_sm.degrade_stage(
+                    ThinkingStage.VISUAL_ANALYSIS,
+                    reason="Visual understanding extraction timed out or degraded; relying on verified text evidence",
+                    fallback_action="Citing page visual asset directly",
+                )
+            else:
+                thinking_sm.complete_stage(
+                    ThinkingStage.VISUAL_ANALYSIS,
+                    details={"visual_type": "diagram/code"},
+                )
+
+        # 5c. Complementary Chunk Packing
+        if hasattr(self.compressor, "pack_complementary_chunks"):
+            expanded_chunks = self.compressor.pack_complementary_chunks(
+                expanded_chunks, user_query, max_chunks=current_strategy.rerank_top_n
+            )
+        else:
+            expanded_chunks = expanded_chunks[: current_strategy.rerank_top_n]
+        if hasattr(self.compressor, "pack_to_token_budget"):
+            expanded_chunks, context_tokens = self.compressor.pack_to_token_budget(
+                expanded_chunks,
+                response_mode_config.max_context_tokens,
+            )
+        else:
+            packed_chunks: list[ScoredChunk] = []
+            context_tokens = 0
+            for sc in expanded_chunks:
+                estimated = max(1, int(len(sc.chunk.text.split()) * 1.3) + 24)
+                if packed_chunks and context_tokens + estimated > response_mode_config.max_context_tokens:
+                    break
+                packed_chunks.append(sc)
+                context_tokens += estimated
+            expanded_chunks = packed_chunks
+
+        # Packing may reorder or remove evidence. Recompute the structured
+        # rule view and bind each rule to the final Source N indices.
+        policy_selection = self.governing_clause_selector.select(
+            user_query,
+            expanded_chunks,
+        )
+        bind_source_indices(policy_selection, expanded_chunks)
+        try:
+            formatted_context = self.compressor.format_context_for_prompt(
+                expanded_chunks,
+                max_token_budget=response_mode_config.max_context_tokens,
+            )
+        except TypeError:
+            formatted_context = self.compressor.format_context_for_prompt(expanded_chunks)
+        formatted_context = (
+            f"{format_policy_decision_context(policy_selection)}\n\n"
+            f"{formatted_context}"
+        )
+        ctx.stage_timings[f"context_expansion{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+
+        # Evidence Verification Stage
+        thinking_sm.start_stage(ThinkingStage.EVIDENCE_VERIFICATION)
+        thinking_sm.complete_stage(
+            ThinkingStage.EVIDENCE_VERIFICATION,
+            details={"evidence_status": telemetry_extra.get("evidence_status", "DIRECT")},
+        )
+
+        ctx.reranked_chunks = reranked_chunks
+        ctx.expanded_chunks = expanded_chunks
+        ctx.policy_selection = policy_selection
+        ctx.telemetry_extra = telemetry_extra
+        ctx.context_tokens = context_tokens
+        ctx.formatted_context = formatted_context
+
+    def _stage_generate(self, ctx: QueryContext, prefix: str) -> None:
+        """Build the grounded prompt and synthesize the answer for one attempt.
+
+        Handles deterministic short-circuits (exact enumerated lists, visual
+        abstention), streamed vs buffered LLM synthesis (gated by
+        ``ctx.stream_live``), and deterministic-calculation enforcement. Writes
+        ``ctx.answer_text``.
+        """
+        thinking_sm = ctx.thinking_sm
+        conv_res = ctx.conv_res
+        response_mode_config = ctx.response_mode_config
+        current_strategy = ctx.current_strategy
+        user_query = ctx.user_query
+        expanded_chunks = ctx.expanded_chunks
+        policy_selection = ctx.policy_selection
+        telemetry_extra = ctx.telemetry_extra
+        req_llm = ctx.req_llm
+        stream_callback = ctx.stream_callback
+
+        # 6. LLM Grounded Answer Synthesis
+        t0 = time.perf_counter()
+        thinking_sm.start_stage(ThinkingStage.ANSWER_PLANNING)
+        thinking_sm.complete_stage(
+            ThinkingStage.ANSWER_PLANNING,
+            details={"answer_mode": conv_res.answer_mode.value if conv_res else AnswerMode.DIRECT.value},
+        )
+
+        if conv_res and conv_res.mode_directives:
+            mode_prompt_str = conv_res.mode_directives
+        else:
+            mode_prompt_str = (
+                EXACT_MODE_INSTRUCTIONS
+                if ctx.fidelity_mode == "exact"
+                else EXPLAIN_MODE_INSTRUCTIONS
+                if ctx.fidelity_mode == "explain"
+                else IMPLEMENT_MODE_INSTRUCTIONS
+                if ctx.fidelity_mode == "implement"
+                else ""
+            )
+        mode_prompt_str = (
+            f"{mode_prompt_str}\n\nREQUESTED RESPONSE DEPTH:\n"
+            f"{response_mode_config.prompt_instructions}"
+        ).strip()
+
+        # The DIRECT mode directive asks for one short answer, which silently
+        # drops the later parts of a multi-part message. State the parts
+        # explicitly and require one answer per part.
+        if ctx.question_parts:
+            numbered_parts = "\n".join(
+                f"  {idx}. {part}" for idx, part in enumerate(ctx.question_parts, start=1)
+            )
+            mode_prompt_str = (
+                f"{mode_prompt_str}\n\nMULTI-PART QUESTION — the user asked "
+                f"{len(ctx.question_parts)} distinct things:\n{numbered_parts}\n"
+                "- Answer EVERY part, in the order asked, under its own heading or bullet.\n"
+                "- This overrides any brevity instruction above: brevity applies per part, "
+                "never as a reason to omit a part.\n"
+                "- If the context supports only some parts, answer those and state "
+                "explicitly which parts the documents do not cover."
+            ).strip()
+
+        # Prevent generation context leakage: only inject history if it's a true follow-up.
+        effective_history = ctx.history if ctx.is_history_followup else None
+        history_text = _format_history_for_prompt(effective_history)
+        refinement_str = f"\nRefinement Instructions:\n{ctx.prompt_refinement}\n" if ctx.prompt_refinement else ""
+        evidence_status_str = telemetry_extra.get("evidence_status", "DIRECT")
+        evidence_status_dir = _format_evidence_status_directive(evidence_status_str)
+        prompt = GROUNDED_SYSTEM_PROMPT.format(
+            evidence_status_directive=evidence_status_dir,
+            mode_instructions=mode_prompt_str,
+            refinement_directive=refinement_str,
+            context_text=ctx.formatted_context,
+            history_text=history_text,
+            query=user_query,
+        )
+
+        max_tokens = response_mode_config.max_output_tokens
+
+        thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
+        exact_numbered_list = _extract_requested_numbered_list(user_query, expanded_chunks)
+        if exact_numbered_list:
+            answer_text = _enumeration_preamble(user_query, len(exact_numbered_list)) + "\n\n" + "\n".join(
+                f"{index}. {label}"
+                for index, label in enumerate(exact_numbered_list, start=1)
+            )
+            if ctx.stream_live:
+                stream_callback(answer_text)
+        elif telemetry_extra.get("requires_visual_abstention"):
+            page_label = "the cited page"
+            if expanded_chunks:
+                identity = expanded_chunks[0].chunk.metadata.get_page_identity()
+                page_label = f"Page {identity.page_label}"
+            answer_text = (
+                f"The retrieved text says the requested details are shown in a visual on {page_label}, "
+                "but the visual labels could not be read reliably. I can’t list them without guessing."
+            )
+            if ctx.stream_live:
+                stream_callback(answer_text)
+        elif req_llm is not None:
+            try:
+                deterministic_policy_answer = bool(
+                    policy_selection.calculations or policy_selection.missing_inputs
+                )
+                if (
+                    ctx.stream_live
+                    and hasattr(req_llm, "stream_complete")
+                    and not deterministic_policy_answer
+                ):
+                    try:
+                        completion_stream = req_llm.stream_complete(
+                            prompt,
+                            temperature=current_strategy.temperature,
+                            max_new_tokens=max_tokens,
+                        )
+                    except TypeError:
+                        completion_stream = req_llm.stream_complete(prompt)
+                    answer_parts: list[str] = []
+                    for part in completion_stream:
+                        delta = getattr(part, "delta", None)
+                        if delta is None:
+                            delta = getattr(part, "text", None)
+                        if delta is None:
+                            delta = str(part)
+                        delta = str(delta)
+                        if not delta:
+                            continue
+                        answer_parts.append(delta)
+                        stream_callback(delta)
+                    raw_answer = "".join(answer_parts).strip()
+                else:
+                    try:
+                        raw_answer = str(
+                            req_llm.complete(
+                                prompt,
+                                temperature=current_strategy.temperature,
+                                max_new_tokens=max_tokens,
+                            )
+                        ).strip()
+                    except TypeError:
+                        raw_answer = str(req_llm.complete(prompt)).strip()
+                answer_text = raw_answer
+            except Exception as exc:
+                logger.warning("LLM synthesis error (%s). Using fallback synthesis.", exc)
+                answer_text = self._fallback_synthesis(user_query, expanded_chunks)
+        else:
+            answer_text = self._fallback_synthesis(user_query, expanded_chunks)
+
+        answer_text = enforce_deterministic_calculations(answer_text, policy_selection)
+        if (
+            ctx.stream_live
+            and (policy_selection.calculations or policy_selection.missing_inputs)
+        ):
+            stream_callback(answer_text)
+
+        ctx.stage_timings[f"llm_synthesis{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+        thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
+        ctx.answer_text = answer_text
 
     def _stage_classify_and_resolve(self, ctx: QueryContext) -> None:
         """Classify the query, resolve conversational context, set follow-up flags on ctx."""
@@ -2079,560 +2644,58 @@ class RAGPipeline:
         while attempt <= max_retries:
             prefix = f"_att{attempt}" if attempt > 0 else ""
 
-            # 2. Multi-Query Generation & Structural Query Expansion
-            t0 = time.perf_counter()
-            if not is_fast_path and scope_decision.is_structural_query:
-                sub_queries = scope_decision.structural_subqueries
-            elif not is_fast_path and (current_strategy.enable_multi_query or rewrite_res.is_comprehensive_list):
-                sub_queries = self.multi_query_gen.generate_subqueries(rewrite_res.rewritten_query)
-            else:
-                sub_queries = [rewrite_res.rewritten_query]
-            # Every part of a multi-part message retrieves on its own terms, even
-            # when the strategy would otherwise run a single query.
-            for part in question_parts:
-                if part not in sub_queries:
-                    sub_queries.append(part)
-            if not is_fast_path:
-                for policy_query in expand_policy_queries(user_query):
-                    if policy_query not in sub_queries:
-                        sub_queries.append(policy_query)
-                sub_queries = sub_queries[:8]
-            stage_timings[f"multi_query{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
-
-            # 3. Hybrid Search (Dense + BM25 with RRF)
-            t0 = time.perf_counter()
-            thinking_sm.start_stage(ThinkingStage.RETRIEVAL)
-            search_filters = applied_filters if applied_filters else None
-            retrieval_cache = get_retrieval_cache()
-            candidate_chunks = []
-            cache_hit_retrieval = False
-            dense_degraded = False
-
-            if (
-                getattr(settings, "retrieval_cache_enabled", True)
-                and len(sub_queries) == 1
-                and not (conv_res and conv_res.is_followup)
-            ):
-                cached_cands = retrieval_cache.get(
-                    sub_queries[0], filters=search_filters, top_k=current_strategy.dense_top_k
-                )
-                if cached_cands:
-                    candidate_chunks = cached_cands
-                    cache_hit_retrieval = True
+            self._stage_retrieve(ctx, prefix)
+            candidate_chunks = ctx.candidate_chunks
+            sub_queries = ctx.sub_queries
+            applied_filters = ctx.applied_filters
+            filter_relaxed = ctx.filter_relaxed
+            cross_document_count = ctx.cross_document_count
 
             if not candidate_chunks:
-                candidate_map: dict[str, ScoredChunk] = {}
-                for sq in sub_queries:
-                    try:
-                        hits = self._retrieve_hybrid_hits(
-                            sq,
-                            dense_top_k=current_strategy.dense_top_k,
-                            bm25_top_k=current_strategy.bm25_top_k,
-                            filters=search_filters,
-                            rrf_k=current_strategy.rrf_k,
-                        )
-                    except Exception as ret_exc:
-                        logger.warning("Dense retrieval error (%s); falling back to BM25 index.", ret_exc)
-                        dense_degraded = True
-                        try:
-                            hits = self.hybrid_retriever.bm25_index.search(
-                                sq, top_k=current_strategy.bm25_top_k, filters=search_filters
-                            )
-                        except Exception:
-                            hits = []
-
-                    for sc in hits:
-                        cid = sc.chunk.id
-                        if cid not in candidate_map or (sc.score or 0.0) > (
-                            candidate_map[cid].score or 0.0
-                        ):
-                            candidate_map[cid] = sc
-                candidate_chunks = list(candidate_map.values())
-
-                if dense_degraded:
-                    thinking_sm.degrade_stage(
-                        ThinkingStage.RETRIEVAL,
-                        reason="Dense vector search was unavailable; continuing with keyword search",
-                        fallback_action="BM25 lexical search applied",
+                if scope_decision.page_number is not None and scope_decision.active_document_name:
+                    unanswerable_text = (
+                        f"I could not find a page labeled {scope_decision.page_number} "
+                        f"in the active document '{scope_decision.active_document_name}'."
                     )
-
-                # Filter relaxation fallback if 0 results. Document, page, and
-                # section constraints are hard user scope and must never be
-                # dropped, otherwise an invalid page can return unrelated facts.
-                if not candidate_chunks and search_filters and getattr(settings, "enable_filter_fallback_relaxation", True):
-                    hard_filter_keys = {"document_id", "source_file", "page_number", "section_number"}
-                    relaxed_filters = {
-                        key: value
-                        for key, value in search_filters.items()
-                        if key in hard_filter_keys
-                    }
-                    relaxed_filters = relaxed_filters or None
-                    filter_relaxed = relaxed_filters != search_filters
-                    applied_filters = relaxed_filters or {}
-                    candidate_map = {}
-                    for sq in sub_queries:
-                        try:
-                            hits = self._retrieve_hybrid_hits(
-                                sq,
-                                dense_top_k=current_strategy.dense_top_k,
-                                bm25_top_k=current_strategy.bm25_top_k,
-                                filters=relaxed_filters,
-                                rrf_k=current_strategy.rrf_k,
-                            )
-                        except Exception:
-                            hits = []
-                        for sc in hits:
-                            cid = sc.chunk.id
-                            if cid not in candidate_map or (sc.score or 0.0) > (
-                                candidate_map[cid].score or 0.0
-                            ):
-                                candidate_map[cid] = sc
-                    candidate_chunks = list(candidate_map.values())
-
-                # Enforce hard document scope validation
-                if scope_decision.scope == DocumentRetrievalScope.CURRENT_DOCUMENT:
-                    valid_cands = []
-                    for sc in candidate_chunks:
-                        d_id = sc.chunk.metadata.document_id
-                        s_name = sc.chunk.metadata.source_file
-                        is_match = False
-                        if scope_decision.active_document_id and d_id == scope_decision.active_document_id:
-                            is_match = True
-                        elif scope_decision.active_document_name and s_name == scope_decision.active_document_name:
-                            is_match = True
-                        if is_match:
-                            valid_cands.append(sc)
-                        else:
-                            cross_document_count += 1
-                    candidate_chunks = valid_cands
-                elif scope_decision.scope == DocumentRetrievalScope.SELECTED_DOCUMENTS and scope_decision.allowed_document_ids:
-                    valid_cands = []
-                    for sc in candidate_chunks:
-                        d_id = sc.chunk.metadata.document_id
-                        if d_id in scope_decision.allowed_document_ids:
-                            valid_cands.append(sc)
-                        else:
-                            cross_document_count += 1
-                    candidate_chunks = valid_cands
-
-                candidate_chunks.sort(key=lambda x: x.score or 0.0, reverse=True)
-                candidate_pool_limit = max(len(candidate_chunks), current_strategy.rerank_top_n * 3, 15)
-                candidate_chunks = candidate_chunks[:candidate_pool_limit]
-
-                # Evidence Continuity: As per new requirement, NEVER reuse previous retrieved chunks
-                # unless they are retrieved again for the current query.
-                raw_new_chunk_count = len(candidate_chunks)
-                prev_chunks = []
-                prev_visuals = []
-                prev_cits = []
-
-                prev_all = []
-                adjacent_pages = set()
-
-                continuity_applied = False
-                if conv_res and conv_res.is_followup and prev_all:
-                    eff_st, candidate_chunks, preserved_cits, continuity_applied = self.consistency_guard.enforce_downgrade_protection(
-                        previous_status=conversation_state.previous_evidence_status,
-                        previous_chunks=prev_all,
-                        previous_citations=prev_cits,
-                        current_status=EvidenceStatus.DIRECT if candidate_chunks else EvidenceStatus.MISSING,
-                        current_chunks=candidate_chunks,
-                        is_followup=True,
+                elif scope_decision.page_number is not None and scope_decision.active_document_id:
+                    unanswerable_text = (
+                        f"I could not find a page labeled {scope_decision.page_number} "
+                        f"in the active document '{scope_decision.active_document_id}'."
                     )
-
-                # Prioritize visual code chunks or diagram chunks for specific follow-up modes
-                if conv_res and conv_res.is_followup:
-                    is_code_mode = (
-                        conv_res.answer_mode == AnswerMode.CODE_EXPLANATION
-                        or "code" in user_query.lower()
-                    )
-                    is_diagram_mode = (
-                        "diagram" in user_query.lower()
-                        or "workflow" in user_query.lower()
-                        or "architecture" in user_query.lower()
-                    )
-                    if is_code_mode:
-                        candidate_chunks.sort(
-                            key=lambda c: (
-                                2 if (str(c.chunk.metadata.content_type).lower() in ("code", "contenttype.code") or "```" in c.chunk.text or "code" in str(c.chunk.metadata.extra.get("visual_type", "")).lower()) else (
-                                    1 if c.chunk.metadata.extra.get("is_visual_extraction") else 0
-                                )
-                            ),
-                            reverse=True,
-                        )
-                    elif is_diagram_mode:
-                        candidate_chunks.sort(
-                            key=lambda c: (
-                                2 if ("diagram" in str(c.chunk.metadata.content_type).lower() or "diagram" in str(c.chunk.metadata.extra.get("visual_type", "")).lower() or "figure" in str(c.chunk.metadata.extra.get("visual_type", "")).lower()) else (
-                                    1 if c.chunk.metadata.extra.get("is_visual_extraction") else 0
-                                )
-                            ),
-                            reverse=True,
-                        )
-
-                if conv_res and conv_res.is_followup:
-                    logger.info(
-                        "[EVIDENCE_CONTINUITY] prev_chunks=%d new_chunks=%d merged_chunks=%d continuity_applied=%s",
-                        len(prev_all),
-                        raw_new_chunk_count,
-                        len(candidate_chunks),
-                        continuity_applied,
-                    )
-                    if continuity_applied:
-                        thinking_sm.record_stage(
-                            ThinkingStage.EVIDENCE_REUSE,
-                            ThinkingStatus.COMPLETED,
-                            details={"reused_count": len(prev_all), "active_topic": conv_res.active_topic},
-                        )
-                    if adjacent_pages:
-                        thinking_sm.record_stage(
-                            ThinkingStage.PAGE_EXPANSION,
-                            ThinkingStatus.COMPLETED,
-                            details={"pages": sorted(list(adjacent_pages))},
-                        )
-
-                if (
-                    getattr(settings, "retrieval_cache_enabled", True)
-                    and len(sub_queries) == 1
-                    and candidate_chunks
-                    and not (conv_res and conv_res.is_followup)
-                ):
-                    retrieval_cache.set(
-                        sub_queries[0],
-                        candidate_chunks,
-                        filters=search_filters,
-                        top_k=current_strategy.dense_top_k,
-                        ttl=getattr(settings, "retrieval_cache_ttl_seconds", 3600),
-                    )
-
-            stage_timings[f"hybrid_retrieval{prefix}"] = 0.1 if cache_hit_retrieval else round((time.perf_counter() - t0) * 1000, 2)
-            thinking_sm.complete_stage(
-                ThinkingStage.RETRIEVAL,
-                details={"candidate_count": len(candidate_chunks)},
-            )
-
-            if not candidate_chunks:
-                if conv_res and conv_res.is_followup and prev_all:
-                    candidate_chunks = list(prev_all)
+                elif scope_decision.active_document_name:
+                    unanswerable_text = f"I could not find this information in the active document '{scope_decision.active_document_name}'."
+                elif scope_decision.active_document_id:
+                    unanswerable_text = f"I could not find this information in the active document '{scope_decision.active_document_id}'."
                 else:
-                    if scope_decision.page_number is not None and scope_decision.active_document_name:
-                        unanswerable_text = (
-                            f"I could not find a page labeled {scope_decision.page_number} "
-                            f"in the active document '{scope_decision.active_document_name}'."
-                        )
-                    elif scope_decision.page_number is not None and scope_decision.active_document_id:
-                        unanswerable_text = (
-                            f"I could not find a page labeled {scope_decision.page_number} "
-                            f"in the active document '{scope_decision.active_document_id}'."
-                        )
-                    elif scope_decision.active_document_name:
-                        unanswerable_text = f"I could not find this information in the active document '{scope_decision.active_document_name}'."
-                    elif scope_decision.active_document_id:
-                        unanswerable_text = f"I could not find this information in the active document '{scope_decision.active_document_id}'."
-                    else:
-                        unanswerable_text = "I could not find this information in the provided document."
+                    unanswerable_text = "I could not find this information in the provided document."
 
-                    report = VerificationReport(
-                        faithfulness=1.0,
-                        completeness=1.0,
-                        citation_coverage=1.0,
-                        coherence=1.0,
-                        composite_score=1.0,
-                        passed=True,
-                        retry_count=attempt,
-                    )
-                    best_answer = unanswerable_text
-                    best_citations = []
-                    best_context_chunks = []
-                    best_candidate_chunks = []
-                    best_reranked_chunks = []
-                    best_report = report
-                    break
-
-            # 4. Cross-Encoder Reranking
-            t0 = time.perf_counter()
-            thinking_sm.start_stage(ThinkingStage.RERANKING)
-            try:
-                reranked_chunks = self._rerank_for_parts(
-                    question_parts or [rewrite_res.rewritten_query],
-                    candidate_chunks,
-                    top_n=current_strategy.rerank_top_n,
-                    min_ratio=current_strategy.min_score_ratio,
+                report = VerificationReport(
+                    faithfulness=1.0,
+                    completeness=1.0,
+                    citation_coverage=1.0,
+                    coherence=1.0,
+                    composite_score=1.0,
+                    passed=True,
+                    retry_count=attempt,
                 )
-            except Exception as rerank_exc:
-                logger.warning("Reranker error (%s); falling back to retrieval ranking.", rerank_exc)
-                thinking_sm.degrade_stage(
-                    ThinkingStage.RERANKING,
-                    reason="Cross-encoder reranking encountered an issue; falling back to retrieval ranking",
-                    fallback_action="Using hybrid rank",
-                )
-                reranked_chunks = candidate_chunks[:current_strategy.rerank_top_n]
+                best_answer = unanswerable_text
+                best_citations = []
+                best_context_chunks = []
+                best_candidate_chunks = []
+                best_reranked_chunks = []
+                best_report = report
+                break
 
-            stage_timings[f"reranking{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
-            if conv_res and conv_res.is_followup and prev_all:
-                existing_ids = {c.chunk.id for c in reranked_chunks}
-                for p_chunk in prev_all:
-                    if p_chunk.chunk.id not in existing_ids:
-                        reranked_chunks.append(p_chunk)
+            self._stage_rerank_and_context(ctx, prefix)
+            reranked_chunks = ctx.reranked_chunks
+            expanded_chunks = ctx.expanded_chunks
+            policy_selection = ctx.policy_selection
+            telemetry_extra = ctx.telemetry_extra
+            context_tokens = ctx.context_tokens
+            formatted_context = ctx.formatted_context
 
-            thinking_sm.complete_stage(
-                ThinkingStage.RERANKING,
-                details={"rerank_count": len(reranked_chunks)},
-            )
-
-            # Cross-encoders rank semantic relatedness. Policy QA additionally
-            # needs a deterministic decision about which clause directly
-            # governs the user's exact actors, conditions, and thresholds.
-            t0 = time.perf_counter()
-            policy_selection = self.governing_clause_selector.select(
-                user_query,
-                reranked_chunks,
-                candidate_pool=candidate_chunks,
-            )
-            selected_context = self.governing_clause_selector.order_for_context(
-                policy_selection,
-                max_chunks=max(current_strategy.rerank_top_n, 5),
-            )
-            if selected_context:
-                reranked_chunks = selected_context
-            stage_timings[f"governing_clause_selection{prefix}"] = round(
-                (time.perf_counter() - t0) * 1000, 2
-            )
-
-            # 5. Parent Context Expansion
-            t0 = time.perf_counter()
-            try:
-                expanded_chunks = self.compressor.expand_to_parents(
-                    reranked_chunks,
-                    self.docstore,
-                    enable_expansion=False if is_fast_path else current_strategy.enable_parent_expansion,
-                )
-            except TypeError:
-                # Preserve compatibility with lightweight/custom compressors
-                # that implement the original two-argument protocol.
-                expanded_chunks = self.compressor.expand_to_parents(
-                    reranked_chunks,
-                    self.docstore,
-                )
-
-            # 5b. Evidence Sufficiency Gate & Cross-Page Vision Fallback (Phases 3, 4, 8)
-            expanded_chunks, telemetry_extra = self._apply_cross_page_vision_fallback_if_needed(
-                expanded_chunks,
-                user_query=user_query,
-                intent=classification.category,
-                previous_status=None,
-                previous_chunks=None,
-                is_followup=conv_res.is_followup if conv_res else False,
-            )
-            logger.info(
-                "[EVIDENCE_STATUS] prev=%s current=%s monotonic=%s rationale='%s'",
-                str(conversation_state.previous_evidence_status) if (conversation_state and conv_res and conv_res.is_followup) else "NONE",
-                telemetry_extra.get("evidence_status", "DIRECT"),
-                telemetry_extra.get("evidence_status", "DIRECT"),
-                "Monotonic status computed across turns" if (conv_res and conv_res.is_followup) else "Single turn evaluation",
-            )
-
-            if telemetry_extra.get("section_expansion") or telemetry_extra.get("adjacent_page_check"):
-                thinking_sm.start_stage(ThinkingStage.VISUAL_ANALYSIS)
-                if telemetry_extra.get("vision_status") == "DEGRADED" or (telemetry_extra.get("vision_fallback") and not any("```" in c.chunk.text for c in expanded_chunks)):
-                    thinking_sm.degrade_stage(
-                        ThinkingStage.VISUAL_ANALYSIS,
-                        reason="Visual understanding extraction timed out or degraded; relying on verified text evidence",
-                        fallback_action="Citing page visual asset directly",
-                    )
-                else:
-                    thinking_sm.complete_stage(
-                        ThinkingStage.VISUAL_ANALYSIS,
-                        details={"visual_type": "diagram/code"},
-                    )
-
-            # 5c. Complementary Chunk Packing
-            if hasattr(self.compressor, "pack_complementary_chunks"):
-                expanded_chunks = self.compressor.pack_complementary_chunks(
-                    expanded_chunks, user_query, max_chunks=current_strategy.rerank_top_n
-                )
-            else:
-                expanded_chunks = expanded_chunks[: current_strategy.rerank_top_n]
-            if hasattr(self.compressor, "pack_to_token_budget"):
-                expanded_chunks, context_tokens = self.compressor.pack_to_token_budget(
-                    expanded_chunks,
-                    response_mode_config.max_context_tokens,
-                )
-            else:
-                packed_chunks: list[ScoredChunk] = []
-                context_tokens = 0
-                for sc in expanded_chunks:
-                    estimated = max(1, int(len(sc.chunk.text.split()) * 1.3) + 24)
-                    if packed_chunks and context_tokens + estimated > response_mode_config.max_context_tokens:
-                        break
-                    packed_chunks.append(sc)
-                    context_tokens += estimated
-                expanded_chunks = packed_chunks
-
-            # Packing may reorder or remove evidence. Recompute the structured
-            # rule view and bind each rule to the final Source N indices.
-            policy_selection = self.governing_clause_selector.select(
-                user_query,
-                expanded_chunks,
-            )
-            bind_source_indices(policy_selection, expanded_chunks)
-            try:
-                formatted_context = self.compressor.format_context_for_prompt(
-                    expanded_chunks,
-                    max_token_budget=response_mode_config.max_context_tokens,
-                )
-            except TypeError:
-                formatted_context = self.compressor.format_context_for_prompt(expanded_chunks)
-            formatted_context = (
-                f"{format_policy_decision_context(policy_selection)}\n\n"
-                f"{formatted_context}"
-            )
-            stage_timings[f"context_expansion{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
-
-            # Evidence Verification Stage
-            thinking_sm.start_stage(ThinkingStage.EVIDENCE_VERIFICATION)
-            thinking_sm.complete_stage(
-                ThinkingStage.EVIDENCE_VERIFICATION,
-                details={"evidence_status": telemetry_extra.get("evidence_status", "DIRECT")},
-            )
-
-            # 6. LLM Grounded Answer Synthesis
-            t0 = time.perf_counter()
-            thinking_sm.start_stage(ThinkingStage.ANSWER_PLANNING)
-            thinking_sm.complete_stage(
-                ThinkingStage.ANSWER_PLANNING,
-                details={"answer_mode": conv_res.answer_mode.value if conv_res else AnswerMode.DIRECT.value},
-            )
-
-            if conv_res and conv_res.mode_directives:
-                mode_prompt_str = conv_res.mode_directives
-            else:
-                mode_prompt_str = (
-                    EXACT_MODE_INSTRUCTIONS
-                    if fidelity_mode == "exact"
-                    else EXPLAIN_MODE_INSTRUCTIONS
-                    if fidelity_mode == "explain"
-                    else IMPLEMENT_MODE_INSTRUCTIONS
-                    if fidelity_mode == "implement"
-                    else ""
-                )
-            mode_prompt_str = (
-                f"{mode_prompt_str}\n\nREQUESTED RESPONSE DEPTH:\n"
-                f"{response_mode_config.prompt_instructions}"
-            ).strip()
-
-            # The DIRECT mode directive asks for one short answer, which silently
-            # drops the later parts of a multi-part message. State the parts
-            # explicitly and require one answer per part.
-            if question_parts:
-                numbered_parts = "\n".join(
-                    f"  {idx}. {part}" for idx, part in enumerate(question_parts, start=1)
-                )
-                mode_prompt_str = (
-                    f"{mode_prompt_str}\n\nMULTI-PART QUESTION — the user asked "
-                    f"{len(question_parts)} distinct things:\n{numbered_parts}\n"
-                    "- Answer EVERY part, in the order asked, under its own heading or bullet.\n"
-                    "- This overrides any brevity instruction above: brevity applies per part, "
-                    "never as a reason to omit a part.\n"
-                    "- If the context supports only some parts, answer those and state "
-                    "explicitly which parts the documents do not cover."
-                ).strip()
-
-            # Prevent generation context leakage: only inject history if it's a true follow-up.
-            effective_history = history if is_history_followup else None
-            history_text = _format_history_for_prompt(effective_history)
-            refinement_str = f"\nRefinement Instructions:\n{prompt_refinement}\n" if prompt_refinement else ""
-            evidence_status_str = telemetry_extra.get("evidence_status", "DIRECT")
-            evidence_status_dir = _format_evidence_status_directive(evidence_status_str)
-            prompt = GROUNDED_SYSTEM_PROMPT.format(
-                evidence_status_directive=evidence_status_dir,
-                mode_instructions=mode_prompt_str,
-                refinement_directive=refinement_str,
-                context_text=formatted_context,
-                history_text=history_text,
-                query=user_query,
-            )
-
-            max_tokens = response_mode_config.max_output_tokens
-
-            thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
-            exact_numbered_list = _extract_requested_numbered_list(user_query, expanded_chunks)
-            if exact_numbered_list:
-                answer_text = _enumeration_preamble(user_query, len(exact_numbered_list)) + "\n\n" + "\n".join(
-                    f"{index}. {label}"
-                    for index, label in enumerate(exact_numbered_list, start=1)
-                )
-                if stream_callback is not None:
-                    stream_callback(answer_text)
-            elif telemetry_extra.get("requires_visual_abstention"):
-                page_label = "the cited page"
-                if expanded_chunks:
-                    identity = expanded_chunks[0].chunk.metadata.get_page_identity()
-                    page_label = f"Page {identity.page_label}"
-                answer_text = (
-                    f"The retrieved text says the requested details are shown in a visual on {page_label}, "
-                    "but the visual labels could not be read reliably. I can’t list them without guessing."
-                )
-                if stream_callback is not None:
-                    stream_callback(answer_text)
-            elif req_llm is not None:
-                try:
-                    deterministic_policy_answer = bool(
-                        policy_selection.calculations or policy_selection.missing_inputs
-                    )
-                    if (
-                        stream_callback is not None
-                        and hasattr(req_llm, "stream_complete")
-                        and not deterministic_policy_answer
-                    ):
-                        try:
-                            completion_stream = req_llm.stream_complete(
-                                prompt,
-                                temperature=current_strategy.temperature,
-                                max_new_tokens=max_tokens,
-                            )
-                        except TypeError:
-                            completion_stream = req_llm.stream_complete(prompt)
-                        answer_parts: list[str] = []
-                        for part in completion_stream:
-                            delta = getattr(part, "delta", None)
-                            if delta is None:
-                                delta = getattr(part, "text", None)
-                            if delta is None:
-                                delta = str(part)
-                            delta = str(delta)
-                            if not delta:
-                                continue
-                            answer_parts.append(delta)
-                            stream_callback(delta)
-                        raw_answer = "".join(answer_parts).strip()
-                    else:
-                        try:
-                            raw_answer = str(
-                                req_llm.complete(
-                                    prompt,
-                                    temperature=current_strategy.temperature,
-                                    max_new_tokens=max_tokens,
-                                )
-                            ).strip()
-                        except TypeError:
-                            raw_answer = str(req_llm.complete(prompt)).strip()
-                    answer_text = raw_answer
-                except Exception as exc:
-                    logger.warning("LLM synthesis error (%s). Using fallback synthesis.", exc)
-                    answer_text = self._fallback_synthesis(user_query, expanded_chunks)
-            else:
-                answer_text = self._fallback_synthesis(user_query, expanded_chunks)
-
-            answer_text = enforce_deterministic_calculations(answer_text, policy_selection)
-            if (
-                stream_callback is not None
-                and (policy_selection.calculations or policy_selection.missing_inputs)
-            ):
-                stream_callback(answer_text)
-
-            stage_timings[f"llm_synthesis{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
-            thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
+            self._stage_generate(ctx, prefix)
+            answer_text = ctx.answer_text
 
             # 7. Verifiable Citation Extraction
             t0 = time.perf_counter()
@@ -2657,6 +2720,16 @@ class RAGPipeline:
             # 8. Post-Generation Verification
             t0 = time.perf_counter()
             if enable_verification and self.verifier is not None:
+                # High-risk (policy / numeric) answers are already buffered before
+                # the user sees them (see _stage_plan), so an LLM claim-support
+                # audit here costs no perceived latency and catches hallucinations
+                # the lexical heuristic cannot. Ordinary factual answers keep the
+                # fast heuristic-only path.
+                use_llm_judge = bool(
+                    ctx.is_high_risk
+                    and req_llm is not None
+                    and getattr(settings, "enable_llm_faithfulness_verification", True)
+                )
                 report = self.verifier.verify(
                     query=user_query,
                     answer=answer_text,
@@ -2664,6 +2737,7 @@ class RAGPipeline:
                     citations=citations,
                     llm=req_llm,
                     allowed_derived_facts=allowed_derived_facts(policy_selection),
+                    use_llm_judge=use_llm_judge,
                 )
                 report.retry_count = attempt
             else:
@@ -2757,8 +2831,8 @@ class RAGPipeline:
             answer_mode=str(conv_res.answer_mode.value if conv_res else AnswerMode.DIRECT.value),
             is_follow_up=conv_res.is_followup if conv_res else False,
             used_conversation_context=bool(conversation_state and len(conversation_state.turns) > 0),
-            reused_previous_evidence=bool(continuity_applied if 'continuity_applied' in locals() else (conv_res and conv_res.is_followup and len(prev_all) > 0 if 'prev_all' in locals() else False)),
-            retrieved_new_evidence=bool(raw_new_chunk_count > 0 if 'raw_new_chunk_count' in locals() else True),
+            reused_previous_evidence=ctx.continuity_applied,
+            retrieved_new_evidence=bool(ctx.raw_new_chunk_count > 0),
             used_visual_evidence=bool(diag_cnt + code_cnt > 0 or any(c.chunk.metadata.extra.get("is_visual_extraction") or c.chunk.metadata.image_assets or c.chunk.metadata.visual_asset_ids for c in best_context_chunks)),
             evidence_status=str(telemetry_extra.get("evidence_status", "DIRECT")),
             sources_used=final_context_documents,
@@ -2788,10 +2862,10 @@ class RAGPipeline:
             active_entities=conv_res.active_entities if conv_res else [],
             answer_mode=conv_res.answer_mode.value if conv_res else AnswerMode.DIRECT.value,
             previous_evidence_status=str(conversation_state.previous_evidence_status) if (conversation_state and conv_res and conv_res.is_followup) else None,
-            evidence_continuity_applied=continuity_applied if 'continuity_applied' in locals() else False,
+            evidence_continuity_applied=ctx.continuity_applied,
             merged_chunk_count=len(best_candidate_chunks),
-            previous_chunk_count=len(prev_all) if (conv_res and conv_res.is_followup and 'prev_all' in locals()) else 0,
-            new_chunk_count=raw_new_chunk_count if 'raw_new_chunk_count' in locals() else len(best_candidate_chunks),
+            previous_chunk_count=len(ctx.prev_all),
+            new_chunk_count=ctx.raw_new_chunk_count,
             retrieved_candidate_count=len(best_candidate_chunks),
             post_rerank_count=len(best_reranked_chunks),
             final_context_count=len(best_context_chunks),

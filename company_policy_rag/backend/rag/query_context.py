@@ -80,12 +80,22 @@ class QueryContext:
     enable_verification: bool = True
     max_retries: int = 0
     current_strategy: Any = None
+    # High-risk (policy / numeric) answers are verified before the user sees
+    # them: their tokens are buffered instead of streamed live, and they keep a
+    # retry budget even on the streaming path. ``stream_live`` is the emit gate —
+    # True only when incremental token emission to the client is permitted.
+    is_high_risk: bool = False
+    stream_live: bool = False
 
     # ── Per-attempt working state ──────────────────────────────────────────
     attempt: int = 0
     prompt_refinement: str = ""
     retry_reasons: list[str] = field(default_factory=list)
     sub_queries: list[str] = field(default_factory=list)
+    candidate_chunks: list["ScoredChunk"] = field(default_factory=list)
+    reranked_chunks: list["ScoredChunk"] = field(default_factory=list)
+    expanded_chunks: list["ScoredChunk"] = field(default_factory=list)
+    answer_text: str = ""
     formatted_context: str = ""
     context_tokens: int = 0
     cross_document_count: int = 0
