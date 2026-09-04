@@ -7,13 +7,19 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
-from backend.api.dependencies import get_document_service
+from backend.api.dependencies import (
+    get_conversation_state_manager,
+    get_document_service,
+    get_semantic_cache_manager,
+)
 from backend.models.api_dto import (
     DocumentDetailResponse,
     DocumentListResponse,
     DocumentUploadResponse,
     IngestionStatusResponse,
 )
+from backend.models.conversation import ConversationStateManager
+from backend.rag.semantic_cache import SemanticCacheManager
 from backend.services.document_service import MAX_FILE_SIZE_BYTES, DocumentService, DuplicateDocumentError
 from backend.utils.logging import logger
 
@@ -250,12 +256,33 @@ def get_document_details(
 def delete_document_by_id(
     doc_id: str,
     doc_service: DocumentService = Depends(get_document_service),
+    semantic_cache: SemanticCacheManager = Depends(get_semantic_cache_manager),
+    conversation_state: ConversationStateManager = Depends(get_conversation_state_manager),
 ):
-    """Delete document, vector embeddings, BM25 postings, and image assets."""
+    """Fully delete a document: its vector embeddings, BM25 postings, docstore
+    chunks, image assets, and stored file — plus every piece of derived
+    conversational state so the deleted content can never resurface. Cached Q&A
+    answers (the semantic cache) and follow-up conversation context can cite a
+    document, so both are invalidated; they cannot be scoped to a single document,
+    so they are cleared wholesale (they simply rebuild on the next query)."""
     res = doc_service.delete_document(doc_id)
     if not res:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Document with ID '{doc_id}' not found.",
         )
+
+    caches_invalidated = {"semantic_cache": False, "conversation_state": False}
+    try:
+        semantic_cache.clear()
+        caches_invalidated["semantic_cache"] = True
+    except Exception as exc:  # best-effort: the document itself is already gone
+        logger.warning("Semantic cache invalidation failed after deleting %s: %s", doc_id, exc)
+    try:
+        conversation_state.clear_all()
+        caches_invalidated["conversation_state"] = True
+    except Exception as exc:
+        logger.warning("Conversation state clear failed after deleting %s: %s", doc_id, exc)
+
+    res["caches_invalidated"] = caches_invalidated
     return res

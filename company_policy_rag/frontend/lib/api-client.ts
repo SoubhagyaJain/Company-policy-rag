@@ -23,6 +23,21 @@ import {
 // the LAN, where "localhost" would otherwise refer to that device.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
+// Large file uploads must NOT go through the Next.js dev proxy: it buffers
+// multipart bodies at ~0.6 MB/s and times out big PDFs (~30s) with a 400/500.
+// The backend runs on the same host, so we post uploads straight to it. The
+// origin is derived from the current page (so it works on localhost AND on a
+// LAN IP), with the backend port/URL overridable via env. CORS is open on the
+// backend, and a plain FormData POST is a CORS-simple request (no preflight).
+const BACKEND_PORT = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+function directBackendBase(): string {
+  if (API_BASE) return API_BASE; // explicit override wins for both proxy + direct
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`;
+  }
+  return '';
+}
+
 export interface DonePayload {
   id?: string;
   request_id?: string;
@@ -809,7 +824,9 @@ export class ApiClient {
     formData.append('file', file);
     formData.append('category', category);
 
-    const res = await fetch(`${this.baseUrl}/api/documents/upload`, {
+    // Post straight to the backend (bypassing the slow dev proxy) so large PDFs
+    // upload in-place instead of stalling for ~30s and failing.
+    const res = await fetch(`${directBackendBase()}/api/documents/upload`, {
       method: 'POST',
       body: formData,
     });

@@ -22,9 +22,20 @@ class BaseChunker(ABC):
         """Estimate token count (approx 4 chars per token)."""
         return max(1, len(text) // 4)
 
-    def _clean_text(self, text: str) -> str:
-        """Normalize whitespace and clean up raw extracted document text."""
-        # Replace multiple spaces with single space, preserve intentional paragraph breaks
+    def _clean_text(self, text: str, preserve_code: bool = False) -> str:
+        """Normalize whitespace and clean up raw extracted document text.
+
+        For code, indentation and intra-line spacing are meaningful, so collapsing
+        runs of spaces/tabs (as prose cleanup does) would destroy the snippet.
+        When ``preserve_code`` is set we keep leading indentation and interior
+        alignment verbatim and only trim trailing spaces and runaway blank lines.
+        """
+        if preserve_code:
+            lines = [line.rstrip() for line in text.splitlines()]
+            cleaned = "\n".join(lines)
+            cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+            return cleaned.strip("\n")
+        # Prose: replace multiple spaces with single space, preserve paragraph breaks
         cleaned = re.sub(r"[ \t]+", " ", text)
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
         return cleaned.strip()
@@ -125,7 +136,9 @@ class BaseChunker(ABC):
             extra=dict(doc_meta.extra),
         )
 
-        cleaned_text = self._clean_text(text)
+        # Code indentation is significant — never collapse it.
+        preserve_code = final_content_type == ContentType.CODE or "```" in text
+        cleaned_text = self._clean_text(text, preserve_code=preserve_code)
 
         return Chunk(
             text=cleaned_text,
