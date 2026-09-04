@@ -60,6 +60,20 @@ _shared_embedding_model: Any | None = None
 _shared_embedding_model_loaded: bool = False
 
 
+def _default_query_instruction(model_name: str) -> str:
+    """Query-side instruction for asymmetric retrieval models.
+
+    BGE English v1.x retrieval models are trained to embed *queries* with a
+    short instruction while *passages* are embedded without one. Omitting it on
+    the query side measurably degrades dense recall. Passage embeddings
+    (``embed_chunks``) intentionally never receive an instruction.
+    """
+    name = model_name.lower()
+    if "bge" in name and "en" in name:
+        return "Represent this sentence for searching relevant passages: "
+    return ""
+
+
 class EmbeddingService:
     """
     Service wrapper for dense vector embeddings with caching, batching, and normalization.
@@ -71,6 +85,7 @@ class EmbeddingService:
         model_name: str = "BAAI/bge-small-en-v1.5",
         cache_enabled: bool = True,
         dimension: int = 384,
+        query_instruction: str | None = None,
     ) -> None:
         self.model_name = model_name
         self.cache_enabled = cache_enabled
@@ -78,6 +93,24 @@ class EmbeddingService:
         self.cache = EmbeddingCache() if cache_enabled else None
         self._model: Any | None = None
         self._model_loaded: bool = False
+        # Applied to search queries only (see ``embed_query``); auto-derived from
+        # the model family unless explicitly overridden.
+        self.query_instruction: str = (
+            query_instruction
+            if query_instruction is not None
+            else _default_query_instruction(model_name)
+        )
+
+    @property
+    def is_using_fallback(self) -> bool:
+        """True once load was attempted and the real model is unavailable.
+
+        When this is True, dense vectors come from the deterministic hash
+        fallback and are **not** comparable to stored real-model vectors, so
+        dense retrieval is effectively random. Callers should surface this as a
+        degraded-retrieval signal rather than trusting the results.
+        """
+        return self._model_loaded and self._model is None
 
     def _init_model(self) -> None:
         global _shared_embedding_model, _shared_embedding_model_loaded
@@ -96,13 +129,29 @@ class EmbeddingService:
             logger.info("Loading embedding model %s", self.model_name)
             os.environ["HF_HUB_OFFLINE"] = "1"
             os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            # Pin embeddings to CPU by default. On a 6 GB GPU the ~5.1 GB text LLM
+            # already owns the VRAM; letting sentence-transformers auto-select CUDA
+            # would allocate a ~1 GB CUDA context during chat and steal it from the
+            # LLM. Overridable via EMBEDDING_DEVICE for larger cards.
+            embedding_device = os.getenv("EMBEDDING_DEVICE", "cpu")
             try:
-                self._model = SentenceTransformer(self.model_name)
+                self._model = SentenceTransformer(self.model_name, device=embedding_device)
             except Exception as local_err:
-                logger.info("Local cached embedding model not found (%s). Fallback embedder enabled.", local_err)
+                logger.error(
+                    "Embedding model %s could not be loaded (%s). Falling back to hash "
+                    "embeddings — DENSE RETRIEVAL IS DEGRADED and results are not "
+                    "comparable to stored vectors.",
+                    self.model_name,
+                    local_err,
+                )
                 self._model = None
         except Exception as exc:
-            logger.warning("Could not load SentenceTransformer model %s (%s). Using fallback embedder.", self.model_name, exc)
+            logger.error(
+                "Could not import/load SentenceTransformer for %s (%s). Falling back to "
+                "hash embeddings — DENSE RETRIEVAL IS DEGRADED.",
+                self.model_name,
+                exc,
+            )
             self._model = None
 
         _shared_embedding_model = self._model
@@ -143,6 +192,21 @@ class EmbeddingService:
         if self.cache is not None:
             self.cache.set(text, vector)
         return vector
+
+    def embed_query(self, text: str) -> list[float]:
+        """Embed a search query for dense retrieval.
+
+        Applies the model's query-side instruction (BGE asymmetric search) so
+        the query vector matches instruction-free passage vectors produced by
+        ``embed_chunks``. For symmetric uses (e.g. query-to-query cache
+        matching) call ``embed_text`` instead. When no instruction is
+        configured this is identical to ``embed_text``.
+        """
+        if not text:
+            return [0.0] * self.dimension
+        if self.query_instruction:
+            return self.embed_text(f"{self.query_instruction}{text}")
+        return self.embed_text(text)
 
     def embed_chunks(self, texts: list[str]) -> list[list[float]]:
         """Batch embed a list of document chunk texts."""

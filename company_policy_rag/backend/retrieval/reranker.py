@@ -72,11 +72,20 @@ class CrossEncoderReranker:
         top_n: int = 5,
         device: str = "auto",
         min_ratio: float = 0.45,
+        max_length: int = 512,
+        pool_size: int | None = None,
     ) -> None:
         self.model_name = model_name
         self.top_n = top_n
         self.device = device
         self.min_ratio = min_ratio
+        # Token budget the cross-encoder sees per (query, chunk) pair. bge-reranker
+        # handles 512 tokens; the model truncates internally, so we pass full chunk
+        # text instead of a lossy character cut that hid mid-chunk governing clauses.
+        self.max_length = max_length
+        # How many top fused candidates to score. Wider than top_n so a chunk the
+        # RRF stage ranked mid-list can still be promoted by the reranker.
+        self.pool_size = pool_size
         self.postprocessor = RelativeScoreThresholdPostprocessor(min_ratio=min_ratio)
         self._model = None
         self._model_loaded = False
@@ -102,7 +111,7 @@ class CrossEncoderReranker:
             try:
                 num_cpus = os.cpu_count() or 8
                 torch.set_num_threads(num_cpus)
-                self._model = CrossEncoder(self.model_name, device=dev)
+                self._model = CrossEncoder(self.model_name, device=dev, max_length=self.max_length)
             except Exception as local_err:
                 logger.info("Local cached reranker model not found (%s). Fallback ranking enabled.", local_err)
                 self._model = None
@@ -129,16 +138,23 @@ class CrossEncoderReranker:
         effective_top_n = self.top_n if top_n is None else top_n
         effective_min_ratio = self.min_ratio if min_ratio is None else min_ratio
 
-        candidate_pool_limit = min(len(candidates), max(effective_top_n * 2, 8))
+        pool = self.pool_size if self.pool_size is not None else max(effective_top_n * 4, 20)
+        candidate_pool_limit = min(len(candidates), pool)
         candidates_to_rerank = candidates[:candidate_pool_limit]
         if self._model is not None:
             try:
                 import torch
-                # Truncate text to first 350 chars for high-speed cross-encoder scoring
-                pairs = [[query, (c.chunk.text or "")[:350]] for c in candidates_to_rerank]
+                # Pass full chunk text; the cross-encoder truncates by tokens
+                # (self.max_length) rather than losing mid-chunk clauses to a
+                # fixed character cut.
+                pairs = [[query, (c.chunk.text or "")] for c in candidates_to_rerank]
                 logger.info("Starting CrossEncoder prediction for %d pairs...", len(pairs))
                 with torch.inference_mode():
-                    logits = self._model.predict(pairs, batch_size=len(pairs), show_progress_bar=False)
+                    logits = self._model.predict(
+                        pairs,
+                        batch_size=min(len(pairs), 16),
+                        show_progress_bar=False,
+                    )
                 logger.info("CrossEncoder prediction complete.")
                 if hasattr(logits, "tolist"):
                     logits = logits.tolist()

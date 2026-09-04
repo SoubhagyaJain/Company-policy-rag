@@ -31,7 +31,10 @@ class DenseVectorRetriever:
             return []
         from backend.utils.logging import logger
         logger.info(f"Dense retrieve: computing embedding for {query}")
-        query_emb = self.embedding_service.embed_text(query)
+        # Query-side instruction (asymmetric retrieval); passages are embedded
+        # without one at index time. Falls back to plain embedding for models
+        # that define no instruction.
+        query_emb = self.embedding_service.embed_query(query)
         logger.info("Dense retrieve: embedding computed, querying vector store")
         res = self.vector_store.search(query_emb, top_k=top_k, filters=filters)
         logger.info("Dense retrieve: vector store query complete")
