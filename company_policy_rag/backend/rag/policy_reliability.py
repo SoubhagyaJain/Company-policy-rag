@@ -582,6 +582,60 @@ def format_policy_decision_context(selection: ClauseSelection) -> str:
     return "\n".join(lines)
 
 
+def _format_part_rules(selection: ClauseSelection, indent: str = "  ") -> list[str]:
+    """Rule/calculation/missing-input lines for one part's governing selection."""
+    lines: list[str] = [f"{indent}GOVERNING-CLAUSE CONFIDENCE: {selection.confidence:.3f}"]
+    if selection.structured_rules:
+        lines.append(f"{indent}STRUCTURED RULES — keep every rule separate:")
+        for rule in selection.structured_rules:
+            source = f"Source {rule.source_index}" if rule.source_index else "retrieved source"
+            lines.append(f"{indent}- {rule.role} ({source}): {rule.text}")
+    if selection.calculations:
+        lines.append(f"{indent}DETERMINISTIC CALCULATIONS — use these exact results; do not recalculate:")
+        for calculation in selection.calculations:
+            source = f"Source {calculation.source_index}" if calculation.source_index else "governing rule"
+            lines.append(f"{indent}- {calculation.expression} = {calculation.result} ({source})")
+    if selection.missing_inputs:
+        lines.append(f"{indent}MISSING INPUTS — do not invent them: " + ", ".join(selection.missing_inputs))
+    if not selection.structured_rules and not selection.calculations:
+        lines.append(f"{indent}(No sufficiently specific governing rule was found for this part.)")
+    return lines
+
+
+def format_multipart_policy_decision_context(
+    part_selections: list[tuple[str, ClauseSelection]],
+) -> str:
+    """Per-part governing-clause context for a multi-part question.
+
+    Each part gets its own labeled rule block so the generator applies each
+    part's governing rule, condition, exception, threshold, and time window only
+    to that part — preventing rules from unrelated parts being merged into one
+    blended answer.
+    """
+    lines = [
+        "POLICY DECISION SUPPORT (deterministic; do not cite this block as a source)",
+        "This question has multiple parts. Each part below is governed by its OWN rule.",
+        "Do NOT merge rules, conditions, exceptions, thresholds, or time windows across parts.",
+    ]
+    for index, (part, selection) in enumerate(part_selections, start=1):
+        lines.append("")
+        lines.append(f"PART {index}: {part.strip()}")
+        lines.append(f"  QUERY FACTS: {asdict(selection.query_facts)}")
+        lines.extend(_format_part_rules(selection))
+    lines.extend(
+        [
+            "",
+            "ANSWER CONSTRAINTS:",
+            "- Answer EVERY part, each under its own heading, using ONLY that part's governing rule above.",
+            "- Never apply one part's exception, threshold, condition, or calculation to another part.",
+            "- Preserve conditions, exceptions, thresholds, actors, and time windows separately.",
+            "- Do not invent missing facts, durations, amounts, dates, or authorization.",
+            "- If a part has no sufficiently specific governing rule, abstain for that part explicitly.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def allowed_derived_facts(selection: ClauseSelection) -> list[str]:
     values: list[str] = []
     for calc in selection.calculations:
