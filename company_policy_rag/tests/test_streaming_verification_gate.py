@@ -143,3 +143,21 @@ def test_low_risk_query_does_not_invoke_llm_faithfulness_judge(pipeline_and_llm)
     pipeline, llm = pipeline_and_llm
     pipeline.query(user_query="What is the resignation notice policy?")
     assert not _issued_llm_faithfulness_audit(llm), "low-risk answer must skip the LLM audit"
+
+
+def test_multipart_query_gets_per_part_governing_blocks(pipeline_and_llm) -> None:
+    pipeline, llm = pipeline_and_llm
+    pipeline.query(
+        user_query="How many vacation days do I accrue per month, "
+        "and what notice must I give before resigning?"
+    )
+    prompts = "\n".join(llm.prompts)
+    assert "PART 1:" in prompts and "PART 2:" in prompts
+    assert "Do NOT merge" in prompts
+
+
+def test_single_part_query_has_no_multipart_block(pipeline_and_llm) -> None:
+    pipeline, llm = pipeline_and_llm
+    pipeline.query(user_query="How many vacation days do I accrue per month?")
+    prompts = "\n".join(llm.prompts)
+    assert "Do NOT merge" not in prompts

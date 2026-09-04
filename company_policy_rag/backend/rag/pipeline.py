@@ -49,6 +49,7 @@ from backend.rag.policy_reliability import (
     enforce_deterministic_calculations,
     expand_policy_queries,
     extract_query_facts,
+    format_multipart_policy_decision_context,
     format_policy_decision_context,
     validate_policy_answer,
 )
@@ -1950,10 +1951,22 @@ class RAGPipeline:
             )
         except TypeError:
             formatted_context = self.compressor.format_context_for_prompt(expanded_chunks)
-        formatted_context = (
-            f"{format_policy_decision_context(policy_selection)}\n\n"
-            f"{formatted_context}"
-        )
+
+        # For a multi-part question, give the generator each part's OWN governing
+        # rule in a separate labeled block so rules, conditions, and thresholds
+        # from unrelated parts are not merged into one blended answer. The single
+        # global `policy_selection` above is kept for validation, deterministic
+        # enforcement, and trace.
+        if len(ctx.question_parts) >= 2:
+            part_selections: list[tuple[str, ClauseSelection]] = []
+            for part in ctx.question_parts:
+                part_sel = self.governing_clause_selector.select(part, expanded_chunks)
+                bind_source_indices(part_sel, expanded_chunks)
+                part_selections.append((part, part_sel))
+            policy_block = format_multipart_policy_decision_context(part_selections)
+        else:
+            policy_block = format_policy_decision_context(policy_selection)
+        formatted_context = f"{policy_block}\n\n{formatted_context}"
         ctx.stage_timings[f"context_expansion{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
         # Evidence Verification Stage
