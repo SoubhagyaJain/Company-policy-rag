@@ -305,6 +305,10 @@ class Settings(BaseSettings):
     conditional_reranker_threshold: float = Field(default=0.85, alias="CONDITIONAL_RERANKER_THRESHOLD")
     retrieval_cache_enabled: bool = Field(default=True, alias="RETRIEVAL_CACHE_ENABLED")
     retrieval_cache_ttl_seconds: int = Field(default=3600, alias="RETRIEVAL_CACHE_TTL_SECONDS")
+    # Max concurrent sub-query retrievals. Sub-queries are independent, so they
+    # run in a thread pool; each also fans dense/BM25 out concurrently. Keep this
+    # modest to avoid oversubscribing CPU cores during embedding.
+    retrieval_max_workers: int = Field(default=4, alias="RETRIEVAL_MAX_WORKERS")
 
     # ── Query rewrite (pre-retrieval) ──────────────────────────────────────
     # Disabled by default for fast single-turn; conditional for multi-turn follow-ups
