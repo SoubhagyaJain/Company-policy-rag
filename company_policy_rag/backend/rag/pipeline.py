@@ -1438,6 +1438,221 @@ class RAGPipeline:
             stream_callback=stream_callback,
         )
 
+    def _stage_scope_and_rewrite(self, ctx: QueryContext) -> None:
+        """Resolve document scope, rewrite the query, and infer metadata filters onto ctx."""
+        # 1. Scope Resolution
+        known_docs: dict[str, str] = {}
+        if self.docstore:
+            for c in self.docstore.values():
+                if c.metadata and c.metadata.document_id and c.metadata.source_file:
+                    known_docs[c.metadata.document_id] = c.metadata.source_file
+        ctx.known_docs = known_docs
+
+        if ctx.filters:
+            if "document_id" in ctx.filters and not ctx.active_document_id:
+                if isinstance(ctx.filters["document_id"], list):
+                    ctx.selected_document_ids = ctx.filters["document_id"]
+                else:
+                    ctx.active_document_id = str(ctx.filters["document_id"])
+            if "source_file" in ctx.filters and not ctx.active_document_name:
+                ctx.active_document_name = str(ctx.filters["source_file"])
+
+        scope_decision = self.scope_resolver.resolve_scope(
+            query=ctx.user_query,
+            active_document_id=ctx.active_document_id,
+            active_document_name=ctx.active_document_name,
+            selected_document_ids=ctx.selected_document_ids,
+            explicit_scope=ctx.document_scope,
+            known_documents=known_docs,
+        )
+        ctx.scope_decision = scope_decision
+
+        # 1a. Query Rewrite
+        t0 = time.perf_counter()
+        ctx.thinking_sm.start_stage(ThinkingStage.QUERY_REWRITE)
+        rewrite_res = self.query_rewriter.rewrite(
+            ctx.effective_search_query,
+            # ConversationResolver has already produced a standalone query.
+            # Passing history here would invoke a second LLM rewrite for the
+            # same turn. Retain the fallback path for callers without state.
+            history=ctx.history if (ctx.is_history_followup and ctx.conv_res is None) else None,
+            llm=ctx.req_llm,
+        )
+        ctx.rewrite_res = rewrite_res
+        ctx.stage_timings["query_rewrite"] = round((time.perf_counter() - t0) * 1000, 2)
+        ctx.thinking_sm.complete_stage(
+            ThinkingStage.QUERY_REWRITE,
+            details={"sub_queries": len(rewrite_res.sub_queries) if hasattr(rewrite_res, "sub_queries") else 1},
+        )
+
+        # 1b. Query-Time Metadata Filter Inference
+        inferred_filters: dict[str, Any] = {}
+        applied_filters: dict[str, Any] = {}
+        ctx.filter_relaxed = False
+        enable_filtering = getattr(settings, "enable_query_metadata_filtering", True)
+        if enable_filtering and self.filter_inferer is not None:
+            t0 = time.perf_counter()
+            inferred_filters = self.filter_inferer.infer_filters(
+                query=ctx.user_query,
+                # Metadata inferred from old turns can silently hide the right
+                # facts after a topic change. Inherit it only for true follow-ups.
+                history=ctx.history if ctx.is_history_followup else None,
+                explicit_filters=ctx.filters,
+            )
+            ctx.stage_timings["filter_inference"] = round((time.perf_counter() - t0) * 1000, 2)
+            if inferred_filters:
+                applied_filters = {**inferred_filters}
+        elif ctx.filters:
+            applied_filters = {**ctx.filters}
+
+        if scope_decision.scope == DocumentRetrievalScope.CURRENT_DOCUMENT:
+            if scope_decision.active_document_id:
+                applied_filters["document_id"] = scope_decision.active_document_id
+            elif scope_decision.active_document_name:
+                applied_filters["source_file"] = scope_decision.active_document_name
+            if scope_decision.page_number is not None:
+                resolved_page_filter = self._resolve_page_number_filter(
+                    scope_decision.page_number,
+                    active_document_id=scope_decision.active_document_id,
+                    active_document_name=scope_decision.active_document_name,
+                    allowed_document_ids=scope_decision.allowed_document_ids,
+                )
+                # User references are printed/display pages. Resolve them to the
+                # physical sheet stored in Chroma/BM25; an unresolved page stays
+                # impossible rather than relaxing to unrelated document pages.
+                applied_filters["page_number"] = (
+                    resolved_page_filter
+                    if resolved_page_filter is not None
+                    else 0
+                )
+            if scope_decision.section_number is not None:
+                applied_filters["section_number"] = scope_decision.section_number
+        elif scope_decision.scope == DocumentRetrievalScope.SELECTED_DOCUMENTS:
+            if scope_decision.allowed_document_ids:
+                if len(scope_decision.allowed_document_ids) == 1:
+                    applied_filters["document_id"] = scope_decision.allowed_document_ids[0]
+                else:
+                    applied_filters["document_id"] = scope_decision.allowed_document_ids
+
+        ctx.inferred_filters = inferred_filters
+        ctx.applied_filters = applied_filters
+
+    def _stage_plan(self, ctx: QueryContext) -> None:
+        """Decompose multi-part questions; decide fast-path, retry budget, and strategy."""
+        # A message that asks several things needs one retrieval per part, so it
+        # can never take the single-shot fast path.
+        ctx.question_parts = decompose_multi_part(ctx.user_query)
+
+        # Fast path check for high-confidence factual questions
+        ctx.is_fast_path = (
+            ctx.response_mode != "detailed"
+            and ctx.classification.category == QueryCategory.FACTUAL
+            and ctx.classification.confidence >= 0.85
+            and not (ctx.history and len(ctx.history) > 0 and self.query_rewriter._is_followup_query(ctx.user_query))
+            and not ctx.scope_decision.is_structural_query
+            and not ctx.question_parts
+        )
+
+        ctx.enable_verification = getattr(settings, "enable_answer_verification", True)
+        # A streamed attempt is already visible to the client and cannot be
+        # replaced safely by a later retry. Verify it, but never stream multiple
+        # competing answers for one request.
+        ctx.max_retries = 0 if (ctx.is_fast_path or ctx.stream_callback is not None) else (self.retry_engine.max_retries if self.retry_engine else 2)
+
+        ctx.current_strategy = ctx.response_mode_config.apply_to(ctx.strategy)
+        if ctx.is_fast_path:
+            ctx.current_strategy.enable_multi_query = False
+
+    def _stage_classify_and_resolve(self, ctx: QueryContext) -> None:
+        """Classify the query, resolve conversational context, set follow-up flags on ctx."""
+        # 0a. Query Classification & Intent Selection
+        t0 = time.perf_counter()
+        ctx.thinking_sm.start_stage(ThinkingStage.QUERY_ANALYSIS)
+        classification = self.query_router.classify(ctx.user_query, history=ctx.history)
+        ctx.classification = classification
+        ctx.strategy = classification.strategy
+        ctx.fidelity_mode = _detect_fidelity_mode(ctx.user_query)
+        ctx.stage_timings["query_routing"] = round((time.perf_counter() - t0) * 1000, 2)
+        ctx.thinking_sm.complete_stage(
+            ThinkingStage.QUERY_ANALYSIS,
+            details={"intent": classification.category.value, "confidence": classification.confidence},
+        )
+
+        # 0a-2. Dynamic Conversational Query Resolution & Observability
+        conv_res: ConversationResolutionResult | None = None
+        if ctx.conversation_state is not None and ctx.chat_mode != "general":
+            ctx.thinking_sm.start_stage(ThinkingStage.CONVERSATION_CONTEXT)
+            conv_res = self.conversation_resolver.resolve(
+                query=ctx.user_query,
+                state=ctx.conversation_state,
+                intent=classification.category,
+            )
+            logger.info(
+                "[CONVERSATION] session_id=%s turn_count=%d is_followup=%s topic_shift=%s topic='%s' entities=%s",
+                ctx.conversation_state.conversation_id,
+                len(ctx.conversation_state.turns) + 1,
+                conv_res.is_followup,
+                conv_res.topic_shift,
+                conv_res.active_topic or "",
+                conv_res.active_entities or [],
+            )
+            logger.info(
+                "[QUERY_RESOLUTION] query='%s' resolved='%s' confidence=%.2f cues='%s'",
+                ctx.user_query,
+                conv_res.resolved_query,
+                conv_res.confidence,
+                conv_res.reason,
+            )
+            logger.info(
+                "[ANSWER_MODE] mode=%s directives='%s'",
+                conv_res.answer_mode.value,
+                conv_res.mode_directives.replace("\n", " "),
+            )
+            ctx.thinking_sm.complete_stage(
+                ThinkingStage.CONVERSATION_CONTEXT,
+                details={
+                    "is_follow_up": conv_res.is_followup,
+                    "active_topic": conv_res.active_topic,
+                    "active_entities": conv_res.active_entities,
+                    "topic_shift": conv_res.topic_shift,
+                },
+            )
+            if conv_res.is_followup:
+                ctx.thinking_sm.start_stage(ThinkingStage.FOLLOW_UP_RESOLUTION)
+                if conv_res.resolution and conv_res.resolution.ambiguity_detected:
+                    ctx.thinking_sm.warn_stage(
+                        ThinkingStage.FOLLOW_UP_RESOLUTION,
+                        reason="Follow-up query contains broad phrasing; maintaining conversation continuity with prior topic.",
+                        details={"is_follow_up": True, "answer_mode": conv_res.answer_mode.value},
+                    )
+                ctx.thinking_sm.complete_stage(
+                    ThinkingStage.FOLLOW_UP_RESOLUTION,
+                    details={
+                        "is_follow_up": True,
+                        "answer_mode": conv_res.answer_mode.value,
+                        "active_topic": conv_res.active_topic,
+                    },
+                )
+        else:
+            ctx.thinking_sm.start_stage(ThinkingStage.CONVERSATION_CONTEXT)
+            ctx.thinking_sm.complete_stage(
+                ThinkingStage.CONVERSATION_CONTEXT,
+                details={"is_follow_up": False},
+            )
+        ctx.conv_res = conv_res
+
+        ctx.is_history_followup = bool(
+            (conv_res and conv_res.is_followup)
+            or (
+                conv_res is None
+                and ctx.history
+                and self.query_rewriter._is_followup_query(ctx.user_query)
+            )
+        )
+        ctx.effective_search_query = (
+            conv_res.resolved_query if (conv_res and conv_res.is_followup) else ctx.user_query
+        )
+
     def _try_general_chat(self, ctx: QueryContext) -> RAGResponse | None:
         """Retrieval-free General chat bypass. Returns a response, or None to continue."""
         if ctx.chat_mode != "general":
@@ -1726,96 +1941,8 @@ class RAGPipeline:
         thinking_sm.start_stage(ThinkingStage.RECEIVED)
         thinking_sm.complete_stage(ThinkingStage.RECEIVED)
 
-        # 0a. Query Classification & Intent Selection
-        t0 = time.perf_counter()
-        thinking_sm.start_stage(ThinkingStage.QUERY_ANALYSIS)
-        classification = self.query_router.classify(user_query, history=history)
-        strategy = classification.strategy
-        fidelity_mode = _detect_fidelity_mode(user_query)
-        stage_timings["query_routing"] = round((time.perf_counter() - t0) * 1000, 2)
-        thinking_sm.complete_stage(
-            ThinkingStage.QUERY_ANALYSIS,
-            details={"intent": classification.category.value, "confidence": classification.confidence},
-        )
-
-        # 0a-2. Dynamic Conversational Query Resolution & Observability
-        conv_res: ConversationResolutionResult | None = None
-        if conversation_state is not None and chat_mode != "general":
-            thinking_sm.start_stage(ThinkingStage.CONVERSATION_CONTEXT)
-            conv_res = self.conversation_resolver.resolve(
-                query=user_query,
-                state=conversation_state,
-                intent=classification.category,
-            )
-            logger.info(
-                "[CONVERSATION] session_id=%s turn_count=%d is_followup=%s topic_shift=%s topic='%s' entities=%s",
-                conversation_state.conversation_id,
-                len(conversation_state.turns) + 1,
-                conv_res.is_followup,
-                conv_res.topic_shift,
-                conv_res.active_topic or "",
-                conv_res.active_entities or [],
-            )
-            logger.info(
-                "[QUERY_RESOLUTION] query='%s' resolved='%s' confidence=%.2f cues='%s'",
-                user_query,
-                conv_res.resolved_query,
-                conv_res.confidence,
-                conv_res.reason,
-            )
-            logger.info(
-                "[ANSWER_MODE] mode=%s directives='%s'",
-                conv_res.answer_mode.value,
-                conv_res.mode_directives.replace("\n", " "),
-            )
-            thinking_sm.complete_stage(
-                ThinkingStage.CONVERSATION_CONTEXT,
-                details={
-                    "is_follow_up": conv_res.is_followup,
-                    "active_topic": conv_res.active_topic,
-                    "active_entities": conv_res.active_entities,
-                    "topic_shift": conv_res.topic_shift,
-                },
-            )
-            if conv_res.is_followup:
-                thinking_sm.start_stage(ThinkingStage.FOLLOW_UP_RESOLUTION)
-                if conv_res.resolution and conv_res.resolution.ambiguity_detected:
-                    thinking_sm.warn_stage(
-                        ThinkingStage.FOLLOW_UP_RESOLUTION,
-                        reason="Follow-up query contains broad phrasing; maintaining conversation continuity with prior topic.",
-                        details={"is_follow_up": True, "answer_mode": conv_res.answer_mode.value},
-                    )
-                thinking_sm.complete_stage(
-                    ThinkingStage.FOLLOW_UP_RESOLUTION,
-                    details={
-                        "is_follow_up": True,
-                        "answer_mode": conv_res.answer_mode.value,
-                        "active_topic": conv_res.active_topic,
-                    },
-                )
-        else:
-            thinking_sm.start_stage(ThinkingStage.CONVERSATION_CONTEXT)
-            thinking_sm.complete_stage(
-                ThinkingStage.CONVERSATION_CONTEXT,
-                details={"is_follow_up": False},
-            )
-
-        is_history_followup = bool(
-            (conv_res and conv_res.is_followup)
-            or (
-                conv_res is None
-                and history
-                and self.query_rewriter._is_followup_query(user_query)
-            )
-        )
-        effective_search_query = (
-            conv_res.resolved_query if (conv_res and conv_res.is_followup) else user_query
-        )
-
-        req_llm, selected_model = self._get_effective_llm(model)
-
         # State shared across the extracted pipeline stages. Built once here from
-        # the locals resolved above; stages read and extend it in place.
+        # the request inputs; each stage reads and extends it in place.
         ctx = QueryContext(
             user_query=user_query,
             filters=filters,
@@ -1834,15 +1961,23 @@ class RAGPipeline:
             total_start=total_start,
             stage_timings=stage_timings,
             response_mode_config=response_mode_config,
-            req_llm=req_llm,
-            selected_model=selected_model,
-            classification=classification,
-            strategy=strategy,
-            fidelity_mode=fidelity_mode,
-            conv_res=conv_res,
-            is_history_followup=is_history_followup,
-            effective_search_query=effective_search_query,
         )
+
+        # Query classification, conversational resolution, and follow-up flags.
+        self._stage_classify_and_resolve(ctx)
+
+        ctx.req_llm, ctx.selected_model = self._get_effective_llm(model)
+
+        # Bridge: the not-yet-extracted remainder of this method still uses these
+        # as locals. Each binding is removed as the stage that reads it is extracted.
+        classification = ctx.classification
+        strategy = ctx.strategy
+        fidelity_mode = ctx.fidelity_mode
+        conv_res = ctx.conv_res
+        is_history_followup = ctx.is_history_followup
+        effective_search_query = ctx.effective_search_query
+        req_llm = ctx.req_llm
+        selected_model = ctx.selected_model
 
         # Explicit General chat mode is a true retrieval bypass, not a document
         # category filter. It uses only same-mode history supplied by ChatService.
@@ -1903,121 +2038,24 @@ class RAGPipeline:
         if cache_hit_response is not None:
             return cache_hit_response
 
-        # 1. Scope Resolution
-        known_docs: dict[str, str] = {}
-        if self.docstore:
-            for c in self.docstore.values():
-                if c.metadata and c.metadata.document_id and c.metadata.source_file:
-                    known_docs[c.metadata.document_id] = c.metadata.source_file
+        # Document-scope resolution, query rewrite, and metadata-filter inference.
+        self._stage_scope_and_rewrite(ctx)
+        scope_decision = ctx.scope_decision
+        rewrite_res = ctx.rewrite_res
+        inferred_filters = ctx.inferred_filters
+        applied_filters = ctx.applied_filters
+        filter_relaxed = ctx.filter_relaxed
+        active_document_id = ctx.active_document_id
+        active_document_name = ctx.active_document_name
+        selected_document_ids = ctx.selected_document_ids
 
-        if filters:
-            if "document_id" in filters and not active_document_id:
-                if isinstance(filters["document_id"], list):
-                    selected_document_ids = filters["document_id"]
-                else:
-                    active_document_id = str(filters["document_id"])
-            if "source_file" in filters and not active_document_name:
-                active_document_name = str(filters["source_file"])
-
-        scope_decision = self.scope_resolver.resolve_scope(
-            query=user_query,
-            active_document_id=active_document_id,
-            active_document_name=active_document_name,
-            selected_document_ids=selected_document_ids,
-            explicit_scope=document_scope,
-            known_documents=known_docs,
-        )
-
-        # 1a. Query Rewrite
-        t0 = time.perf_counter()
-        thinking_sm.start_stage(ThinkingStage.QUERY_REWRITE)
-        rewrite_res = self.query_rewriter.rewrite(
-            effective_search_query,
-            # ConversationResolver has already produced a standalone query.
-            # Passing history here would invoke a second LLM rewrite for the
-            # same turn. Retain the fallback path for callers without state.
-            history=history if (is_history_followup and conv_res is None) else None,
-            llm=req_llm
-        )
-        stage_timings["query_rewrite"] = round((time.perf_counter() - t0) * 1000, 2)
-        thinking_sm.complete_stage(
-            ThinkingStage.QUERY_REWRITE,
-            details={"sub_queries": len(rewrite_res.sub_queries) if hasattr(rewrite_res, "sub_queries") else 1},
-        )
-
-        # 1b. Query-Time Metadata Filter Inference
-        inferred_filters: dict[str, Any] = {}
-        applied_filters: dict[str, Any] = {}
-        filter_relaxed = False
-        enable_filtering = getattr(settings, "enable_query_metadata_filtering", True)
-        if enable_filtering and self.filter_inferer is not None:
-            t0 = time.perf_counter()
-            inferred_filters = self.filter_inferer.infer_filters(
-                query=user_query,
-                # Metadata inferred from old turns can silently hide the right
-                # facts after a topic change. Inherit it only for true follow-ups.
-                history=history if is_history_followup else None,
-                explicit_filters=filters,
-            )
-            stage_timings["filter_inference"] = round((time.perf_counter() - t0) * 1000, 2)
-            if inferred_filters:
-                applied_filters = {**inferred_filters}
-        elif filters:
-            applied_filters = {**filters}
-
-        if scope_decision.scope == DocumentRetrievalScope.CURRENT_DOCUMENT:
-            if scope_decision.active_document_id:
-                applied_filters["document_id"] = scope_decision.active_document_id
-            elif scope_decision.active_document_name:
-                applied_filters["source_file"] = scope_decision.active_document_name
-            if scope_decision.page_number is not None:
-                resolved_page_filter = self._resolve_page_number_filter(
-                    scope_decision.page_number,
-                    active_document_id=scope_decision.active_document_id,
-                    active_document_name=scope_decision.active_document_name,
-                    allowed_document_ids=scope_decision.allowed_document_ids,
-                )
-                # User references are printed/display pages. Resolve them to the
-                # physical sheet stored in Chroma/BM25; an unresolved page stays
-                # impossible rather than relaxing to unrelated document pages.
-                applied_filters["page_number"] = (
-                    resolved_page_filter
-                    if resolved_page_filter is not None
-                    else 0
-                )
-            if scope_decision.section_number is not None:
-                applied_filters["section_number"] = scope_decision.section_number
-        elif scope_decision.scope == DocumentRetrievalScope.SELECTED_DOCUMENTS:
-            if scope_decision.allowed_document_ids:
-                if len(scope_decision.allowed_document_ids) == 1:
-                    applied_filters["document_id"] = scope_decision.allowed_document_ids[0]
-                else:
-                    applied_filters["document_id"] = scope_decision.allowed_document_ids
-
-        # A message that asks several things needs one retrieval per part, so it
-        # can never take the single-shot fast path.
-        question_parts = decompose_multi_part(user_query)
-
-        # Fast path check for high-confidence factual questions
-        is_fast_path = (
-            response_mode != "detailed"
-            and
-            classification.category == QueryCategory.FACTUAL
-            and classification.confidence >= 0.85
-            and not (history and len(history) > 0 and self.query_rewriter._is_followup_query(user_query))
-            and not scope_decision.is_structural_query
-            and not question_parts
-        )
-
-        enable_verification = getattr(settings, "enable_answer_verification", True)
-        # A streamed attempt is already visible to the client and cannot be
-        # replaced safely by a later retry. Verify it, but never stream multiple
-        # competing answers for one request.
-        max_retries = 0 if (is_fast_path or stream_callback is not None) else (self.retry_engine.max_retries if self.retry_engine else 2)
-
-        current_strategy = response_mode_config.apply_to(strategy)
-        if is_fast_path:
-            current_strategy.enable_multi_query = False
+        # Multi-part decomposition, fast-path decision, retry budget, and strategy.
+        self._stage_plan(ctx)
+        question_parts = ctx.question_parts
+        is_fast_path = ctx.is_fast_path
+        enable_verification = ctx.enable_verification
+        max_retries = ctx.max_retries
+        current_strategy = ctx.current_strategy
 
         attempt = 0
         best_answer = ""
