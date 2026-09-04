@@ -40,6 +40,7 @@ from backend.rag.context_compression import ContextCompressor
 from backend.rag.evidence_gate import EvidenceSufficiencyGate
 from backend.rag.filter_extractor import QueryMetadataInferer
 from backend.rag.multi_query import MultiQueryGenerator, decompose_multi_part
+from backend.rag.query_context import QueryContext
 from backend.rag.policy_reliability import (
     ClauseSelection,
     GoverningClauseSelector,
@@ -1437,6 +1438,263 @@ class RAGPipeline:
             stream_callback=stream_callback,
         )
 
+    def _try_general_chat(self, ctx: QueryContext) -> RAGResponse | None:
+        """Retrieval-free General chat bypass. Returns a response, or None to continue."""
+        if ctx.chat_mode != "general":
+            return None
+
+        t0 = time.perf_counter()
+        history_text = _format_history_for_prompt(
+            ctx.history,
+            max_turns=max(1, int(getattr(settings, "memory_window_size", 5))),
+        )
+        prompt = GENERAL_CHAT_PROMPT.format(
+            response_mode_instructions=ctx.response_mode_config.prompt_instructions,
+            history_text=history_text,
+            query=ctx.user_query,
+        )
+        ctx.thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
+        ctx.thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
+        if ctx.req_llm is not None:
+            try:
+                try:
+                    answer_text = str(
+                        ctx.req_llm.complete(
+                            prompt,
+                            temperature=0.6,
+                            max_new_tokens=ctx.response_mode_config.max_output_tokens,
+                        )
+                    ).strip()
+                except TypeError:
+                    answer_text = str(ctx.req_llm.complete(prompt)).strip()
+            except Exception as exc:
+                logger.warning("General chat generation failed: %s", exc)
+                answer_text = "General chat is selected, but the language model is currently unavailable. Please try again shortly."
+        else:
+            answer_text = "General chat is selected, but the language model is currently unavailable. Please try again shortly."
+        ctx.thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
+        ctx.thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
+        ctx.stage_timings["general_chat_generation"] = round((time.perf_counter() - t0) * 1000, 2)
+        total_elapsed = round((time.perf_counter() - ctx.total_start) * 1000, 2)
+        reasoning_sum = ctx.thinking_sm.get_reasoning_summary(
+            intent="conversational",
+            answer_mode="DIRECT",
+            is_follow_up=bool(ctx.history),
+            used_conversation_context=bool(ctx.history),
+            reused_previous_evidence=False,
+            retrieved_new_evidence=False,
+            used_visual_evidence=False,
+            evidence_status="DIRECT",
+        )
+        trace = RAGTrace(
+            query=ctx.user_query,
+            rewritten_query=None,
+            sub_queries=[],
+            query_type=QueryCategory.CONVERSATIONAL.value,
+            routing_confidence=1.0,
+            retrieval_strategy="general_chat_bypass",
+            query_scope="general",
+            retrieved_candidate_count=0,
+            post_rerank_count=0,
+            final_context_count=0,
+            response_mode=ctx.response_mode,
+            retrieval_top_k=0,
+            rerank_top_k=0,
+            context_tokens=0,
+            generation_max_tokens=ctx.response_mode_config.max_output_tokens,
+            execution_time_ms=total_elapsed,
+            stage_timings_ms=ctx.stage_timings,
+            fallback_reason="general_chat_mode",
+            faithfulness_checked=False,
+            faithfulness_passed=True,
+            verification_report=None,
+            verification_score=None,
+            retry_count=0,
+            retry_reasons=[],
+            cache_hit=False,
+            cache_similarity=None,
+            evidence_sufficiency_passed=True,
+            generation_model=ctx.selected_model,
+            grounding_validation_passed=True,
+            reasoning_summary=reasoning_sum,
+            thinking_events=[e.model_dump() for e in ctx.thinking_sm.get_all_events()],
+        )
+        _log_rag_trace(trace)
+        return RAGResponse(
+            id=f"resp_{uuid.uuid4().hex[:12]}",
+            query=ctx.user_query,
+            answer=answer_text,
+            citations=[],
+            context_chunks=[],
+            trace=trace,
+            model=ctx.selected_model,
+            token_usage={"prompt_tokens": len(prompt.split()), "completion_tokens": len(answer_text.split())},
+        )
+
+    def _try_conversational_greeting(self, ctx: QueryContext) -> RAGResponse | None:
+        """Greeting/conversational bypass. Returns a response, or None to continue."""
+        if not (
+            ctx.classification.category == QueryCategory.CONVERSATIONAL
+            or self.query_rewriter.is_conversational(ctx.user_query)
+        ):
+            return None
+
+        greeting_answer = (
+            "Hello! How can I assist you today? Feel free to ask any questions regarding company policies, "
+            "AI agent architectures, code implementations, or any uploaded documentation."
+        )
+        total_elapsed = round((time.perf_counter() - ctx.total_start) * 1000, 2)
+        ctx.thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
+        ctx.thinking_sm.record_stage(ThinkingStage.ANSWER_GENERATION, ThinkingStatus.COMPLETED)
+        ctx.thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
+        reasoning_sum = ctx.thinking_sm.get_reasoning_summary(
+            intent="conversational",
+            answer_mode="DIRECT",
+            is_follow_up=False,
+            used_conversation_context=False,
+            reused_previous_evidence=False,
+            retrieved_new_evidence=False,
+            used_visual_evidence=False,
+            evidence_status="DIRECT",
+        )
+        trace = RAGTrace(
+            query=ctx.user_query,
+            rewritten_query=None,
+            sub_queries=[],
+            query_type=ctx.classification.category.value,
+            routing_confidence=ctx.classification.confidence,
+            retrieval_strategy="conversational_bypass",
+            query_scope="global",
+            retrieved_candidate_count=0,
+            post_rerank_count=0,
+            final_context_count=0,
+            response_mode=ctx.response_mode,
+            retrieval_top_k=0,
+            rerank_top_k=0,
+            context_tokens=0,
+            generation_max_tokens=0,
+            execution_time_ms=total_elapsed,
+            stage_timings_ms={"conversational_bypass": total_elapsed},
+            fallback_reason="conversational_greeting",
+            faithfulness_checked=False,
+            faithfulness_passed=True,
+            verification_report=None,
+            verification_score=None,
+            retry_count=0,
+            retry_reasons=[],
+            cache_hit=False,
+            cache_similarity=None,
+            anchor_section="Conversational Bypass",
+            evidence_sufficiency_passed=True,
+            generation_model=ctx.selected_model,
+            grounding_validation_passed=True,
+            reasoning_summary=reasoning_sum,
+            thinking_events=[e.model_dump() for e in ctx.thinking_sm.get_all_events()],
+        )
+        _log_rag_trace(trace)
+        return RAGResponse(
+            id=f"resp_{uuid.uuid4().hex[:12]}",
+            query=ctx.user_query,
+            answer=greeting_answer,
+            citations=[],
+            context_chunks=[],
+            trace=trace,
+            model=ctx.selected_model,
+            token_usage={"prompt_tokens": 0, "completion_tokens": len(greeting_answer.split())},
+        )
+
+    def _try_semantic_cache_hit(
+        self,
+        ctx: QueryContext,
+        *,
+        cache_enabled: bool,
+        cache_read_eligible: bool,
+    ) -> RAGResponse | None:
+        """Pre-rewrite semantic-cache lookup. Returns a cached response, or None to continue."""
+        if not (cache_enabled and self.semantic_cache is not None and cache_read_eligible):
+            return None
+
+        t0 = time.perf_counter()
+        cached_res = self.semantic_cache.get(
+            ctx.user_query,
+            model_name=ctx.selected_model,
+            cache_context=ctx.cache_context,
+        )
+        ctx.stage_timings["cache_lookup"] = round((time.perf_counter() - t0) * 1000, 2)
+        if cached_res is not None and (
+            _is_degraded_or_abstention_answer(cached_res.answer)
+            or not _answer_matches_requested_enumeration(ctx.user_query, cached_res.answer)
+        ):
+            logger.info("Ignoring incomplete semantic-cache answer and continuing with fresh retrieval.")
+            cached_res = None
+        if cached_res is None:
+            return None
+
+        total_elapsed = round((time.perf_counter() - ctx.total_start) * 1000, 2)
+        ctx.thinking_sm.record_stage(
+            ThinkingStage.RETRIEVAL,
+            ThinkingStatus.COMPLETED,
+            summary="Retrieved verified answer from semantic cache.",
+            details={"cache_hit": True},
+        )
+        ctx.thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
+        ctx.thinking_sm.record_stage(ThinkingStage.ANSWER_GENERATION, ThinkingStatus.COMPLETED)
+        ctx.thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
+        reasoning_sum = ctx.thinking_sm.get_reasoning_summary(
+            intent=ctx.classification.category.value,
+            answer_mode="DIRECT",
+            is_follow_up=False,
+            used_conversation_context=False,
+            reused_previous_evidence=False,
+            retrieved_new_evidence=False,
+            used_visual_evidence=False,
+            evidence_status="DIRECT",
+        )
+        trace = RAGTrace(
+            query=ctx.user_query,
+            rewritten_query=None,
+            sub_queries=[],
+            query_type=ctx.classification.category.value,
+            routing_confidence=ctx.classification.confidence,
+            retrieval_strategy=ctx.strategy.name,
+            query_scope="global",
+            retrieved_candidate_count=0,
+            post_rerank_count=0,
+            final_context_count=0,
+            response_mode=ctx.response_mode,
+            retrieval_top_k=ctx.response_mode_config.retrieval_top_k,
+            rerank_top_k=ctx.response_mode_config.rerank_top_k,
+            context_tokens=0,
+            generation_max_tokens=ctx.response_mode_config.max_output_tokens,
+            execution_time_ms=total_elapsed,
+            stage_timings_ms=ctx.stage_timings,
+            fallback_reason="none",
+            faithfulness_checked=True,
+            faithfulness_passed=True,
+            verification_report=None,
+            verification_score=1.0,
+            retry_count=0,
+            retry_reasons=[],
+            cache_hit=True,
+            cache_similarity=cached_res.similarity_score,
+            generation_model=ctx.selected_model,
+            evidence_sufficiency_passed=True,
+            grounding_validation_passed=True,
+            reasoning_summary=reasoning_sum,
+            thinking_events=[e.model_dump() for e in ctx.thinking_sm.get_all_events()],
+        )
+        _log_rag_trace(trace)
+        return RAGResponse(
+            id=f"resp_{uuid.uuid4().hex[:12]}",
+            query=ctx.user_query,
+            answer=cached_res.answer,
+            citations=cached_res.citations,
+            context_chunks=[],
+            trace=trace,
+            model=ctx.model or "semantic_cache",
+            token_usage={"prompt_tokens": 0, "completion_tokens": len(cached_res.answer.split())},
+        )
+
     def _query_internal(
         self,
         user_query: str,
@@ -1556,164 +1814,46 @@ class RAGPipeline:
 
         req_llm, selected_model = self._get_effective_llm(model)
 
+        # State shared across the extracted pipeline stages. Built once here from
+        # the locals resolved above; stages read and extend it in place.
+        ctx = QueryContext(
+            user_query=user_query,
+            filters=filters,
+            chat_mode=chat_mode,
+            history=history,
+            model=model,
+            active_document_id=active_document_id,
+            active_document_name=active_document_name,
+            selected_document_ids=selected_document_ids,
+            document_scope=document_scope,
+            conversation_state=conversation_state,
+            response_mode=response_mode,
+            thinking_detail_level=thinking_detail_level,
+            thinking_sm=thinking_sm,
+            stream_callback=stream_callback,
+            total_start=total_start,
+            stage_timings=stage_timings,
+            response_mode_config=response_mode_config,
+            req_llm=req_llm,
+            selected_model=selected_model,
+            classification=classification,
+            strategy=strategy,
+            fidelity_mode=fidelity_mode,
+            conv_res=conv_res,
+            is_history_followup=is_history_followup,
+            effective_search_query=effective_search_query,
+        )
+
         # Explicit General chat mode is a true retrieval bypass, not a document
         # category filter. It uses only same-mode history supplied by ChatService.
-        if chat_mode == "general":
-            t0 = time.perf_counter()
-            history_text = _format_history_for_prompt(
-                history,
-                max_turns=max(1, int(getattr(settings, "memory_window_size", 5))),
-            )
-            prompt = GENERAL_CHAT_PROMPT.format(
-                response_mode_instructions=response_mode_config.prompt_instructions,
-                history_text=history_text,
-                query=user_query,
-            )
-            thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
-            thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
-            if req_llm is not None:
-                try:
-                    try:
-                        answer_text = str(
-                            req_llm.complete(
-                                prompt,
-                                temperature=0.6,
-                                max_new_tokens=response_mode_config.max_output_tokens,
-                            )
-                        ).strip()
-                    except TypeError:
-                        answer_text = str(req_llm.complete(prompt)).strip()
-                except Exception as exc:
-                    logger.warning("General chat generation failed: %s", exc)
-                    answer_text = "General chat is selected, but the language model is currently unavailable. Please try again shortly."
-            else:
-                answer_text = "General chat is selected, but the language model is currently unavailable. Please try again shortly."
-            thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
-            thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
-            stage_timings["general_chat_generation"] = round((time.perf_counter() - t0) * 1000, 2)
-            total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
-            reasoning_sum = thinking_sm.get_reasoning_summary(
-                intent="conversational",
-                answer_mode="DIRECT",
-                is_follow_up=bool(history),
-                used_conversation_context=bool(history),
-                reused_previous_evidence=False,
-                retrieved_new_evidence=False,
-                used_visual_evidence=False,
-                evidence_status="DIRECT",
-            )
-            trace = RAGTrace(
-                query=user_query,
-                rewritten_query=None,
-                sub_queries=[],
-                query_type=QueryCategory.CONVERSATIONAL.value,
-                routing_confidence=1.0,
-                retrieval_strategy="general_chat_bypass",
-                query_scope="general",
-                retrieved_candidate_count=0,
-                post_rerank_count=0,
-                final_context_count=0,
-                response_mode=response_mode,
-                retrieval_top_k=0,
-                rerank_top_k=0,
-                context_tokens=0,
-                generation_max_tokens=response_mode_config.max_output_tokens,
-                execution_time_ms=total_elapsed,
-                stage_timings_ms=stage_timings,
-                fallback_reason="general_chat_mode",
-                faithfulness_checked=False,
-                faithfulness_passed=True,
-                verification_report=None,
-                verification_score=None,
-                retry_count=0,
-                retry_reasons=[],
-                cache_hit=False,
-                cache_similarity=None,
-                evidence_sufficiency_passed=True,
-                generation_model=selected_model,
-                grounding_validation_passed=True,
-                reasoning_summary=reasoning_sum,
-                thinking_events=[e.model_dump() for e in thinking_sm.get_all_events()],
-            )
-            _log_rag_trace(trace)
-            return RAGResponse(
-                id=f"resp_{uuid.uuid4().hex[:12]}",
-                query=user_query,
-                answer=answer_text,
-                citations=[],
-                context_chunks=[],
-                trace=trace,
-                model=selected_model,
-                token_usage={"prompt_tokens": len(prompt.split()), "completion_tokens": len(answer_text.split())},
-            )
+        general_chat_response = self._try_general_chat(ctx)
+        if general_chat_response is not None:
+            return general_chat_response
 
         # Conversational / Greeting intent check
-        if classification.category == QueryCategory.CONVERSATIONAL or self.query_rewriter.is_conversational(
-            user_query
-        ):
-            greeting_answer = (
-                "Hello! How can I assist you today? Feel free to ask any questions regarding company policies, "
-                "AI agent architectures, code implementations, or any uploaded documentation."
-            )
-            total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
-            thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
-            thinking_sm.record_stage(ThinkingStage.ANSWER_GENERATION, ThinkingStatus.COMPLETED)
-            thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
-            reasoning_sum = thinking_sm.get_reasoning_summary(
-                intent="conversational",
-                answer_mode="DIRECT",
-                is_follow_up=False,
-                used_conversation_context=False,
-                reused_previous_evidence=False,
-                retrieved_new_evidence=False,
-                used_visual_evidence=False,
-                evidence_status="DIRECT",
-            )
-            trace = RAGTrace(
-                query=user_query,
-                rewritten_query=None,
-                sub_queries=[],
-                query_type=classification.category.value,
-                routing_confidence=classification.confidence,
-                retrieval_strategy="conversational_bypass",
-                query_scope="global",
-                retrieved_candidate_count=0,
-                post_rerank_count=0,
-                final_context_count=0,
-                response_mode=response_mode,
-                retrieval_top_k=0,
-                rerank_top_k=0,
-                context_tokens=0,
-                generation_max_tokens=0,
-                execution_time_ms=total_elapsed,
-                stage_timings_ms={"conversational_bypass": total_elapsed},
-                fallback_reason="conversational_greeting",
-                faithfulness_checked=False,
-                faithfulness_passed=True,
-                verification_report=None,
-                verification_score=None,
-                retry_count=0,
-                retry_reasons=[],
-                cache_hit=False,
-                cache_similarity=None,
-                anchor_section="Conversational Bypass",
-                evidence_sufficiency_passed=True,
-                generation_model=selected_model,
-                grounding_validation_passed=True,
-                reasoning_summary=reasoning_sum,
-                thinking_events=[e.model_dump() for e in thinking_sm.get_all_events()],
-            )
-            _log_rag_trace(trace)
-            return RAGResponse(
-                id=f"resp_{uuid.uuid4().hex[:12]}",
-                query=user_query,
-                answer=greeting_answer,
-                citations=[],
-                context_chunks=[],
-                trace=trace,
-                model=selected_model,
-                token_usage={"prompt_tokens": 0, "completion_tokens": len(greeting_answer.split())},
-            )
+        greeting_response = self._try_conversational_greeting(ctx)
+        if greeting_response is not None:
+            return greeting_response
 
         # 0b. Pre-rewrite Cache Lookup
         cache_enabled = (
@@ -1754,85 +1894,14 @@ class RAGPipeline:
             or normalized_scope not in {"", "all", "global"}
         )
         cache_read_eligible = cache_eligible and not is_exact_repeat
-        if cache_enabled and self.semantic_cache is not None and cache_read_eligible:
-            t0 = time.perf_counter()
-            cached_res = self.semantic_cache.get(
-                user_query,
-                model_name=selected_model,
-                cache_context=cache_context,
-            )
-            stage_timings["cache_lookup"] = round((time.perf_counter() - t0) * 1000, 2)
-            if cached_res is not None and (
-                _is_degraded_or_abstention_answer(cached_res.answer)
-                or not _answer_matches_requested_enumeration(user_query, cached_res.answer)
-            ):
-                logger.info("Ignoring incomplete semantic-cache answer and continuing with fresh retrieval.")
-                cached_res = None
-            if cached_res is not None:
-                total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
-                thinking_sm.record_stage(
-                    ThinkingStage.RETRIEVAL,
-                    ThinkingStatus.COMPLETED,
-                    summary="Retrieved verified answer from semantic cache.",
-                    details={"cache_hit": True},
-                )
-                thinking_sm.record_stage(ThinkingStage.ANSWER_PLANNING, ThinkingStatus.COMPLETED)
-                thinking_sm.record_stage(ThinkingStage.ANSWER_GENERATION, ThinkingStatus.COMPLETED)
-                thinking_sm.record_stage(ThinkingStage.COMPLETED, ThinkingStatus.COMPLETED)
-                reasoning_sum = thinking_sm.get_reasoning_summary(
-                    intent=classification.category.value,
-                    answer_mode="DIRECT",
-                    is_follow_up=False,
-                    used_conversation_context=False,
-                    reused_previous_evidence=False,
-                    retrieved_new_evidence=False,
-                    used_visual_evidence=False,
-                    evidence_status="DIRECT",
-                )
-                trace = RAGTrace(
-                    query=user_query,
-                    rewritten_query=None,
-                    sub_queries=[],
-                    query_type=classification.category.value,
-                    routing_confidence=classification.confidence,
-                    retrieval_strategy=strategy.name,
-                    query_scope="global",
-                    retrieved_candidate_count=0,
-                    post_rerank_count=0,
-                    final_context_count=0,
-                    response_mode=response_mode,
-                    retrieval_top_k=response_mode_config.retrieval_top_k,
-                    rerank_top_k=response_mode_config.rerank_top_k,
-                    context_tokens=0,
-                    generation_max_tokens=response_mode_config.max_output_tokens,
-                    execution_time_ms=total_elapsed,
-                    stage_timings_ms=stage_timings,
-                    fallback_reason="none",
-                    faithfulness_checked=True,
-                    faithfulness_passed=True,
-                    verification_report=None,
-                    verification_score=1.0,
-                    retry_count=0,
-                    retry_reasons=[],
-                    cache_hit=True,
-                    cache_similarity=cached_res.similarity_score,
-                    generation_model=selected_model,
-                    evidence_sufficiency_passed=True,
-                    grounding_validation_passed=True,
-                    reasoning_summary=reasoning_sum,
-                    thinking_events=[e.model_dump() for e in thinking_sm.get_all_events()],
-                )
-                _log_rag_trace(trace)
-                return RAGResponse(
-                    id=f"resp_{uuid.uuid4().hex[:12]}",
-                    query=user_query,
-                    answer=cached_res.answer,
-                    citations=cached_res.citations,
-                    context_chunks=[],
-                    trace=trace,
-                    model=model or "semantic_cache",
-                    token_usage={"prompt_tokens": 0, "completion_tokens": len(cached_res.answer.split())},
-                )
+        # Mirror eligibility onto ctx so the later cache-write path can reuse it.
+        ctx.cache_context = cache_context
+        ctx.cache_eligible = cache_eligible
+        cache_hit_response = self._try_semantic_cache_hit(
+            ctx, cache_enabled=cache_enabled, cache_read_eligible=cache_read_eligible
+        )
+        if cache_hit_response is not None:
+            return cache_hit_response
 
         # 1. Scope Resolution
         known_docs: dict[str, str] = {}
