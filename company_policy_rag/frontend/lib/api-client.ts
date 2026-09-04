@@ -18,9 +18,10 @@ import {
   ResponseMode,
 } from './types';
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== 'undefined' ? 'http://localhost:8000' : 'http://127.0.0.1:8000');
+// Prefer the same-origin /api proxy configured in next.config.mjs. This keeps
+// browser requests working when the frontend is opened from another device on
+// the LAN, where "localhost" would otherwise refer to that device.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 export interface DonePayload {
   id?: string;
@@ -865,12 +866,22 @@ export class ApiClient {
    * Delete Document: DELETE /api/documents/{doc_id}
    */
   async deleteDocument(docId: string): Promise<{ status: string; document_id: string }> {
-    const res = await fetch(`${this.baseUrl}/api/documents/${docId}`, {
+    const res = await fetch(`${this.baseUrl}/api/documents/${encodeURIComponent(docId)}`, {
       method: 'DELETE',
     });
 
     if (!res.ok) {
-      throw new Error(`Failed to delete document (${res.status})`);
+      let message = `Failed to delete document (${res.status})`;
+      try {
+        const payload = await res.json();
+        const detail = payload?.detail?.message || payload?.detail;
+        if (typeof detail === 'string' && detail.trim()) {
+          message = `${message}: ${detail}`;
+        }
+      } catch {
+        // Keep the concise status fallback for non-JSON responses.
+      }
+      throw new Error(message);
     }
 
     return res.json();

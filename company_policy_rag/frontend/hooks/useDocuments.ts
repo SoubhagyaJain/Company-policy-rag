@@ -41,6 +41,13 @@ export function useDocuments() {
     };
   }, [fetchDocuments]);
 
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
   const pollDocumentStatus = useCallback(async (docId: string) => {
     try {
       const statusRes = await apiClient.getDocumentStatus(docId);
@@ -53,10 +60,7 @@ export function useDocuments() {
       );
 
       if (statusRes.status === 'READY' || statusRes.status === 'READY_WITH_VISION' || statusRes.status === 'indexed') {
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
+        stopPolling();
         setUploadProgress(100);
         setCurrentStage('READY');
         setStageMessage('Document indexed and ready for RAG.');
@@ -68,10 +72,7 @@ export function useDocuments() {
           fetchDocuments();
         }, 600);
       } else if (statusRes.status === 'FAILED') {
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
+        stopPolling();
         setUploading(false);
         setError(statusRes.error || `Ingestion failed at stage: ${statusRes.failed_stage || statusRes.current_stage}`);
         fetchDocuments();
@@ -79,7 +80,27 @@ export function useDocuments() {
     } catch (err) {
       console.warn('Status poll warning:', err);
     }
-  }, [fetchDocuments]);
+  }, [fetchDocuments, stopPolling]);
+
+  // Poll the backend for live ingestion progress until READY/FAILED. Large
+  // files ingest asynchronously on the server, so this is how the UI tracks
+  // real per-stage progress (parse → chunk → embed → index) rather than guessing.
+  const startPolling = useCallback((docId: string) => {
+    stopPolling();
+    let ticks = 0;
+    const MAX_TICKS = 1200; // ~20 min ceiling at 1s cadence
+    pollDocumentStatus(docId);
+    pollingRef.current = setInterval(() => {
+      ticks += 1;
+      if (ticks > MAX_TICKS) {
+        stopPolling();
+        setUploading(false);
+        setError('Ingestion is taking unusually long. It may still finish — refresh to check.');
+        return;
+      }
+      pollDocumentStatus(docId);
+    }, 1000);
+  }, [pollDocumentStatus, stopPolling]);
 
   const uploadDocument = useCallback(
     async (file: File, category = 'General'): Promise<DocumentItem | null> => {
@@ -91,51 +112,46 @@ export function useDocuments() {
       }
 
       setUploading(true);
-      setUploadProgress(10);
+      setUploadProgress(5);
       setCurrentStage('UPLOAD');
       setStageMessage(`Uploading ${file.name}...`);
       setError(null);
 
-      // Progressive stage estimator while awaiting network response
-      const stages = [
-        { progress: 25, stage: 'TEXT_EXTRACTION', message: 'Extracting pages & raw text...' },
-        { progress: 40, stage: 'SECTION_DETECTION', message: 'Detecting logical sections & metadata...' },
-        { progress: 55, stage: 'CHUNKING', message: 'Applying adaptive document chunking...' },
-        { progress: 75, stage: 'EMBEDDINGS', message: 'Generating dense vector embeddings...' },
-        { progress: 90, stage: 'VECTOR_INDEX', message: 'Indexing in ChromaDB & BM25...' },
-      ];
-
-      let stageIdx = 0;
-      const stageInterval = setInterval(() => {
-        if (stageIdx < stages.length) {
-          const s = stages[stageIdx];
-          setUploadProgress(s.progress);
-          setCurrentStage(s.stage);
-          setStageMessage(s.message);
-          stageIdx++;
-        }
-      }, 500);
-
       try {
+        // Server stores the file and returns immediately; heavy ingestion runs
+        // asynchronously. We then poll for real per-stage progress.
         const uploadedDoc = await apiClient.uploadDocument(file, category);
-        clearInterval(stageInterval);
 
-        setUploadProgress(100);
-        setCurrentStage('READY');
-        setStageMessage('Knowledge base updated & READY.');
-
+        // Surface the document right away (as processing) so it appears in the list.
         setDocuments((prev) => [uploadedDoc, ...prev.filter((d) => d.id !== uploadedDoc.id)]);
 
-        setTimeout(() => {
-          setUploading(false);
-          setUploadProgress(0);
-          setCurrentStage('IDLE');
-          setStageMessage('');
-        }, 500);
+        const terminal = ['READY', 'READY_WITH_VISION', 'indexed', 'FAILED'];
+        if (terminal.includes(uploadedDoc.status)) {
+          // Fast path (tiny files that finished before the response, or errors).
+          if (uploadedDoc.status === 'FAILED') {
+            setUploading(false);
+            setCurrentStage('FAILED');
+            setError(uploadedDoc.error || 'Ingestion failed.');
+          } else {
+            setUploadProgress(100);
+            setCurrentStage('READY');
+            setStageMessage('Knowledge base updated & READY.');
+            setTimeout(() => {
+              setUploading(false);
+              setUploadProgress(0);
+              setCurrentStage('IDLE');
+              setStageMessage('');
+              fetchDocuments();
+            }, 500);
+          }
+          return uploadedDoc;
+        }
 
+        setCurrentStage(uploadedDoc.current_stage || 'QUEUED');
+        setStageMessage('Queued for indexing…');
+        startPolling(uploadedDoc.id);
         return uploadedDoc;
       } catch (err) {
-        clearInterval(stageInterval);
         setUploading(false);
         setUploadProgress(0);
         setCurrentStage('FAILED');
@@ -144,7 +160,7 @@ export function useDocuments() {
         return null;
       }
     },
-    []
+    [fetchDocuments, startPolling]
   );
 
   const retryDocument = useCallback(
@@ -158,16 +174,29 @@ export function useDocuments() {
       try {
         const statusRes = await apiClient.retryDocument(docId);
         setActiveJob(statusRes);
-        setUploadProgress(100);
-        setCurrentStage('READY');
-        setStageMessage('Document successfully re-indexed and READY.');
 
-        await fetchDocuments();
-        setTimeout(() => {
-          setUploading(false);
-          setUploadProgress(0);
-          setCurrentStage('IDLE');
-        }, 500);
+        const terminal = ['READY', 'READY_WITH_VISION', 'indexed', 'FAILED'];
+        if (terminal.includes(statusRes.status)) {
+          if (statusRes.status === 'FAILED') {
+            setUploading(false);
+            setError(statusRes.error || 'Retry indexing failed');
+            return false;
+          }
+          setUploadProgress(100);
+          setCurrentStage('READY');
+          setStageMessage('Document successfully re-indexed and READY.');
+          await fetchDocuments();
+          setTimeout(() => {
+            setUploading(false);
+            setUploadProgress(0);
+            setCurrentStage('IDLE');
+          }, 500);
+          return true;
+        }
+
+        // Re-indexing runs asynchronously; track live progress.
+        setCurrentStage(statusRes.current_stage || 'QUEUED');
+        startPolling(docId);
         return true;
       } catch (err) {
         setUploading(false);
@@ -177,7 +206,7 @@ export function useDocuments() {
         return false;
       }
     },
-    [fetchDocuments]
+    [fetchDocuments, startPolling]
   );
 
   const deleteDocument = useCallback(

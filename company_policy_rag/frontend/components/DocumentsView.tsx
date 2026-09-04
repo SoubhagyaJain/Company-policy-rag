@@ -25,6 +25,7 @@ import {
 
 import { LiquidGlassCard } from '@/components/LiquidGlassCard';
 import { useDocuments } from '@/hooks/useDocuments';
+import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 import { formatBytes, formatDate } from '@/lib/utils';
 import type { DocumentItem } from '@/lib/types';
 
@@ -128,6 +129,10 @@ export function DocumentsView() {
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Buttery inertia scrolling over the live WebGL background.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useSmoothScroll(scrollRef);
+
   const CATEGORIES = ['General', 'HR & Benefits', 'Operations', 'IT & Security', 'Finance', 'Compliance'];
   const visibleDocuments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -180,15 +185,15 @@ export function DocumentsView() {
   };
 
   return (
-    <div className="flex-1 h-[calc(100vh-57px)] overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-[#FAF9F5] dark:bg-[#141413]">
+    <div ref={scrollRef} className="flex-1 h-full overflow-y-auto p-4 sm:p-6 lg:p-8 sp-scroll">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* ── Page heading ────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="font-serif font-bold text-2xl text-charcoal dark:text-cream-100">
+            <h1 className="sp-heading text-2xl font-semibold tracking-tight">
               Document Manager
             </h1>
-            <p className="text-sm text-charcoal-muted dark:text-cream-400 mt-0.5">
+            <p className="sp-muted text-sm mt-0.5">
               Upload, index, and manage your corporate policy knowledge base.
             </p>
           </div>
@@ -212,7 +217,7 @@ export function DocumentsView() {
             <button
               onClick={refreshDocuments}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-xs font-medium text-charcoal dark:text-cream-200 hover:bg-cream-200 dark:hover:bg-[#2A2925] transition-colors disabled:opacity-50"
+              className="sp-chip flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -235,7 +240,7 @@ export function DocumentsView() {
         )}
 
         {/* ── Upload dropzone ─────────────────────── */}
-        <LiquidGlassCard className="p-0 overflow-hidden">
+        <LiquidGlassCard variant="space" className="p-0 overflow-hidden">
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -345,7 +350,7 @@ export function DocumentsView() {
               icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
             },
           ].map((stat) => (
-            <LiquidGlassCard key={stat.label} className="p-3">
+            <LiquidGlassCard key={stat.label} variant="space" className="p-3">
               <div className="flex items-center gap-2 mb-1">
                 {stat.icon}
                 <span className="text-[11px] text-charcoal-muted dark:text-cream-400 font-medium">
@@ -359,12 +364,12 @@ export function DocumentsView() {
 
         {/* ── Document list ────────────────────────── */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-charcoal-muted dark:text-cream-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--sp-text-faint)' }} />
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search by filename, category, type, or content hash…"
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-cream-100 dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder text-sm text-charcoal dark:text-cream-100 outline-none focus:border-terracotta-500"
+            className="sp-field-inner w-full pl-10 pr-4 py-2.5 rounded-xl text-sm outline-none backdrop-blur-md"
           />
         </div>
         {loading ? (
@@ -388,7 +393,7 @@ export function DocumentsView() {
                   exit="exit"
                   layout
                 >
-                  <LiquidGlassCard className="p-4 flex items-center gap-4" hoverEffect>
+                  <LiquidGlassCard variant="space" className="p-4 flex items-center gap-4" hoverEffect>
                     {/* File icon */}
                     <div className="w-10 h-10 rounded-xl bg-cream-100 dark:bg-sand-dark flex items-center justify-center shrink-0">
                       {getFileIcon(doc.file_type)}

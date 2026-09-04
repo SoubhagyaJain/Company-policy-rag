@@ -183,9 +183,9 @@ Open **two terminals**:
 
 **Terminal 1 — Backend:**
 ```bash
-cd company_policy_rag
-.venv\Scripts\Activate.ps1
-uvicorn backend.api.main:app --host 127.0.0.1 --port 8000 --reload
+
+
+
 ```
 
 **Terminal 2 — Frontend:**

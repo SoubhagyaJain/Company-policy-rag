@@ -52,6 +52,81 @@ _CHECK_THIS_OUT_SUBQUERIES: tuple[str, ...] = (
 )
 
 
+# Cues that mark the start of a genuinely separate question. Used to decide
+# whether an "and" joins two questions ("what is X and how do I claim Y") or
+# merely two nouns inside one ("terms and conditions", "health and safety").
+_QUESTION_START_CUES = (
+    "what", "how", "when", "where", "why", "who", "which", "whose",
+    "can", "could", "do", "does", "did", "is", "are", "was", "were",
+    "should", "would", "will", "may", "must", "am",
+    "tell me", "explain", "list", "describe", "summarize", "compare",
+    "give me", "show me", "walk me",
+)
+
+# Numbered or bulleted parts: "1) ...", "2. ...", "- ...", "(a) ...".
+# Users write these inline as often as on their own lines, so a marker is
+# accepted mid-sentence too; fragments that do not read as questions are
+# discarded afterwards, which keeps prose like "Section 3." from splitting.
+_ENUMERATED_PART_PATTERN = re.compile(r"(?:^|\n|\s)\s*(?:\(?[0-9a-d]\)|[1-9][.)]|[-*•])\s+")
+
+_CLAUSE_SPLIT_PATTERN = re.compile(
+    r"\s+(?:and\s+also|and\s+then|as\s+well\s+as|and|also|plus)\s+(?=(?:%s)\b)"
+    % "|".join(re.escape(cue) for cue in _QUESTION_START_CUES),
+    re.IGNORECASE,
+)
+
+
+def _looks_like_question_part(fragment: str) -> bool:
+    """A usable standalone part: long enough and headed by an interrogative cue."""
+    cleaned = fragment.strip().strip("?.,;: ")
+    if len(cleaned.split()) < 3:
+        return False
+    lowered = cleaned.lower()
+    return lowered.startswith(_QUESTION_START_CUES)
+
+
+def decompose_multi_part(query: str, max_parts: int = 4) -> list[str]:
+    """
+    Split a message that asks several things into independent sub-questions.
+
+    Returns an empty list for a single question so callers can tell a genuine
+    multi-part message ("What is the leave policy and how do I expense travel?")
+    from an ordinary one. Splitting is deliberately conservative: a conjunction
+    only separates parts when the text after it actually starts a new question.
+    """
+    text = " ".join((query or "").strip().split())
+    if not text:
+        return []
+
+    # 1. Enumerated parts win outright when the user numbered them.
+    if _ENUMERATED_PART_PATTERN.search(query or ""):
+        raw_parts = [p for p in _ENUMERATED_PART_PATTERN.split(query or "") if p and p.strip()]
+    else:
+        # 2. Otherwise split on hard sentence boundaries, keeping the "?".
+        raw_parts = [p for p in re.split(r"(?<=[?;])\s+|\n+", text) if p and p.strip()]
+
+    # 3. Within each sentence, split conjunctions that join two questions.
+    parts: list[str] = []
+    for raw in raw_parts:
+        parts.extend(p for p in _CLAUSE_SPLIT_PATTERN.split(raw) if p and p.strip())
+
+    # 4. Keep only fragments that stand on their own as questions.
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        candidate = part.strip().strip(",;: ").rstrip(".")
+        if not _looks_like_question_part(candidate):
+            continue
+        key = candidate.lower().rstrip("?")
+        if key not in seen:
+            seen.add(key)
+            cleaned.append(candidate)
+
+    if len(cleaned) < 2:
+        return []
+    return cleaned[:max_parts]
+
+
 def _split_topic_clause(clause: str) -> list[str]:
     parts = re.split(r",(?![^()]*\))", clause)
     topics: list[str] = []
@@ -85,6 +160,11 @@ class MultiQueryGenerator:
 
         add_q(core)
         q_lower = core.lower()
+
+        # A message asking several things must retrieve for each part; otherwise
+        # the parts after the first are never represented in the candidate pool.
+        for part in decompose_multi_part(core):
+            add_q(part)
 
         if re.search(r"guardrails?", q_lower):
             add_q("Guardrails building block AI agents safety constraints")

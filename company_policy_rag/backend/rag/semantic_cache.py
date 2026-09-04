@@ -22,6 +22,16 @@ _AUDIENCE_TERMS = {
     "exempt", "non-exempt", "temporary", "vendor", "vendors",
 }
 
+_RELATIONSHIP_TERMS = {
+    "sister", "brother", "spouse", "partner", "mother", "father", "parent",
+    "child", "daughter", "son", "relative", "family", "coworker", "friend",
+}
+
+_AUTHORIZATION_TERMS = {
+    "allow", "allowed", "authorize", "authorized", "permit", "permitted",
+    "prohibit", "prohibited", "forbid", "forbidden", "require", "required",
+}
+
 
 def _normalized_query(query: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+(?:[-.][a-z0-9]+)*", query.casefold()))
@@ -33,13 +43,20 @@ def _critical_query_facts(query: str) -> tuple[frozenset[str], ...]:
     tokens = set(re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", lowered))
     numbers = frozenset(re.findall(r"\b\d+(?:[.-]\d+)*\b", lowered))
     audiences = frozenset(tokens.intersection(_AUDIENCE_TERMS))
+    relationships = frozenset(tokens.intersection(_RELATIONSHIP_TERMS))
+    authorization = frozenset(tokens.intersection(_AUTHORIZATION_TERMS))
+    times = frozenset(
+        re.sub(r"\s+", "", match.casefold())
+        for match in re.findall(r"\b(?:[01]?\d|2[0-3])(?::[0-5]\d)?\s*(?:a\.?m\.?|p\.?m\.?)?\b", query, re.IGNORECASE)
+        if ":" in match or re.search(r"[ap]", match, re.IGNORECASE)
+    )
     quoted = frozenset(
         value.strip().casefold()
         for value in re.findall(r"['\"]([^'\"]{1,80})['\"]", query)
         if value.strip()
     )
     negation = frozenset({"negated"}) if tokens.intersection({"not", "never", "without", "exclude", "excluding"}) else frozenset()
-    return numbers, audiences, quoted, negation
+    return numbers, audiences, relationships, authorization, times, quoted, negation
 
 
 def _queries_are_interchangeable(cached_query: str, incoming_query: str) -> bool:

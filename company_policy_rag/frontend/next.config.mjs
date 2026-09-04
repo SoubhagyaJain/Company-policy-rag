@@ -1,8 +1,14 @@
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
-  allowedDevOrigins: ['127.0.0.1'],
+  allowedDevOrigins: ['192.168.1.3'],
   async rewrites() {
     return [
       {
@@ -17,7 +23,9 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '100mb',
     },
-    proxyClientMaxBodySize: '100mb',
+  },
+  turbopack: {
+    root: path.join(__dirname, '../../'),
   },
 };
 

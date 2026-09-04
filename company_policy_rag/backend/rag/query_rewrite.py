@@ -8,6 +8,26 @@ from backend.utils.logging import logger
 
 _POLICY_TOPIC_EXPANSIONS: list[tuple[tuple[str, ...], str]] = [
     (
+        ("prescription", "medication", "drowsiness", "drowsy", "prescribed drug"),
+        "prescribed drugs medication advise supervisor job performance occupational health",
+    ),
+    (
+        ("private work", "private job", "electrical work", "sister", "brother", "own account"),
+        "working on own account immediate family commercial value authorization private electrical work",
+    ),
+    (
+        ("callout", "call out", "after-hours", "after hours", "emergency call"),
+        "after hours calls eight hour break midnight 6am 7:30 overtime travelling time on job",
+    ),
+    (
+        ("company vehicle", "smoking", "smoke in"),
+        "smoke free smoking prohibited company vehicles",
+    ),
+    (
+        ("unattended", "customer property", "customer's property", "company key"),
+        "unattended premises express owner permission customer entry",
+    ),
+    (
         ("health benefit", "health insurance", "benefits", "eligible for health", "enrollment"),
         "health insurance medical dental vision eligibility enrollment waiting period 30 days",
     ),
@@ -121,6 +141,19 @@ _REFERENTIAL_PHRASES_PATTERN: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
+_SELF_CONTAINED_SUBJECT_PATTERN: re.Pattern[str] = re.compile(
+    r"^(?:suppose\s+|consider\s+|if\s+)?"
+    r"(?:a|an|the|each|every|one|my|our|someone|somebody)\s+"
+    r"[a-z0-9][a-z0-9_-]*\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_self_contained(query: str) -> bool:
+    """Return True when a query supplies its own subject before using pronouns."""
+    cleaned = " ".join(query.strip().split())
+    return len(cleaned.split()) >= 8 and bool(_SELF_CONTAINED_SUBJECT_PATTERN.match(cleaned))
+
 
 def _format_history_for_rewrite(history: list[Dict[str, Any]], max_turns: int = 4) -> str:
     recent = history[-(max_turns * 2):]
@@ -159,6 +192,14 @@ class QueryRewriter:
         """
         q_lower = query.strip().lower()
         if not q_lower:
+            return False
+
+        # Pronouns such as ``their`` and ``they`` frequently refer to a subject
+        # introduced earlier in the same question (for example, "An employee
+        # ... are they required ..."). Sending those standalone questions to a
+        # history-aware LLM both corrupts retrieval and adds a full generation
+        # call to the request path.
+        if _looks_self_contained(q_lower):
             return False
 
         if _REFERENTIAL_PRONOUNS_PATTERN.search(q_lower):
@@ -216,8 +257,12 @@ class QueryRewriter:
     ) -> str:
         """
         Robust non-LLM query rewrite fallback for multi-turn dialogues.
-        Extracts the root topic (first user query) and recent user queries from history
-        ONLY when original query is identified as a follow-up.
+
+        Only the immediately preceding user turn is used to bind a referential
+        follow-up. The first question of the session is deliberately NOT mixed
+        in: appending it to every later turn pins retrieval to turn 1's topic
+        forever, which is the main reason answer quality decays over a long
+        conversation.
         """
         if not history or not self._is_followup_query(original):
             return augmented
@@ -230,15 +275,7 @@ class QueryRewriter:
         if not user_queries:
             return augmented
 
-        root_query = user_queries[0]
-        last_query = user_queries[-1]
-
-        if len(user_queries) == 1 or root_query == last_query:
-            context_str = root_query
-        else:
-            context_str = f"{root_query} {last_query}"
-
-        return f"{augmented} {context_str}"
+        return f"{augmented} {user_queries[-1]}"
 
     def rewrite(
         self,
@@ -255,7 +292,13 @@ class QueryRewriter:
         rewritten = augmented
         effective_llm = llm or self.llm
 
-        if self.enable_llm_rewrite and effective_llm is not None and history and len(history) > 0:
+        if (
+            self.enable_llm_rewrite
+            and effective_llm is not None
+            and history
+            and len(history) > 0
+            and self._is_followup_query(original)
+        ):
             try:
                 history_str = _format_history_for_rewrite(history)
                 prompt = (

@@ -72,6 +72,7 @@ class SelfReflectionVerifier:
         answer: str,
         context_chunks: list[ScoredChunk],
         has_citations: bool,
+        allowed_derived_facts: list[str] | None = None,
     ) -> tuple[float, list[str]]:
         """Evaluate factual groundedness of answer against retrieved context chunks."""
         if not context_chunks:
@@ -111,6 +112,7 @@ class SelfReflectionVerifier:
                         if isinstance(v, (str, int, float)):
                             context_parts.append(str(v))
 
+        context_parts.extend(allowed_derived_facts or [])
         context_text = " ".join(context_parts).lower()
         context_compact = context_text.replace(" ", "")
         answer_lower = answer.lower()
@@ -124,6 +126,23 @@ class SelfReflectionVerifier:
         elif "furniture" in answer_lower and "furniture" not in context_text:
             unsupported.append("Unsupported equipment category: 'furniture'.")
             return 0.35, unsupported
+
+        # Named software/products are especially easy for a generator to add
+        # from model memory. Treat capitalized product-like tokens that are not
+        # in the evidence as unsupported (excluding sentence starts and tags).
+        product_candidates = re.findall(
+            r"(?<![.!?]\s)\b(?:Slack|Jira(?:\s+Service\s+Desk)?|Salesforce|Docker|Kubernetes|"
+            r"Workday|ServiceNow|Teams|Zoom)\b",
+            answer,
+            re.IGNORECASE,
+        )
+        missing_products = sorted(
+            {product for product in product_candidates if product.casefold() not in context_text}
+        )
+        if missing_products:
+            unsupported.append(
+                "Unsupported software or workflow: " + ", ".join(missing_products) + "."
+            )
 
         # Code claim precision check: detect fabricated code or placeholder pass
         if "```" in answer or "def " in answer or "class " in answer or "Agent(" in answer:
@@ -184,7 +203,10 @@ class SelfReflectionVerifier:
             faith_score = 0.90
 
         if unsupported:
-            faith_score = max(0.50, round(faith_score - 0.10 * len(unsupported), 3))
+            # A policy answer with even one unsupported concrete claim must not
+            # clear the faithfulness gate merely because the surrounding prose
+            # overlaps the retrieved text.
+            faith_score = min(0.35, round(faith_score - 0.10 * len(unsupported), 3))
 
         return round(faith_score, 3), unsupported
 
@@ -194,7 +216,7 @@ class SelfReflectionVerifier:
         answer: str,
     ) -> tuple[float, list[str]]:
         """Evaluate coverage of query entities and constraints in answer."""
-        if "unable to answer" in answer.lower():
+        if "unable to answer" in answer.lower() or "could not find this information" in answer.lower():
             return 1.0, []
 
         query_lower = query.lower()
@@ -211,13 +233,48 @@ class SelfReflectionVerifier:
                 if any(stem in aw for aw in answer_words) or qw in answer_lower:
                     matched_count += 1
             comp_score = min(1.0, matched_count / max(1, len(query_words)))
-            if matched_count >= 1:
+            if matched_count >= 1 and comp_score >= 0.60:
                 comp_score = max(comp_score, 0.80)
         else:
             comp_score = 0.90
 
+        # Multi-part policy questions must cover each explicitly requested
+        # aspect; a fluent answer to only the first half is incomplete.
+        aspect_source = re.sub(r"^.*?\b(?:what|which|compare|explain)\b", "", query_lower)
+        raw_aspects = [
+            part.strip(" ?.,")
+            for part in re.split(r",|\band\b|\bversus\b|\bvs\.?\b", aspect_source)
+            if part.strip(" ?.,")
+        ]
+        meaningful_aspects: list[str] = []
+        for aspect in raw_aspects:
+            tokens = [
+                token for token in re.findall(r"[a-z0-9-]+", aspect)
+                if len(token) >= 4 and token not in _STOP_WORDS
+            ]
+            if tokens:
+                meaningful_aspects.append(" ".join(tokens))
+        for aspect in meaningful_aspects:
+            tokens = aspect.split()
+            if not any(token[:4] in answer_lower for token in tokens):
+                missing.append(aspect)
+
+        if "compare" in query_lower:
+            comparison_entities = [
+                term
+                for term in ("full-time", "part-time", "employee", "contractor", "manager")
+                if term in query_lower
+            ]
+            comparison_missing = False
+            for entity in comparison_entities:
+                if entity not in answer_lower:
+                    missing.append(entity)
+                    comparison_missing = True
+            if comparison_missing:
+                missing.append("Comparative distinction between requested groups")
+
         if missing:
-            comp_score = max(0.50, round(comp_score - 0.15 * len(missing), 3))
+            comp_score = min(0.45, round(comp_score - 0.15 * len(missing), 3))
 
         return round(comp_score, 3), missing
 
@@ -228,7 +285,7 @@ class SelfReflectionVerifier:
         citations: list[Citation],
     ) -> float:
         """Evaluate presence and validity of bracketed citations."""
-        if "unable to answer" in answer.lower():
+        if "unable to answer" in answer.lower() or "could not find this information" in answer.lower():
             return 1.0
 
         cited_tags = re.findall(r"\[(?:VISUAL\s+)?SOURCE\s*(\d+)\]", answer, re.IGNORECASE)
@@ -237,14 +294,14 @@ class SelfReflectionVerifier:
         has_citations = len(citations) > 0 or len(all_tags) > 0
 
         if not has_citations:
-            return 0.50
+            return 0.20
 
         # Validate citation indices against context pool
         total_chunks = len(context_chunks)
         if total_chunks > 0 and all_tags:
-            valid_count = sum(1 for tag in all_tags if 1 <= int(tag) <= max(total_chunks, 10))
+            valid_count = sum(1 for tag in all_tags if 1 <= int(tag) <= total_chunks)
             if valid_count == 0:
-                return 0.70
+                return 0.15
             return min(1.0, 0.85 + 0.15 * (valid_count / len(all_tags)))
 
         return 0.95 if has_citations else 0.50
@@ -262,7 +319,7 @@ class SelfReflectionVerifier:
         # Punctuation / structural ending check
         if clean.endswith(".") or clean.endswith("]") or clean.endswith("!") or clean.endswith("?"):
             return 0.95
-        return 0.80
+        return 0.70
 
     def verify(
         self,
@@ -271,6 +328,7 @@ class SelfReflectionVerifier:
         context_chunks: list[ScoredChunk],
         citations: list[Citation],
         llm: Any | None = None,
+        allowed_derived_facts: list[str] | None = None,
         custom_validator: (
             Callable[[str, str, list[ScoredChunk]], tuple[float, float, float, float, list[str]]]
             | None
@@ -302,13 +360,17 @@ class SelfReflectionVerifier:
             except Exception as exc:
                 logger.warning("Custom validator error: %s. Falling back to heuristic verification.", exc)
                 has_citations = len(citations) > 0 or bool(re.search(r"\[(?:VISUAL\s+)?Source\s*\d+\]", answer, re.IGNORECASE))
-                faith, unsupported = self._evaluate_faithfulness(answer, context_chunks, has_citations)
+                faith, unsupported = self._evaluate_faithfulness(
+                    answer, context_chunks, has_citations, allowed_derived_facts
+                )
                 comp, missing = self._evaluate_completeness(query, answer)
                 cit = self._evaluate_citation_coverage(answer, context_chunks, citations)
                 coh = self._evaluate_coherence(answer)
         else:
             has_citations = len(citations) > 0 or bool(re.search(r"\[(?:VISUAL\s+)?Source\s*\d+\]", answer, re.IGNORECASE))
-            faith, unsupported = self._evaluate_faithfulness(answer, context_chunks, has_citations)
+            faith, unsupported = self._evaluate_faithfulness(
+                answer, context_chunks, has_citations, allowed_derived_facts
+            )
             comp, missing = self._evaluate_completeness(query, answer)
             cit = self._evaluate_citation_coverage(answer, context_chunks, citations)
             coh = self._evaluate_coherence(answer)
@@ -322,9 +384,11 @@ class SelfReflectionVerifier:
         # Bounded pass gates
         passed = (
             composite >= self.threshold
-            and faith >= 0.50
-            and comp >= 0.35
-            and cit >= 0.35
+            and faith >= getattr(settings, "verification_faithfulness_threshold", 0.75)
+            and comp >= getattr(settings, "verification_completeness_threshold", 0.70)
+            and cit >= getattr(settings, "verification_citation_threshold", 0.60)
+            and not unsupported
+            and not missing
         )
 
         # Special case: unanswerable notice is considered passed
@@ -354,4 +418,5 @@ class SelfReflectionVerifier:
             critique=critique,
             missing_aspects=missing,
             unsupported_claims=unsupported,
+            overall_grounded=passed,
         )

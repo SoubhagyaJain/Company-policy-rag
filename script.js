@@ -1493,3 +1493,120 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 });
+// --- Injected Earth Component ---
+document.addEventListener('DOMContentLoaded', () => {
+  const simOutputBody = document.getElementById('simOutputBody');
+  if (!simOutputBody) return;
+  
+  // Add a button to trigger the Earth injection
+  const triggerBtn = document.createElement('button');
+  triggerBtn.className = 'sim-run-btn';
+  triggerBtn.style.marginTop = '1rem';
+  triggerBtn.textContent = 'Render Earth Component';
+  simOutputBody.parentElement.insertBefore(triggerBtn, simOutputBody);
+
+  triggerBtn.addEventListener('click', () => {
+    // Clear output body
+    simOutputBody.innerHTML = '';
+    
+    // Create container for Earth component
+    const container = document.createElement('div');
+    container.style.position = 'relative';
+    container.style.width = '100%';
+    container.style.height = '400px';
+    container.style.backgroundColor = 'black';
+    container.style.overflow = 'hidden';
+    container.style.borderRadius = '8px';
+    
+    // Create text overlay
+    const overlay = document.createElement('div');
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.display = 'flex';
+    overlay.style.flexDirection = 'column';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.color = 'white';
+    overlay.style.padding = '20px';
+    overlay.style.zIndex = '10';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.textAlign = 'center';
+    overlay.style.background = 'rgba(0,0,0,0.5)';
+    
+    const title = document.createElement('h3');
+    title.innerText = 'You are given a task to integrate an existing React component in the codebase';
+    title.style.fontWeight = 'bold';
+    title.style.fontSize = '1.2rem';
+    title.style.marginBottom = '10px';
+    
+    const subtitle = document.createElement('p');
+    subtitle.innerText = 'The codebase should support:\\n- shadcn project structure\\n- Tailwind CSS\\n- Typescript';
+    subtitle.style.fontSize = '0.9rem';
+    subtitle.style.whiteSpace = 'pre-wrap';
+    
+    overlay.appendChild(title);
+    overlay.appendChild(subtitle);
+    container.appendChild(overlay);
+    
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    canvas.style.display = 'block';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.touchAction = 'none';
+    container.appendChild(canvas);
+    
+    simOutputBody.appendChild(container);
+    
+    // Three.js Logic
+    if (typeof THREE === 'undefined') {
+        console.error('THREE is not defined. Ensure three.js is loaded.');
+        return;
+    }
+    
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.z = 3;
+    
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    
+    const geometry = new THREE.SphereGeometry(1, 64, 64);
+    const material = new THREE.MeshPhongMaterial({
+      color: 0x2233ff,
+      emissive: 0x112244,
+      specular: 0x444444,
+      shininess: 10,
+      wireframe: true
+    });
+    
+    const earthMesh = new THREE.Mesh(geometry, material);
+    scene.add(earthMesh);
+    
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const light = new THREE.DirectionalLight(0xffffff, 2);
+    light.position.set(5, 3, 5);
+    scene.add(light);
+    
+    let animationId;
+    const animate = () => {
+      animationId = requestAnimationFrame(animate);
+      earthMesh.rotation.y += 0.002;
+      earthMesh.rotation.x += 0.0005;
+      renderer.render(scene, camera);
+    };
+    animate();
+    
+    // Handle resize
+    const resizeObserver = new ResizeObserver(() => {
+      if (!container.clientWidth) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+    resizeObserver.observe(container);
+  });
+});

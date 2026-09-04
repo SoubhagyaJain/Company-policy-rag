@@ -39,7 +39,17 @@ from backend.rag.citations import CitationEngine
 from backend.rag.context_compression import ContextCompressor
 from backend.rag.evidence_gate import EvidenceSufficiencyGate
 from backend.rag.filter_extractor import QueryMetadataInferer
-from backend.rag.multi_query import MultiQueryGenerator
+from backend.rag.multi_query import MultiQueryGenerator, decompose_multi_part
+from backend.rag.policy_reliability import (
+    ClauseSelection,
+    GoverningClauseSelector,
+    allowed_derived_facts,
+    bind_source_indices,
+    enforce_deterministic_calculations,
+    expand_policy_queries,
+    format_policy_decision_context,
+    validate_policy_answer,
+)
 from backend.rag.query_rewrite import QueryRewriter
 from backend.rag.query_router import QueryRouter
 from backend.rag.retry_engine import RetryEngine
@@ -372,6 +382,28 @@ def _extract_requested_numbered_list(
     return [found[index] for index in range(1, expected + 1)]
 
 
+def _enumeration_preamble(query: str, count: int) -> str:
+    """Derive a grounded lead-in for a deterministically extracted list from the
+    query itself — e.g. "What are the five LLM fine-tuning techniques?" ->
+    "The five LLM fine-tuning techniques are:". Never fabricates a subject: if
+    the enumerated noun phrase cannot be parsed, falls back to a neutral lead-in.
+
+    Root-cause fix: the pipeline previously hardcoded the fine-tuning phrasing for
+    every extracted list, so any other "list the N X" question emitted a false
+    subject sentence.
+    """
+    phrase_match = re.search(
+        r"\b(?P<phrase>(?:\d{1,2}|two|three|four|five|six|seven|eight|nine|ten)\s+"
+        r"(?:[\w-]+[ -]?){0,3}(?:tech\w*|methods?|steps?|types?|ways?|items?))\b",
+        str(query or ""),
+        re.IGNORECASE,
+    )
+    if phrase_match:
+        phrase = re.sub(r"\s+", " ", phrase_match.group("phrase")).strip()
+        return f"The {phrase} are:"
+    return f"Based on the retrieved document, the {count} items are:"
+
+
 def _answer_matches_requested_enumeration(query: str, answer: str | None) -> bool:
     """Reject cached list answers that contain too few or too many numbered items."""
     expected = _requested_enumeration_count(query)
@@ -506,10 +538,13 @@ class RAGPipeline:
         evidence_gate: EvidenceSufficiencyGate | None = None,
         conversation_resolver: ConversationResolver | None = None,
         consistency_guard: ConversationConsistencyGuard | None = None,
+        governing_clause_selector: GoverningClauseSelector | None = None,
     ) -> None:
         self.hybrid_retriever = hybrid_retriever
         self.reranker = reranker or CrossEncoderReranker()
-        self.query_rewriter = query_rewriter or QueryRewriter()
+        self.query_rewriter = query_rewriter or QueryRewriter(
+            enable_llm_rewrite=bool(getattr(settings, "enable_query_rewrite", False))
+        )
         self.query_router = query_router or QueryRouter()
         self.multi_query_gen = multi_query_gen or MultiQueryGenerator()
         self.compressor = compressor or ContextCompressor()
@@ -523,8 +558,11 @@ class RAGPipeline:
         self.scope_resolver = scope_resolver or DocumentScopeResolver()
         self.vision_service = vision_service or VisionService()
         self.evidence_gate = evidence_gate or EvidenceSufficiencyGate()
-        self.conversation_resolver = conversation_resolver or ConversationResolver(llm=self.llm)
+        self.conversation_resolver = conversation_resolver or ConversationResolver(
+            llm=self.llm if bool(getattr(settings, "enable_query_rewrite", False)) else None
+        )
         self.consistency_guard = consistency_guard or ConversationConsistencyGuard()
+        self.governing_clause_selector = governing_clause_selector or GoverningClauseSelector()
 
 
         raw_llm_name = getattr(self.llm, "model", None)
@@ -537,7 +575,11 @@ class RAGPipeline:
         self._llm_cache_lock = threading.RLock()
         self._shared_llm_lock = threading.RLock()
 
-        if self.query_rewriter.llm is None and self.llm is not None:
+        if (
+            self.query_rewriter.enable_llm_rewrite
+            and self.query_rewriter.llm is None
+            and self.llm is not None
+        ):
             self.query_rewriter.llm = self.llm
         if self.query_router.llm is None and self.llm is not None:
             self.query_router.llm = self.llm
@@ -1244,6 +1286,53 @@ class RAGPipeline:
 
             return self._llm_instance_cache[selected_model], selected_model
 
+    def _rerank_for_parts(
+        self,
+        parts: list[str],
+        candidates: list[ScoredChunk],
+        top_n: int,
+        min_ratio: float,
+    ) -> list[ScoredChunk]:
+        """
+        Rerank once per question part and interleave the winners.
+
+        The cross-encoder only scores a bounded slice of the candidate pool and
+        ranks it against a single query string. For a message asking several
+        things that silently drops every part after the first, because those
+        chunks rank low against the combined query or never get scored at all.
+        Giving each part its own pass and round-robin merging the results keeps
+        evidence for every part in the final context.
+        """
+        if not candidates:
+            return []
+        if len(parts) < 2:
+            return self.reranker.rerank(parts[0], candidates, top_n=top_n, min_ratio=min_ratio)
+
+        # Each part must be able to win seats, but no part may crowd out the rest.
+        per_part_quota = max(2, top_n // len(parts))
+        ranked_per_part: list[list[ScoredChunk]] = []
+        for part in parts:
+            try:
+                ranked_per_part.append(
+                    self.reranker.rerank(part, candidates, top_n=per_part_quota, min_ratio=min_ratio)
+                )
+            except Exception as exc:
+                logger.warning("Per-part rerank failed for %r: %s", part, exc)
+
+        merged: list[ScoredChunk] = []
+        seen: set[str] = set()
+        for tier in range(per_part_quota):
+            for ranked in ranked_per_part:
+                if tier >= len(ranked):
+                    continue
+                chunk = ranked[tier]
+                if chunk.chunk.id not in seen:
+                    seen.add(chunk.chunk.id)
+                    merged.append(chunk)
+        if not merged:
+            return self.reranker.rerank(parts[0], candidates, top_n=top_n, min_ratio=min_ratio)
+        return merged[:top_n]
+
     def _retrieve_hybrid_hits(
         self,
         query: str,
@@ -1774,7 +1863,10 @@ class RAGPipeline:
         thinking_sm.start_stage(ThinkingStage.QUERY_REWRITE)
         rewrite_res = self.query_rewriter.rewrite(
             effective_search_query,
-            history=history if is_history_followup else None,
+            # ConversationResolver has already produced a standalone query.
+            # Passing history here would invoke a second LLM rewrite for the
+            # same turn. Retain the fallback path for callers without state.
+            history=history if (is_history_followup and conv_res is None) else None,
             llm=req_llm
         )
         stage_timings["query_rewrite"] = round((time.perf_counter() - t0) * 1000, 2)
@@ -1832,6 +1924,10 @@ class RAGPipeline:
                 else:
                     applied_filters["document_id"] = scope_decision.allowed_document_ids
 
+        # A message that asks several things needs one retrieval per part, so it
+        # can never take the single-shot fast path.
+        question_parts = decompose_multi_part(user_query)
+
         # Fast path check for high-confidence factual questions
         is_fast_path = (
             response_mode != "detailed"
@@ -1840,6 +1936,7 @@ class RAGPipeline:
             and classification.confidence >= 0.85
             and not (history and len(history) > 0 and self.query_rewriter._is_followup_query(user_query))
             and not scope_decision.is_structural_query
+            and not question_parts
         )
 
         enable_verification = getattr(settings, "enable_answer_verification", True)
@@ -1860,6 +1957,7 @@ class RAGPipeline:
         best_candidate_chunks: list[ScoredChunk] = []
         best_reranked_chunks: list[ScoredChunk] = []
         best_report: VerificationReport | None = None
+        best_policy_selection: ClauseSelection | None = None
         best_score = -1.0
         retry_reasons: list[str] = []
         prompt_refinement = ""
@@ -1868,6 +1966,7 @@ class RAGPipeline:
         context_tokens = 0
         cross_document_count = 0
         telemetry_extra: dict[str, Any] = {}
+        policy_selection: ClauseSelection | None = None
 
         while attempt <= max_retries:
             prefix = f"_att{attempt}" if attempt > 0 else ""
@@ -1880,6 +1979,16 @@ class RAGPipeline:
                 sub_queries = self.multi_query_gen.generate_subqueries(rewrite_res.rewritten_query)
             else:
                 sub_queries = [rewrite_res.rewritten_query]
+            # Every part of a multi-part message retrieves on its own terms, even
+            # when the strategy would otherwise run a single query.
+            for part in question_parts:
+                if part not in sub_queries:
+                    sub_queries.append(part)
+            if not is_fast_path:
+                for policy_query in expand_policy_queries(user_query):
+                    if policy_query not in sub_queries:
+                        sub_queries.append(policy_query)
+                sub_queries = sub_queries[:8]
             stage_timings[f"multi_query{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
             # 3. Hybrid Search (Dense + BM25 with RRF)
@@ -2136,8 +2245,8 @@ class RAGPipeline:
             t0 = time.perf_counter()
             thinking_sm.start_stage(ThinkingStage.RERANKING)
             try:
-                reranked_chunks = self.reranker.rerank(
-                    rewrite_res.rewritten_query,
+                reranked_chunks = self._rerank_for_parts(
+                    question_parts or [rewrite_res.rewritten_query],
                     candidate_chunks,
                     top_n=current_strategy.rerank_top_n,
                     min_ratio=current_strategy.min_score_ratio,
@@ -2161,6 +2270,25 @@ class RAGPipeline:
             thinking_sm.complete_stage(
                 ThinkingStage.RERANKING,
                 details={"rerank_count": len(reranked_chunks)},
+            )
+
+            # Cross-encoders rank semantic relatedness. Policy QA additionally
+            # needs a deterministic decision about which clause directly
+            # governs the user's exact actors, conditions, and thresholds.
+            t0 = time.perf_counter()
+            policy_selection = self.governing_clause_selector.select(
+                user_query,
+                reranked_chunks,
+                candidate_pool=candidate_chunks,
+            )
+            selected_context = self.governing_clause_selector.order_for_context(
+                policy_selection,
+                max_chunks=max(current_strategy.rerank_top_n, 5),
+            )
+            if selected_context:
+                reranked_chunks = selected_context
+            stage_timings[f"governing_clause_selection{prefix}"] = round(
+                (time.perf_counter() - t0) * 1000, 2
             )
 
             # 5. Parent Context Expansion
@@ -2232,6 +2360,14 @@ class RAGPipeline:
                     packed_chunks.append(sc)
                     context_tokens += estimated
                 expanded_chunks = packed_chunks
+
+            # Packing may reorder or remove evidence. Recompute the structured
+            # rule view and bind each rule to the final Source N indices.
+            policy_selection = self.governing_clause_selector.select(
+                user_query,
+                expanded_chunks,
+            )
+            bind_source_indices(policy_selection, expanded_chunks)
             try:
                 formatted_context = self.compressor.format_context_for_prompt(
                     expanded_chunks,
@@ -2239,6 +2375,10 @@ class RAGPipeline:
                 )
             except TypeError:
                 formatted_context = self.compressor.format_context_for_prompt(expanded_chunks)
+            formatted_context = (
+                f"{format_policy_decision_context(policy_selection)}\n\n"
+                f"{formatted_context}"
+            )
             stage_timings[f"context_expansion{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
             # Evidence Verification Stage
@@ -2273,6 +2413,23 @@ class RAGPipeline:
                 f"{response_mode_config.prompt_instructions}"
             ).strip()
 
+            # The DIRECT mode directive asks for one short answer, which silently
+            # drops the later parts of a multi-part message. State the parts
+            # explicitly and require one answer per part.
+            if question_parts:
+                numbered_parts = "\n".join(
+                    f"  {idx}. {part}" for idx, part in enumerate(question_parts, start=1)
+                )
+                mode_prompt_str = (
+                    f"{mode_prompt_str}\n\nMULTI-PART QUESTION — the user asked "
+                    f"{len(question_parts)} distinct things:\n{numbered_parts}\n"
+                    "- Answer EVERY part, in the order asked, under its own heading or bullet.\n"
+                    "- This overrides any brevity instruction above: brevity applies per part, "
+                    "never as a reason to omit a part.\n"
+                    "- If the context supports only some parts, answer those and state "
+                    "explicitly which parts the documents do not cover."
+                ).strip()
+
             # Prevent generation context leakage: only inject history if it's a true follow-up.
             effective_history = history if is_history_followup else None
             history_text = _format_history_for_prompt(effective_history)
@@ -2293,7 +2450,7 @@ class RAGPipeline:
             thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
             exact_numbered_list = _extract_requested_numbered_list(user_query, expanded_chunks)
             if exact_numbered_list:
-                answer_text = "The five LLM fine-tuning techniques are:\n\n" + "\n".join(
+                answer_text = _enumeration_preamble(user_query, len(exact_numbered_list)) + "\n\n" + "\n".join(
                     f"{index}. {label}"
                     for index, label in enumerate(exact_numbered_list, start=1)
                 )
@@ -2312,7 +2469,14 @@ class RAGPipeline:
                     stream_callback(answer_text)
             elif req_llm is not None:
                 try:
-                    if stream_callback is not None and hasattr(req_llm, "stream_complete"):
+                    deterministic_policy_answer = bool(
+                        policy_selection.calculations or policy_selection.missing_inputs
+                    )
+                    if (
+                        stream_callback is not None
+                        and hasattr(req_llm, "stream_complete")
+                        and not deterministic_policy_answer
+                    ):
                         try:
                             completion_stream = req_llm.stream_complete(
                                 prompt,
@@ -2352,6 +2516,13 @@ class RAGPipeline:
             else:
                 answer_text = self._fallback_synthesis(user_query, expanded_chunks)
 
+            answer_text = enforce_deterministic_calculations(answer_text, policy_selection)
+            if (
+                stream_callback is not None
+                and (policy_selection.calculations or policy_selection.missing_inputs)
+            ):
+                stream_callback(answer_text)
+
             stage_timings[f"llm_synthesis{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
             thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
 
@@ -2384,6 +2555,7 @@ class RAGPipeline:
                     context_chunks=expanded_chunks,
                     citations=citations,
                     llm=req_llm,
+                    allowed_derived_facts=allowed_derived_facts(policy_selection),
                 )
                 report.retry_count = attempt
             else:
@@ -2396,6 +2568,18 @@ class RAGPipeline:
                     passed=True,
                     retry_count=attempt,
                 )
+            policy_validation = validate_policy_answer(answer_text, policy_selection)
+            report.incorrect_numbers = list(policy_validation.incorrect_numbers)
+            report.missed_conditions = list(policy_validation.missed_conditions)
+            report.missed_exceptions = list(policy_validation.missed_exceptions)
+            if policy_validation.unsupported_numbers:
+                report.unsupported_claims.extend(
+                    f"Unsupported numerical claim: {item}"
+                    for item in policy_validation.unsupported_numbers
+                )
+            if not policy_validation.passed:
+                report.passed = False
+                report.overall_grounded = False
             stage_timings[f"verification{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
             if report.composite_score > best_score or best_report is None:
@@ -2407,6 +2591,7 @@ class RAGPipeline:
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
                 best_report = report
+                best_policy_selection = policy_selection
 
             if report.passed or is_fast_path:
                 best_answer = answer_text
@@ -2416,6 +2601,7 @@ class RAGPipeline:
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
                 best_report = report
+                best_policy_selection = policy_selection
                 break
 
             if attempt >= max_retries or not self.retry_engine.should_retry(attempt, report):
@@ -2517,6 +2703,37 @@ class RAGPipeline:
             retry_reasons=retry_reasons,
             cache_hit=False,
             cache_similarity=None,
+            governing_clause_confidence=(
+                best_policy_selection.confidence if best_policy_selection else None
+            ),
+            selected_primary_clause=(
+                best_policy_selection.to_trace_dict()["primary_rules"][0]
+                if best_policy_selection and best_policy_selection.primary_rules
+                else None
+            ),
+            selected_exceptions=(
+                best_policy_selection.to_trace_dict()["exceptions"]
+                if best_policy_selection
+                else []
+            ),
+            selected_definitions=(
+                best_policy_selection.to_trace_dict()["definitions"]
+                if best_policy_selection
+                else []
+            ),
+            structured_rules=(
+                best_policy_selection.to_trace_dict()["structured_rules"]
+                if best_policy_selection
+                else []
+            ),
+            deterministic_calculations=(
+                best_policy_selection.to_trace_dict()["calculations"]
+                if best_policy_selection
+                else []
+            ),
+            missing_required_inputs=(
+                best_policy_selection.missing_inputs if best_policy_selection else []
+            ),
             anchor_section=anchor_sec,
             page_identity=primary_page_id_str,
             text_candidates=txt_cands,
@@ -2527,7 +2744,7 @@ class RAGPipeline:
             vision_status=telemetry_extra.get("vision_status") or ("READY" if (diag_cnt > 0 or any(c.chunk.metadata.image_assets or c.chunk.metadata.visual_asset_ids for c in best_context_chunks)) else "N/A"),
             evidence_status=str(telemetry_extra.get("evidence_status", "DIRECT")),
 
-            grounding_status="PASS" if (best_report and best_report.passed) else "PASS",
+            grounding_status="PASS" if (best_report is None or best_report.passed) else "FAIL",
             evidence_text_count=text_cnt,
             evidence_code_count=code_cnt,
             evidence_diagram_count=diag_cnt,

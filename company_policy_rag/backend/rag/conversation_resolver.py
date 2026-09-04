@@ -12,6 +12,7 @@ from backend.models.conversation import (
     FollowUpResolution,
 )
 from backend.models.rag import QueryCategory
+from backend.rag.query_rewrite import _looks_self_contained
 from backend.utils.logging import logger
 
 # Regex patterns for referential pronouns
@@ -100,6 +101,18 @@ _NEW_TOPIC_INDICATORS = re.compile(
     r"^(what\s+is|what\s+are|how\s+does\s+[a-zA-Z0-9_\-\s]{6,}|explain\s+(the\s+)?[a-zA-Z0-9_\-\s]{6,}|tell\s+me\s+about\s+(the\s+)?[a-zA-Z0-9_\-\s]{6,}|define|list)",
     re.IGNORECASE,
 )
+
+# Active entities accumulate across every turn. Left unbounded they eventually
+# overlap some token of any new question, which silently converts real topic
+# changes into follow-ups and drags a stale topic into retrieval. Keep only the
+# most recent few so the overlap signal stays about the *current* subject.
+_MAX_ACTIVE_ENTITIES = 12
+
+# A single shared token ("policy", "company", "employee") is far too weak to
+# claim continuity; require either a real share of the question's own content
+# words or at least two distinct matches.
+_MIN_TOPIC_OVERLAP_RATIO = 0.34
+_MIN_TOPIC_OVERLAP_TOKENS = 2
 
 # Stop words to ignore during entity overlap calculations
 _STOP_WORDS = {
@@ -238,6 +251,12 @@ class FollowUpResolver:
         has_followup_phrase = bool(_FOLLOWUP_PHRASES_PATTERN.search(q_lower))
         word_count = len(clean_q.split())
 
+        # A pronoun can be locally bound to a subject introduced in this same
+        # question. Treating such a query as conversational coreference caused
+        # unrelated prior turns to replace the user's actual policy question.
+        if _looks_self_contained(clean_q) and not has_followup_phrase:
+            return False, True, 0.95, "Self-contained query with an explicit subject"
+
         # Check for explicit follow-up phrases / pronouns
         if has_followup_phrase or has_pronoun:
             conf = 0.95 if (has_followup_phrase and has_pronoun) else 0.90
@@ -257,16 +276,35 @@ class FollowUpResolver:
                 if not re.match(r"^(what\s+is\s+the|what\s+are\s+the|define\s+|list\s+all)\b", q_lower):
                     return True, False, 0.85, "Short implicit query continuing previous context"
 
-        # Check for semantic / lexical entity overlap with active topic
+        # Check for semantic / lexical entity overlap with active topic.
+        # A question that carries its own subject and no referential cue is a new
+        # question even when it reuses a word from the previous topic ("What is
+        # the *vacation* policy?" after "*vacation* carryover"), so overlap alone
+        # must never outvote the absence of any continuation cue. Requiring a
+        # proportional share also stops the accumulated entity list from
+        # swallowing every later turn in a long conversation.
         query_words = set(re.findall(r"\b[a-zA-Z0-9_]{3,}\b", q_lower)) - _STOP_WORDS
         topic_words = set(re.findall(r"\b[a-zA-Z0-9_]{3,}\b", (state.active_topic or "").lower())) - _STOP_WORDS
         entities_words = set(
-            w for ent in (state.active_entities or []) for w in re.findall(r"\b[a-zA-Z0-9_]{3,}\b", ent.lower())
+            w
+            for ent in (state.active_entities or [])[-_MAX_ACTIVE_ENTITIES:]
+            for w in re.findall(r"\b[a-zA-Z0-9_]{3,}\b", ent.lower())
         ) - _STOP_WORDS
 
         overlap = query_words.intersection(topic_words.union(entities_words))
-        if overlap and len(overlap) >= 1:
-            return True, False, 0.80, f"Lexical entity overlap detected on {overlap}"
+        overlap_ratio = (len(overlap) / len(query_words)) if query_words else 0.0
+        if overlap and (
+            len(overlap) >= _MIN_TOPIC_OVERLAP_TOKENS or overlap_ratio >= _MIN_TOPIC_OVERLAP_RATIO
+        ):
+            # A complete, self-standing question stays its own topic even when it
+            # shares vocabulary with the previous one.
+            if not _NEW_TOPIC_INDICATORS.match(q_lower):
+                return (
+                    True,
+                    False,
+                    0.80,
+                    f"Lexical entity overlap detected on {sorted(overlap)}",
+                )
 
         # If query has distinct new subject and no follow-up cues, it is a TOPIC SHIFT
         return False, True, 0.90, "Distinct new topic detected without referential pronouns or continuation cues"
@@ -419,6 +457,18 @@ class FollowUpResolver:
             target_detail_level="detailed" if is_expanded else "standard",
         )
 
+    @staticmethod
+    def _is_usable_rewrite(candidate: str) -> bool:
+        """Reject prose, refusals, and echoes of the instruction rather than short queries."""
+        text = candidate.strip()
+        if len(text) < 5 or len(text.split()) > 60:
+            return False
+        lowered = text.lower()
+        if lowered.startswith(("i cannot", "i can't", "sorry", "as an ai", "here is", "sure,")):
+            return False
+        # The model occasionally echoes the prompt's own labels back.
+        return not lowered.startswith(("standalone search query", "follow-up question", "active topic"))
+
     def resolve_standalone_query(
         self,
         query: str,
@@ -455,7 +505,11 @@ class FollowUpResolver:
                 )
                 res = str(effective_llm.complete(prompt)).strip().strip('"').strip("'")
                 first_line = res.splitlines()[0].strip()
-                if len(first_line) >= len(query) and len(first_line) >= 5:
+                # A good standalone rewrite of "tell me more about it" is often
+                # SHORTER than the original ("vacation carryover limit"), so
+                # length must not be the acceptance test. Require only that the
+                # model returned a usable query rather than prose or a refusal.
+                if self._is_usable_rewrite(first_line):
                     return first_line
             except Exception as exc:
                 logger.warning("LLM standalone query resolution failed: %s. Using deterministic synthesizer.", exc)
@@ -517,8 +571,10 @@ class FollowUpResolver:
             sub_subject = re.sub(r"^(and\s+for\s+|and\s+|what\s+about\s+|how\s+about\s+|as\s+for\s+|for\s+)", "", clean_q, flags=re.IGNORECASE).strip("?. ")
             return f"{sub_subject.capitalize()} policy, rules, and eligibility regarding {active_topic}."
 
-        # Replace pronouns directly with active topic
-        resolved = _PRONOUNS_PATTERN.sub(active_topic, clean_q)
+        # Bind only the FIRST referential pronoun to the active topic. Substituting
+        # every occurrence ("is that the same as this one?") repeats the topic three
+        # times and turns the search query into keyword spam.
+        resolved = _PRONOUNS_PATTERN.sub(active_topic, clean_q, count=1)
         if active_topic.lower() not in resolved.lower():
             resolved = f"{resolved} regarding {active_topic}"
 
@@ -618,6 +674,9 @@ class FollowUpResolver:
             for ent in query_entities:
                 if ent.lower() not in [e.lower() for e in merged_entities]:
                     merged_entities.append(ent)
+            # Bounded, recency-ordered: an unbounded list makes every later turn
+            # look like a continuation of something said twenty turns ago.
+            merged_entities = merged_entities[-_MAX_ACTIVE_ENTITIES:]
 
             expansion_requested = answer_mode in (
                 AnswerMode.EXPAND,

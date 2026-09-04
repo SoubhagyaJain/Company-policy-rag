@@ -48,6 +48,24 @@ def test_semantic_cache_rejects_conflicting_audiences(tmp_path):
     assert cache.get("Can contractors work remotely?", threshold=0.5) is None
 
 
+def test_semantic_cache_rejects_changed_relationship_time_and_authorization(tmp_path):
+    cache = SemanticCacheManager(
+        collection_name="policy_fact_guard",
+        persist_dir=tmp_path / "chroma",
+        embedding_service=_constant_embedder(),
+    )
+    cache._collection = None
+    assert cache.put(
+        "Is private work for my sister at 2:30am allowed?",
+        "Policy-specific answer.",
+        [_citation()],
+    )
+
+    assert cache.get("Is private work for my coworker at 2:30am allowed?", threshold=0.5) is None
+    assert cache.get("Is private work for my sister at 3:30am allowed?", threshold=0.5) is None
+    assert cache.get("Is private work for my sister at 2:30am prohibited?", threshold=0.5) is None
+
+
 def test_semantic_cache_isolated_by_prompt_and_retrieval_context(tmp_path):
     cache = SemanticCacheManager(
         collection_name="context_guard",

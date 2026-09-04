@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useSmoothScroll } from '../hooks/useSmoothScroll';
 import {
   Activity,
   AlertCircle,
@@ -101,6 +102,10 @@ export const AdminView: React.FC = () => {
   // expandedTraceId MUST remain the first useState hook for SSR test-harness compatibility
   const [expandedTraceId, setExpandedTraceId] = useState<string | null>(null);
 
+  // Buttery inertia scrolling over the live WebGL background.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useSmoothScroll(scrollRef);
+
   const {
     summary,
     data,
@@ -125,6 +130,27 @@ export const AdminView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'queries' | 'models' | 'caches' | 'ingestion' | 'errors'>('overview');
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // In-app confirmation (replaces window.confirm, which browsers/webviews can
+  // silently suppress — that made destructive actions like delete appear dead).
+  const [confirmAction, setConfirmAction] = useState<null | {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void | Promise<unknown>;
+  }>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
+  const runConfirm = async () => {
+    if (!confirmAction || confirmBusy) return;
+    try {
+      setConfirmBusy(true);
+      await confirmAction.onConfirm();
+    } finally {
+      setConfirmBusy(false);
+      setConfirmAction(null);
+    }
+  };
 
   React.useEffect(() => {
     const handleFullscreenChange = () => {
@@ -358,9 +384,13 @@ export const AdminView: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm(`Delete trace "${trace.original_query.slice(0, 35)}..."?`)) {
-                              deleteTrace(trace.trace_id);
-                            }
+                            const q = trace.original_query || 'this trace';
+                            setConfirmAction({
+                              title: 'Delete trace',
+                              message: `Delete trace "${q.slice(0, 60)}${q.length > 60 ? '…' : ''}"? This cannot be undone.`,
+                              confirmLabel: 'Delete trace',
+                              onConfirm: () => deleteTrace(trace.trace_id),
+                            });
                           }}
                           className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-colors"
                           title="Delete trace"
@@ -633,7 +663,7 @@ export const AdminView: React.FC = () => {
   );
 
   return (
-    <div className="flex-1 h-[calc(100vh-57px)] overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-[#FAF9F5] dark:bg-[#141413] text-charcoal dark:text-cream-100 transition-colors">
+    <div ref={scrollRef} className="flex-1 h-full overflow-y-auto p-4 sm:p-6 lg:p-8 sp-scroll sp-text">
       <div className="w-full space-y-6 pb-12">
         {/* ── HEADER & AUTO-REFRESH CONTROLS ─────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
@@ -722,11 +752,12 @@ export const AdminView: React.FC = () => {
 
             {/* Clear Telemetry */}
             <button
-              onClick={async () => {
-                if (window.confirm('Reset all captured in-memory and persistent telemetry traces and metrics?')) {
-                  await clearTelemetry();
-                }
-              }}
+              onClick={() => setConfirmAction({
+                title: 'Purge telemetry database',
+                message: 'Reset ALL captured in-memory and persistent telemetry traces and metrics? This cannot be undone.',
+                confirmLabel: 'Purge everything',
+                onConfirm: clearTelemetry,
+              })}
               disabled={loading}
               className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
               title="Purge telemetry database"
@@ -1131,11 +1162,12 @@ export const AdminView: React.FC = () => {
                 </div>
                 {recentTraces.length > 0 && (
                   <button
-                    onClick={async () => {
-                      if (window.confirm('Delete all captured query execution traces?')) {
-                        await clearTelemetry();
-                      }
-                    }}
+                    onClick={() => setConfirmAction({
+                      title: 'Clear all traces',
+                      message: 'Delete ALL captured query execution traces? This cannot be undone.',
+                      confirmLabel: 'Clear all traces',
+                      onConfirm: clearTelemetry,
+                    })}
                     disabled={loading}
                     className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 shrink-0"
                     title="Delete all traces"
@@ -1437,6 +1469,49 @@ export const AdminView: React.FC = () => {
           onDelete={deleteTrace}
         />
       </div>
+
+      {/* ── CONFIRMATION MODAL (replaces window.confirm) ─────────── */}
+      {confirmAction && (
+        <div
+          className="fixed inset-0 z-[400] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !confirmBusy && setConfirmAction(null)}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm rounded-2xl bg-white dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder shadow-xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-charcoal dark:text-cream-100">{confirmAction.title}</h3>
+                <p className="text-xs text-charcoal-muted dark:text-cream-400 mt-1 leading-relaxed">{confirmAction.message}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button
+                onClick={() => setConfirmAction(null)}
+                disabled={confirmBusy}
+                className="px-3.5 py-2 rounded-xl bg-cream-100 dark:bg-cream-950 text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder text-xs font-semibold transition-colors hover:bg-cream-200 dark:hover:bg-[#2A2925] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runConfirm}
+                disabled={confirmBusy}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors disabled:opacity-60 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {confirmBusy ? 'Working…' : confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

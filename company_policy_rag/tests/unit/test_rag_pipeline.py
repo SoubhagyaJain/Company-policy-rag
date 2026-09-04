@@ -277,7 +277,8 @@ def test_query_rewriter_with_history():
 
 
 def test_pipeline_query_rewriter_llm_connection(sample_chunks: list[Chunk]):
-    # Verify Fix 1: RAGPipeline(..., llm=llm) connects query_rewriter.llm
+    # LLM rewriting is opt-in so auxiliary generation cannot silently dominate
+    # request latency.
     class DummyLLM:
         def __init__(self):
             self.model = "qwen2.5:7b"
@@ -290,7 +291,16 @@ def test_pipeline_query_rewriter_llm_connection(sample_chunks: list[Chunk]):
         dense_retriever=DenseVectorRetriever(vector_store=None, embedding_service=EmbeddingService()),
         bm25_index=BM25SearchIndex(),
     )
-    pipeline = RAGPipeline(hybrid_retriever=mock_retriever, llm=dummy_llm)
+    default_pipeline = RAGPipeline(hybrid_retriever=mock_retriever, llm=dummy_llm)
+    assert default_pipeline.query_rewriter.enable_llm_rewrite is False
+    assert default_pipeline.query_rewriter.llm is None
+    assert default_pipeline.conversation_resolver.llm is None
+
+    pipeline = RAGPipeline(
+        hybrid_retriever=mock_retriever,
+        llm=dummy_llm,
+        query_rewriter=QueryRewriter(enable_llm_rewrite=True),
+    )
     assert pipeline.query_rewriter.llm is dummy_llm
 
 

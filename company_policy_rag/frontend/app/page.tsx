@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
-import { Header, ViewTab } from '@/components/Header';
-import { SessionSidebar } from '@/components/SessionSidebar';
-import { ChatWindow } from '@/components/ChatWindow';
-import { CitationDrawer } from '@/components/CitationDrawer';
+import type { ViewTab } from '@/components/Header';
+import { tabDirection } from '@/components/space/SpaceTabNav';
 import { DocumentsView } from '@/components/DocumentsView';
 import { AdminView } from '@/components/AdminView';
+import { SpaceShell } from '@/components/space/SpaceShell';
+import { LibraryShell } from '@/components/space/LibraryShell';
+import { SpaceHero } from '@/components/space/SpaceHero';
 
 import { useChatStream } from '@/hooks/useChatStream';
 import { useSessions } from '@/hooks/useSessions';
@@ -18,16 +19,29 @@ import { apiClient } from '@/lib/api-client';
 import type { FilterOptions, ResponseMode } from '@/lib/types';
 
 
+/* Direction-aware blur crossfade for tab content. Custom = travel direction:
+ * +1 → new tab is to the right (old exits left, new enters from right), -1 → reverse. */
+const panelVariants = {
+  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 26 : d < 0 ? -26 : 0, scale: 0.985, filter: 'blur(6px)' }),
+  center: { opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' },
+  exit: (d: number) => ({ opacity: 0, x: d > 0 ? -26 : d < 0 ? 26 : 0, scale: 0.98, filter: 'blur(6px)' }),
+};
+
+const reducedVariants = {
+  enter: { opacity: 0 },
+  center: { opacity: 1 },
+  exit: { opacity: 0 },
+};
+
 export default function HomePage() {
-  /* ─── Dark mode ──────────────────────────────── */
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  /* ─── Dark mode (Space UI defaults to dark) ──── */
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   useEffect(() => {
     const stored = localStorage.getItem('rag_dark_mode');
-    if (stored === 'true') {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    }
+    const dark = stored === null ? true : stored !== 'false';
+    setIsDarkMode(dark);
+    document.documentElement.classList.toggle('dark', dark);
   }, []);
 
   useEffect(() => {
@@ -40,8 +54,19 @@ export default function HomePage() {
   }, [isDarkMode]);
 
   /* ─── Tabs & sidebar ─────────────────────────── */
+  const reduceMotion = useReducedMotion();
   const [activeTab, setActiveTab] = useState<ViewTab>('chat');
+  const [tabDir, setTabDir] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  /* Switch tabs while recording travel direction so content slides the right way. */
+  const changeTab = useCallback((next: ViewTab) => {
+    setActiveTab((cur) => {
+      if (cur === next) return cur;
+      setTabDir(tabDirection(cur, next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const desktopQuery = window.matchMedia('(min-width: 1024px)');
@@ -165,86 +190,96 @@ export default function HomePage() {
     [activeSessionId, cancelStream, closeCitationDrawer, deleteSession, sessions, setMessages]
   );
 
-  /* ─── Tab content ────────────────────────────── */
-  const renderContent = () => {
+  /* ─── Shared ─── */
+  const connected = health.status === 'ok' && health.vector_db;
+  const toggleTheme = useCallback(() => setIsDarkMode((v) => !v), []);
+
+  const tabContent = (() => {
     switch (activeTab) {
-      case 'documents':
-        return <DocumentsView />;
-      case 'observability':
-        return <AdminView />;
       case 'chat':
-      default:
         return (
-          <ChatWindow
+          <SpaceShell
             messages={messages}
             isStreaming={isStreaming}
             onSendMessage={handleSendMessage}
             onCancelStream={cancelStream}
-            onClearChat={handleClearChat}
-            onOpenCitation={openCitation}
-          />
-        );
-    }
-  };
-
-  return (
-    <div className="app-shell h-[100dvh] flex flex-col bg-[#FAF9F5] dark:bg-[#141413] transition-colors">
-      {/* Header */}
-      <Header
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        isSidebarOpen={isSidebarOpen}
-        setIsSidebarOpen={setIsSidebarOpen}
-        isDarkMode={isDarkMode}
-        setIsDarkMode={setIsDarkMode}
-        health={health}
-      />
-
-      {/* Main body: sidebar + content */}
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {activeTab === 'chat' && isSidebarOpen && (
-          <button
-            type="button"
-            aria-label="Close conversation sidebar"
-            onClick={() => setIsSidebarOpen(false)}
-            className="absolute inset-0 z-30 bg-[#211E1A]/25 backdrop-blur-[2px] lg:hidden"
-          />
-        )}
-        {/* Session sidebar — only relevant on chat tab */}
-        {activeTab === 'chat' && (
-          <SessionSidebar
-            isOpen={isSidebarOpen}
+            openCitation={openCitation}
+            activeCitation={activeCitation}
+            isDrawerOpen={isDrawerOpen}
+            closeCitationDrawer={closeCitationDrawer}
             sessions={sessions}
             activeSessionId={activeSessionId}
             onSelectSession={handleSwitchSession}
             onNewSession={handleNewSession}
             onDeleteSession={handleDeleteSession}
             onRenameSession={renameSession}
+            health={health}
+            activeTab={activeTab}
+            setActiveTab={changeTab}
+            isLight={!isDarkMode}
+            onToggleTheme={toggleTheme}
           />
-        )}
-
-
-        {/* Page content with page-transition animation */}
-        <AnimatePresence mode="wait">
-          <motion.main
-            key={activeTab}
-            initial={{ opacity: 0, x: 12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -12 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="flex-1 min-h-0 min-w-0 overflow-hidden relative flex flex-col"
+        );
+      case 'documents':
+        return (
+          <LibraryShell
+            activeTab={activeTab}
+            setActiveTab={changeTab}
+            isLight={!isDarkMode}
+            onToggleTheme={toggleTheme}
+            connected={connected}
           >
-            {renderContent()}
-          </motion.main>
-        </AnimatePresence>
-      </div>
+            <DocumentsView />
+          </LibraryShell>
+        );
+      default:
+        return (
+          <LibraryShell
+            activeTab={activeTab}
+            setActiveTab={changeTab}
+            isLight={!isDarkMode}
+            onToggleTheme={toggleTheme}
+            connected={connected}
+          >
+            <AdminView />
+          </LibraryShell>
+        );
+    }
+  })();
 
-      {/* Citation drawer slides from right */}
-      <CitationDrawer
-        isOpen={isDrawerOpen}
-        citation={activeCitation}
-        onClose={closeCitationDrawer}
-      />
+  const panelTransition = reduceMotion
+    ? { duration: 0.14, ease: [0.22, 1, 0.36, 1] as const }
+    : {
+        x: { type: 'spring' as const, stiffness: 460, damping: 44, mass: 0.9 },
+        scale: { type: 'spring' as const, stiffness: 460, damping: 44, mass: 0.9 },
+        opacity: { duration: 0.26, ease: [0.22, 1, 0.36, 1] as const },
+        filter: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const },
+      };
+
+  return (
+    <div className="relative min-h-[100dvh] w-full">
+      {/* Deep-space fallback shown only while the shared hero first fades in. */}
+      <div aria-hidden className="sp-ambient pointer-events-none fixed inset-0 z-0" />
+      {/* One persistent WebGL hero shared by every tab. It never unmounts, so
+          switching tabs crossfades transparent content over a constant
+          background instead of tearing the hero down and rebuilding it (which
+          is what caused the black flash between tabs). */}
+      <SpaceHero light={!isDarkMode} className="fixed inset-0 z-0" />
+      <AnimatePresence mode="wait" custom={tabDir} initial={false}>
+        <motion.div
+          key={activeTab}
+          custom={tabDir}
+          variants={reduceMotion ? reducedVariants : panelVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={panelTransition}
+          className="relative z-[1] h-[100dvh] w-full"
+          style={{ willChange: 'transform, opacity, filter', transformOrigin: 'center' }}
+        >
+          {tabContent}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

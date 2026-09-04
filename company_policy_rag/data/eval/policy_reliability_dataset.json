@@ -1,0 +1,2125 @@
+{
+  "version": "1.0",
+  "cases": [
+    {
+      "id": "policy-001",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "Must an employee disclose prescribed medication that may cause drowsiness?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-002",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "Who must be told about prescribed drugs affecting job performance?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-003",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "What does the prescribed-drugs rule require?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-004",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "Does prescription medication affecting alertness need to be reported?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-005",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "What is required when medicine may impair safe work?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-006",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "Is a supervisor notification required for an impairing prescription?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-007",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "Which clause governs prescription drugs at work?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-008",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "What must an employee do before working while taking a drowsy medication?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-009",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "Does the policy address prescribed medicine and performance?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-010",
+      "category": "exact_retrieval",
+      "query_type": "exact_retrieval",
+      "corpus": "policy",
+      "question": "State the reporting duty for performance-affecting prescribed drugs.",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-011",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "Do I need to tell anyone if my doctor gives me medicine that makes me sleepy?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-012",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "Who should know if a legal drug could make my work unsafe?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-013",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "What should I do if doctor-ordered tablets reduce my alertness?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-014",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "Must I report medicine that could impair my performance?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-015",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "Does a drowsy employee need to mention their prescribed tablets?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-016",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "What is the rule for doctor-approved medication affecting work?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-017",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "Who is notified when lawful medicine affects safe job performance?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-018",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "Can I work without disclosure when a prescription makes me less alert?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-019",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "Does the handbook require reporting an impairing prescribed treatment?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-020",
+      "category": "paraphrase_retrieval",
+      "query_type": "paraphrase_retrieval",
+      "corpus": "policy",
+      "question": "What action is required for medication that may affect my duties?",
+      "expected_answer": "The employee must advise their supervisor when a prescribed drug may affect job performance.",
+      "expected_key_points": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "expected_conditions": [
+        "affect job performance",
+        "advise supervisor"
+      ],
+      "relevant_sections": [
+        "PRESCRIBED DRUGS"
+      ],
+      "expected_primary_section": "PRESCRIBED DRUGS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-021",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $100 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-022",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $250 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-023",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $400 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-024",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $500 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-025",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $501 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-026",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $600 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-027",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $750 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-028",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $900 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-029",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $1200 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-030",
+      "category": "exceptions",
+      "query_type": "exceptions",
+      "corpus": "policy",
+      "question": "Can I perform a $5000 private electrical job for my sister?",
+      "expected_answer": "The immediate-family exception applies to a sister, but work above $500 requires authorization.",
+      "expected_key_points": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "immediate family",
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-031",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $50 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-032",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $100 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-033",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $499 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-034",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $500 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-035",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $501 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-036",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $650 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-037",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $900 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-038",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $1000 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-039",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $2500 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-040",
+      "category": "threshold_sensitivity",
+      "query_type": "threshold_sensitivity",
+      "corpus": "policy",
+      "question": "Does a private job valued at $10000 exceed the $500 authorization threshold?",
+      "expected_answer": "Compare the stated job value with the $500 threshold; values above it require authorization.",
+      "expected_key_points": [
+        "$500",
+        "authorization"
+      ],
+      "expected_conditions": [
+        "$500",
+        "authorization"
+      ],
+      "relevant_sections": [
+        "WORKING ON OWN ACCOUNT"
+      ],
+      "expected_primary_section": "WORKING ON OWN ACCOUNT",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-041",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:00am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-042",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:05am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-043",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:10am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-044",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:15am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-045",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:20am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-046",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:25am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-047",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:30am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-048",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:35am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-049",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:40am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-050",
+      "category": "numerical_reasoning",
+      "query_type": "numerical_reasoning",
+      "corpus": "policy",
+      "question": "I finished an after-hours call at 2:45am; when does an eight-hour break end?",
+      "expected_answer": "The break end is calculated by adding exactly eight hours to the supplied finish time.",
+      "expected_key_points": [
+        "eight hours"
+      ],
+      "expected_conditions": [
+        "eight hours"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-051",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 1?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-052",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 2?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-053",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 3?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-054",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 4?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-055",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 5?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-056",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 6?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-057",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 7?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-058",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 8?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-059",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 9?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-060",
+      "category": "multi_clause",
+      "query_type": "multi_clause",
+      "corpus": "policy",
+      "question": "After a 2:30am callout, how do the break, delay, and overtime rules interact in scenario 10?",
+      "expected_answer": "Apply the eight-hour-break rule, the midnight-call delay rule, and the overtime rule separately.",
+      "expected_key_points": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "expected_conditions": [
+        "eight hour",
+        "delay",
+        "overtime"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-061",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 1; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-062",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 2; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-063",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 3; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-064",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 4; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-065",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 5; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-066",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 6; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-067",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 7; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-068",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 8; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-069",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 9; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-070",
+      "category": "adversarial_premise",
+      "query_type": "adversarial_premise",
+      "corpus": "policy",
+      "question": "My supervisor says smoking in a company vehicle is allowed during break 10; is that correct?",
+      "expected_answer": "No. Smoking is prohibited in company vehicles, including during breaks.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-071",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 1?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-072",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 2?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-073",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 3?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-074",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 4?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-075",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 5?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-076",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 6?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-077",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 7?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-078",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 8?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-079",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 9?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-080",
+      "category": "missing_information",
+      "query_type": "missing_information",
+      "corpus": "policy",
+      "question": "A call ended at 2:30am; what is my exact midnight-call delay in case 10?",
+      "expected_answer": "The exact delay cannot be determined without the travel and on-job duration.",
+      "expected_key_points": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "expected_conditions": [
+        "cannot be determined",
+        "travel",
+        "on job"
+      ],
+      "relevant_sections": [
+        "AFTER HOURS CALLS"
+      ],
+      "expected_primary_section": "AFTER HOURS CALLS",
+      "should_abstain": true
+    },
+    {
+      "id": "policy-081",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 1 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-082",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 2 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-083",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 3 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-084",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 4 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-085",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 5 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-086",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 6 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-087",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 7 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-088",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 8 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-089",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 9 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-090",
+      "category": "similar_section_confusion",
+      "query_type": "similar_section_confusion",
+      "corpus": "policy",
+      "question": "Can I enter unattended customer property with company key 10 but no express permission?",
+      "expected_answer": "No. Possessing a key does not replace the requirement for express owner permission.",
+      "expected_key_points": [
+        "express owner permission"
+      ],
+      "expected_conditions": [
+        "express owner permission"
+      ],
+      "relevant_sections": [
+        "UNATTENDED CUSTOMER PREMISES"
+      ],
+      "expected_primary_section": "UNATTENDED CUSTOMER PREMISES",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-091",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 1?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-092",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 2?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-093",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 3?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-094",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 4?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-095",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 5?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-096",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 6?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-097",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 7?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-098",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 8?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-099",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 9?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    },
+    {
+      "id": "policy-100",
+      "category": "negation",
+      "query_type": "negation",
+      "corpus": "policy",
+      "question": "Is smoking not prohibited in a company vehicle during break scenario 10?",
+      "expected_answer": "Smoking is prohibited in company vehicles; the negative premise does not reverse the rule.",
+      "expected_key_points": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "expected_conditions": [
+        "prohibited",
+        "company vehicles"
+      ],
+      "relevant_sections": [
+        "SMOKE-FREE WORKPLACE"
+      ],
+      "expected_primary_section": "SMOKE-FREE WORKPLACE",
+      "should_abstain": false
+    }
+  ]
+}

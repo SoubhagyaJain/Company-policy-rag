@@ -42,6 +42,9 @@ class ChunkMetadata(BaseModel):
     page_label: str | None = None
     section_title: str | None = None
     section_number: str | None = None
+    clause_id: str | None = Field(default=None, description="Stable clause or subclause identifier")
+    parent_section: str | None = Field(default=None, description="Immediate governing section identifier")
+    chunk_type: str = Field(default="policy_clause", description="Policy clause, exception, definition, table, or prose")
     section_path: str | None = None
     section_level: int | None = None
     chunk_strategy: str = Field(default="recursive", description="Strategy used: recursive, semantic, markdown, etc.")

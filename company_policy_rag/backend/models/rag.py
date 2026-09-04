@@ -178,6 +178,11 @@ class VerificationReport(BaseModel):
     critique: str | None = None
     missing_aspects: list[str] = Field(default_factory=list)
     unsupported_claims: list[str] = Field(default_factory=list)
+    incorrect_numbers: list[str] = Field(default_factory=list)
+    missed_conditions: list[str] = Field(default_factory=list)
+    missed_exceptions: list[str] = Field(default_factory=list)
+    citation_errors: list[str] = Field(default_factory=list)
+    overall_grounded: bool = True
     retry_count: int = 0
 
 
@@ -216,6 +221,13 @@ class RAGTrace(BaseModel):
     retry_reasons: list[str] = Field(default_factory=list)
     cache_hit: bool = False
     cache_similarity: float | None = None
+    governing_clause_confidence: float | None = None
+    selected_primary_clause: dict[str, Any] | None = None
+    selected_exceptions: list[dict[str, Any]] = Field(default_factory=list)
+    selected_definitions: list[dict[str, Any]] = Field(default_factory=list)
+    structured_rules: list[dict[str, Any]] = Field(default_factory=list)
+    deterministic_calculations: list[dict[str, Any]] = Field(default_factory=list)
+    missing_required_inputs: list[str] = Field(default_factory=list)
     # Conversation-Aware Observability fields
     conversation_id: str | None = None
     is_followup: bool = False

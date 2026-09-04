@@ -225,6 +225,22 @@ def test_query_rewriter_coreference_behavior():
     res_independent = query_rewriter.rewrite("What is the dress code policy?", history=history)
     assert "health insurance eligibility" not in res_independent.rewritten_query
 
+    # A pronoun bound to a subject inside the same question is not a reference
+    # to an earlier turn and must not pay for an LLM rewrite.
+    mock_independent_llm = MagicMock()
+    mock_independent_llm.complete.return_value = "unrelated prior topic"
+    independent_llm_rewriter = QueryRewriter(
+        enable_llm_rewrite=True,
+        llm=mock_independent_llm,
+    )
+    self_contained = independent_llm_rewriter.rewrite(
+        "An electrician wants to perform electrical work privately for their sister. Is this allowed?",
+        history=history,
+    )
+    mock_independent_llm.complete.assert_not_called()
+    assert "electrical work" in self_contained.rewritten_query.lower()
+    assert "health insurance" not in self_contained.rewritten_query.lower()
+
     # Case D: Mocked LLM coreference rewrite
     mock_llm = MagicMock()
     mock_llm.complete.return_value = "Standalone Query: What is the health insurance waiting period duration?"

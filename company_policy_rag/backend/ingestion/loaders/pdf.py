@@ -56,6 +56,19 @@ class PDFLoader(BaseLoader):
         enable_vision = getattr(settings, "vision_enabled", True)
         doc_id = base_meta.document_id or f"doc_{file_path.stem}"
 
+        # Uncached extraction is only affordable where interactive vision is permitted
+        # (a GPU, or an explicit CPU opt-in). CPU generation runs for minutes per page
+        # and cannot be cancelled, so elsewhere every page stays cache-only.
+        live_vision_ok = False
+        if enable_vision and self.vision_service:
+            live_vision_ok, live_vision_reason = self.vision_service.is_query_time_available()
+            if not live_vision_ok:
+                logger.info(
+                    "[INGESTION] Scanned pages in %s stay cache-only: %s",
+                    file_path.name,
+                    live_vision_reason,
+                )
+
         # 1. Read all pages
         fitz_pages = self._read_with_fitz(file_path)
         pages = fitz_pages if fitz_pages is not None else self._read_with_pypdf(file_path)
@@ -144,9 +157,13 @@ class PDFLoader(BaseLoader):
             if text.strip():
                 documents.append(RawDocument(content=text, metadata=page_meta))
 
-            # Visual Content Extraction (Cache-only check during ingestion, never blocks)
+            # Visual Content Extraction (cache-only for text-bearing pages so ingestion
+            # stays fast; a page with zero extractable text has no other way to enter
+            # the index, so it gets a live inference pass now instead of being dropped).
             if enable_vision and self.vision_service:
                 active_cue = prev_continuation_cues[0] if (is_continuation and prev_continuation_cues) else (continuation_signals[0] if continuation_signals else None)
+                page_has_text = bool(text.strip())
+                live_inference = live_vision_ok and not page_has_text
                 visual_chunks = self.vision_service.process_pdf_page_visuals(
                     pdf_path=file_path,
                     page_number=physical_page_num,
@@ -154,7 +171,7 @@ class PDFLoader(BaseLoader):
                     document_id=doc_id,
                     section_title=current_ctx.section_title,
                     continuation_cue=active_cue,
-                    live_inference=False,  # Instant cache lookup during ingestion!
+                    live_inference=live_inference,
                     page_label=page_label,
                     display_page_number=display_page_number,
                     internal_page_index=internal_page_index,

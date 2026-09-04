@@ -31,7 +31,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      // Space UI defaults to dark; the client effect in app/page.tsx reconciles
+      // to the user's stored `rag_dark_mode` choice. suppressHydrationWarning
+      // covers that post-hydration class change.
+      className={`dark ${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <body className={`${inter.className} antialiased min-h-screen`}>

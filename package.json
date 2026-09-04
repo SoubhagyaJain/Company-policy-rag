@@ -1,0 +1,44 @@
+{
+  "name": "rag-chatbot",
+  "version": "1.0.0",
+  "description": "![Architecture: Microservices](https://img.shields.io/badge/Architecture-Microservices-blue)\r ![Backend: FastAPI](https://img.shields.io/badge/Backend-FastAPI_|_Python_3.11-009688?logo=fastapi)\r ![Frontend: Next.js](https://img.shields.io/badge/Frontend-Next.js_16_|_React_19-000000?logo=next.js)\r ![VectorDB: Chroma](https://img.shields.io/badge/VectorDB-ChromaDB-FF4F00)\r ![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)\r ![Vision: Qwen VL](https://img.shields.io/badge/Vision-Qwen_2.5_VL_7B-00B4D8?logo=ollama)\r ![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)\r ![Observability: SQLite WAL](https://img.shields.io/badge/Observability-SQLite_WAL_Write--Behind-success)\r ![Tests: 192/192](https://img.shields.io/badge/Tests-192%2F192_Passed_(100%25)-brightgreen)",
+  "main": "script.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SoubhagyaJain/Rag-chatbot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/SoubhagyaJain/Rag-chatbot/issues"
+  },
+  "homepage": "https://github.com/SoubhagyaJain/Rag-chatbot#readme",
+  "dependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@types/three": "^0.185.4",
+    "autoprefixer": "^10.4.21",
+    "next": "^15.3.3",
+    "postcss": "^8.5.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^3.4.17",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}

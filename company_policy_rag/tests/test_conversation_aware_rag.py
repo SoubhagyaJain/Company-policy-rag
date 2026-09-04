@@ -170,6 +170,30 @@ def test_01_referential_pronoun_resolution() -> None:
     assert "Hotel Search Agent" in fallback_resolved
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "An electrician wants to perform electrical work privately for their sister. Is this allowed?",
+        "An employee is taking prescription medication that may cause drowsiness. Are they required to tell anyone at work?",
+        "An employee normally starts at 7:30 am. After a callout they finish at 2:30 am. Can the company require a normal start?",
+    ],
+)
+def test_01b_self_contained_pronouns_are_not_prior_turn_references(query: str) -> None:
+    resolver = ConversationResolver()
+    state = ConversationRAGState(
+        conversation_id="conv_unrelated_prior_topic",
+        active_topic="Entry into unattended customer property",
+        active_entities=["customer property", "company key"],
+    )
+
+    is_followup, topic_shift, confidence, reason = resolver.detect_followup(query, state)
+
+    assert is_followup is False
+    assert topic_shift is True
+    assert confidence >= 0.9
+    assert "self-contained" in reason.lower()
+
+
 # ============================================================================
 # Test 02: Conversational Follow-Up Phrase Resolution
 # ============================================================================

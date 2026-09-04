@@ -49,6 +49,12 @@ class BaseChunker(ABC):
         final_sec_title = section_title or doc_meta.section_title
         final_sec_num = section_number or doc_meta.section_number
         final_sec_path = section_path or doc_meta.section_path
+        clause_match = re.search(r"(?m)^\s*(?:section\s+)?(\d+(?:\.\d+){0,4})(?:[.)\s]|$)", text, re.IGNORECASE)
+        clause_id = (clause_match.group(1) if clause_match else final_sec_num) or None
+        parent_section = None
+        if clause_id:
+            clause_parts = str(clause_id).split(".")
+            parent_section = ".".join(clause_parts[:-1]) or clause_parts[0]
 
         # Determine content type based on document metadata hints if default PROSE was passed
         final_content_type = content_type
@@ -58,6 +64,18 @@ class BaseChunker(ABC):
                 final_content_type = ContentType.CODE
             elif raw_ct == "table" or doc_meta.has_tables:
                 final_content_type = ContentType.TABLE
+
+        lowered_text = text.casefold()
+        if final_content_type == ContentType.TABLE:
+            chunk_type = "table"
+        elif re.search(r"\b(?:except|exception|unless|provided that|does not apply)\b", lowered_text):
+            chunk_type = "exception"
+        elif re.search(r"\b(?:means|is defined as|definition)\b", lowered_text):
+            chunk_type = "definition"
+        elif doc_meta.document_type.value in {"pdf", "docx", "text", "markdown"}:
+            chunk_type = "policy_clause"
+        else:
+            chunk_type = "prose"
 
         image_assets = [dict(asset) for asset in (doc_meta.image_assets or [])]
         visual_asset_ids = [
@@ -89,6 +107,9 @@ class BaseChunker(ABC):
             page_label=doc_meta.page_label,
             section_title=final_sec_title,
             section_number=final_sec_num,
+            clause_id=clause_id,
+            parent_section=parent_section,
+            chunk_type=chunk_type,
             section_path=final_sec_path,
             section_level=section_level if section_level is not None else doc_meta.section_level,
             chunk_strategy=strategy_name,

@@ -7,7 +7,7 @@ import { cn } from '../lib/utils';
 interface LiquidGlassCardProps extends HTMLMotionProps<'div'> {
   children: React.ReactNode;
   className?: string;
-  variant?: 'cream' | 'sand' | 'dark' | 'glow';
+  variant?: 'cream' | 'sand' | 'dark' | 'glow' | 'space';
   hoverEffect?: boolean;
 }
 
@@ -26,6 +26,8 @@ export function LiquidGlassCard({
         return 'bg-charcoal/90 dark:bg-charcoal-dark/90 border-charcoal-light/20 text-cream-100';
       case 'glow':
         return 'bg-cream-50/90 dark:bg-cream-950/90 border-terracotta-500/30 shadow-[0_0_25px_rgba(217,119,6,0.1)]';
+      case 'space':
+        return 'bg-white/70 dark:bg-[#0a0f1e]/65 border-[rgba(22,34,58,0.14)] dark:border-[rgba(198,222,255,0.14)] shadow-[0_14px_36px_-12px_rgba(24,38,64,0.16)] dark:shadow-[0_14px_36px_-12px_rgba(2,5,14,0.5)]';
       case 'cream':
       default:
         return 'bg-[#FAF9F5]/85 dark:bg-[#141413]/85 border-[#E5E0D8]/70 dark:border-[#2A2925]/70';

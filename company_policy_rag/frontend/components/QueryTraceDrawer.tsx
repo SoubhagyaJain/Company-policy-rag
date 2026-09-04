@@ -33,6 +33,7 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
   const [showRawJson, setShowRawJson] = useState(false);
   const [activeTab, setActiveTab] = useState<'waterfall' | 'evidence' | 'grounding' | 'json'>('waterfall');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   if (!trace) return null;
 
@@ -107,24 +108,44 @@ export const QueryTraceDrawer: React.FC<QueryTraceDrawerProps> = ({ trace, onClo
 
           <div className="flex items-center gap-1.5 shrink-0">
             {onDelete && (
-              <button
-                onClick={async () => {
-                  if (window.confirm(`Delete trace "${trace.original_query.slice(0, 30)}..."?`)) {
-                    setIsDeleting(true);
-                    try {
-                      const deleted = await onDelete(trace.trace_id);
-                      if (deleted) onClose();
-                    } finally {
-                      setIsDeleting(false);
-                    }
-                  }
-                }}
-                disabled={isDeleting}
-                className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 rounded-xl transition-colors"
-                title="Delete this query trace"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              confirmingDelete ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={async () => {
+                      setIsDeleting(true);
+                      try {
+                        const deleted = await onDelete(trace.trace_id);
+                        if (deleted) onClose();
+                      } finally {
+                        setIsDeleting(false);
+                        setConfirmingDelete(false);
+                      }
+                    }}
+                    disabled={isDeleting}
+                    className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors disabled:opacity-60 flex items-center gap-1.5"
+                    title="Confirm delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {isDeleting ? 'Deleting…' : 'Confirm'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDelete(false)}
+                    disabled={isDeleting}
+                    className="px-2.5 py-1.5 rounded-xl bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder text-xs font-medium transition-colors"
+                    title="Cancel"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 rounded-xl transition-colors"
+                  title="Delete this query trace"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )
             )}
             <button
               onClick={onClose}

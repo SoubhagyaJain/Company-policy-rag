@@ -6,6 +6,7 @@ import re
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -84,6 +85,10 @@ class DocumentService:
         self._pending_hashes: dict[str, str] = {}
         self._hash_catalog = self._load_hash_catalog()
         self._lock = threading.Lock()
+        # Single-worker queue for the heavy parse→chunk→embed→index pipeline, so
+        # large uploads run off the request thread (no proxy/browser timeout) and
+        # ingestions are serialized (BM25/vector writes never race each other).
+        self._ingestion_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ingest")
         self._restore_document_registry()
 
     def _load_hash_catalog(self) -> dict[str, dict[str, Any]]:
@@ -354,7 +359,11 @@ class DocumentService:
                 if job.status == IngestionStatus.TEXT_INDEXING.value or job.status == "PROCESSING":
                     try:
                         updated_dt = datetime.fromisoformat(job.updated_at)
-                        if (datetime.now(UTC) - updated_dt).total_seconds() > 300:
+                        # A single stage on a large file (parsing a 100MB PDF, a big
+                        # embedding batch) can legitimately run for minutes without a
+                        # heartbeat, so only treat a job as stuck after a generous
+                        # window to avoid false failures on big documents.
+                        if (datetime.now(UTC) - updated_dt).total_seconds() > 900:
                             job.status = IngestionStatus.FAILED.value
                             job.error = "Ingestion job became unresponsive (heartbeat timeout)."
                             job.can_retry = True
@@ -477,7 +486,17 @@ class DocumentService:
 
             raw_docs = load_document(file_path, base_metadata=base_metadata)
             if not raw_docs:
-                logger.warning(f"Could not extract text content from file '{filename}'. Proceeding with 0 chunks.")
+                # A scanned PDF has no text layer at all, so vision extraction is the only
+                # way to read one. Name that cause instead of a generic parse failure.
+                if ext == ".pdf" and not getattr(settings, "vision_enabled", True):
+                    logger.warning(
+                        "No text layer in '%s' (scanned or image-only PDF) and vision extraction "
+                        "is disabled via VISION_ENABLED=false. Indexing 0 chunks; this document "
+                        "will not be retrievable until vision is enabled and it is re-uploaded.",
+                        filename,
+                    )
+                else:
+                    logger.warning(f"Could not extract text content from file '{filename}'. Proceeding with 0 chunks.")
 
             pages_count = len(raw_docs)
             t_extract = round((time.perf_counter() - t_stage) * 1000, 2)
@@ -486,7 +505,11 @@ class DocumentService:
                 stage=IngestionStage.TEXT_EXTRACTION,
                 status="COMPLETED",
                 progress=25,
-                message=f"Extracted {pages_count} pages successfully.",
+                message=(
+                    f"Extracted {pages_count} pages successfully."
+                    if pages_count
+                    else "No readable text found. This file indexes 0 chunks and will not be retrievable."
+                ),
                 duration_ms=t_extract,
             )
             logger.info(
@@ -941,23 +964,60 @@ class DocumentService:
                     job_id=f"job_{uuid.uuid4().hex[:10]}",
                     filename=filename,
                     status="TEXT_INDEXING",
-                    progress=10,
-                    current_stage="UPLOAD",
+                    progress=5,
+                    current_stage="QUEUED",
                     text_ready=False,
                     created_at=datetime.now(UTC).isoformat(),
                     updated_at=datetime.now(UTC).isoformat(),
                 )
-
-            return self._execute_ingestion_stages(
-                document_id=document_id,
-                filename=filename,
-                file_path=target_path,
-                category=category,
-                chunk_strategy=chunk_strategy,
-            )
-        finally:
+        except Exception:
             with self._lock:
                 self._pending_hashes.pop(content_hash, None)
+            raise
+
+        # Run the heavy pipeline (parse → chunk → embed → index) off the request
+        # thread on the single-worker queue. A 100MB file can take minutes to
+        # embed on CPU; blocking the HTTP response would trip the proxy/browser
+        # timeout and freeze the UI. The client polls GET
+        # /api/documents/{id}/status — which reflects live per-stage progress —
+        # until the job reaches READY or FAILED.
+        def _run_ingestion() -> None:
+            try:
+                self._execute_ingestion_stages(
+                    document_id=document_id,
+                    filename=filename,
+                    file_path=target_path,
+                    category=category,
+                    chunk_strategy=chunk_strategy,
+                )
+            except Exception:
+                # _execute_ingestion_stages already records the FAILED job state;
+                # swallow here so the shared worker survives for the next upload.
+                logger.exception("[INGESTION] background job crashed for document_id=%s", document_id)
+            finally:
+                with self._lock:
+                    self._pending_hashes.pop(content_hash, None)
+
+        self._ingestion_executor.submit(_run_ingestion)
+
+        file_type = Path(filename).suffix.lstrip(".").lower() or "unknown"
+        return DocumentUploadResponse(
+            document_id=document_id,
+            filename=filename,
+            file_type=file_type,
+            file_size_bytes=file_size,
+            file_hash=self._hash_catalog.get(document_id, {}).get("sha256", ""),
+            pages_count=0,
+            chunks_indexed=0,
+            chunk_strategy=chunk_strategy or "auto",
+            status="TEXT_INDEXING",
+            progress=5,
+            current_stage="QUEUED",
+            text_ready=False,
+            vision_status="PENDING",
+            category=category,
+            created_at=datetime.now(UTC).isoformat(),
+        )
 
     def retry_document(self, document_id: str) -> IngestionStatusResponse:
         """Retry indexing for a previously uploaded document without re-uploading the file."""
@@ -987,14 +1047,24 @@ class DocumentService:
             )
             self._ingestion_jobs[document_id] = job
 
-        # Re-run ingestion
-        self._execute_ingestion_stages(
-            document_id=document_id,
-            filename=filename,
-            file_path=file_path,
-        )
+        # Re-run ingestion on the background queue (same reasoning as upload):
+        # a large document must not block the retry request. The client polls
+        # /status for progress until READY/FAILED.
+        retry_path = file_path
 
-        return self.get_ingestion_status(document_id) or job
+        def _run_retry() -> None:
+            try:
+                self._execute_ingestion_stages(
+                    document_id=document_id,
+                    filename=filename,
+                    file_path=retry_path,
+                )
+            except Exception:
+                logger.exception("[INGESTION] background retry crashed for document_id=%s", document_id)
+
+        self._ingestion_executor.submit(_run_retry)
+
+        return job
 
     def list_documents(
         self,
