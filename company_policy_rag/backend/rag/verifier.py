@@ -36,6 +36,25 @@ _STOP_WORDS = {
     "indicate", "indicates", "indicating", "yes", "one", "two", "also", "including", "includes",
 }
 
+_LLM_FAITHFULNESS_PROMPT = """You are a strict grounding auditor for a document question-answering system.
+Judge whether EVERY factual claim in the ANSWER is directly supported by the CONTEXT.
+Use ONLY the CONTEXT — never outside knowledge. Numbers, amounts, dates, times, names,
+and conditions must match the CONTEXT exactly; a changed or invented figure is unsupported.
+Citation tags like [Source 1] are not claims and never count as unsupported.
+
+CONTEXT:
+{context}
+
+ANSWER:
+{answer}
+
+Respond with ONLY a single-line JSON object, no prose before or after:
+{{"faithfulness": <number between 0.0 and 1.0>, "unsupported_claims": ["<short claim>", ...]}}
+- faithfulness 1.0 = every claim supported; 0.0 = mostly fabricated.
+- unsupported_claims lists each specific ANSWER claim NOT supported by the CONTEXT (empty list if all supported).
+JSON:"""
+
+
 _QUANTITATIVE_CLAIM_REGEX = re.compile(
     r"(\$\s*[\d,]+(?:\.\d+)?|\b\d+(?:\.\d+)?\s*%|\b\d+\s*(?:days?|months?|weeks?|hours?|minutes?|dollars?|cents?|gb|mb|usd|eur)\b)",
     re.IGNORECASE,
@@ -210,6 +229,55 @@ class SelfReflectionVerifier:
 
         return round(faith_score, 3), unsupported
 
+    def _evaluate_faithfulness_llm(
+        self,
+        answer: str,
+        context_chunks: list[ScoredChunk],
+        llm: Any | None,
+    ) -> tuple[float, list[str]] | None:
+        """LLM claim-support audit. Returns (score, unsupported_claims), or None
+        to signal the caller to keep the heuristic verdict (no LLM, empty
+        context, or an LLM/parse failure)."""
+        if llm is None or not context_chunks:
+            return None
+
+        max_chars = int(getattr(settings, "llm_verification_max_context_chars", 6000))
+        context_text = "\n\n".join(sc.chunk.text for sc in context_chunks).strip()
+        if not context_text:
+            return None
+        context_text = context_text[:max_chars]
+
+        prompt = _LLM_FAITHFULNESS_PROMPT.format(context=context_text, answer=answer)
+        try:
+            try:
+                raw = str(llm.complete(prompt, temperature=0.0, max_new_tokens=256)).strip()
+            except TypeError:
+                raw = str(llm.complete(prompt)).strip()
+        except Exception as exc:
+            logger.warning("LLM faithfulness verification failed (%s); using heuristic.", exc)
+            return None
+
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            logger.debug("LLM faithfulness verdict had no JSON object; using heuristic.")
+            return None
+        try:
+            data = json.loads(match.group(0))
+        except Exception:
+            logger.debug("LLM faithfulness verdict was not valid JSON; using heuristic.")
+            return None
+
+        score = data.get("faithfulness")
+        if not isinstance(score, (int, float)):
+            return None
+        score = max(0.0, min(1.0, float(score)))
+
+        raw_claims = data.get("unsupported_claims") or []
+        if not isinstance(raw_claims, list):
+            raw_claims = []
+        claims = [str(c).strip() for c in raw_claims if str(c).strip()][:10]
+        return round(score, 3), claims
+
     def _evaluate_completeness(
         self,
         query: str,
@@ -333,6 +401,7 @@ class SelfReflectionVerifier:
             Callable[[str, str, list[ScoredChunk]], tuple[float, float, float, float, list[str]]]
             | None
         ) = None,
+        use_llm_judge: bool = False,
     ) -> VerificationReport:
         """Evaluate answer across 4 dimensions and return comprehensive VerificationReport."""
         if not answer or not answer.strip():
@@ -374,6 +443,25 @@ class SelfReflectionVerifier:
             comp, missing = self._evaluate_completeness(query, answer)
             cit = self._evaluate_citation_coverage(answer, context_chunks, citations)
             coh = self._evaluate_coherence(answer)
+
+            # LLM claim-support audit augments the lexical heuristic: it can only
+            # make the verdict stricter (catch hallucinations the overlap check
+            # misses), never inflate a weak answer. Skipped for abstentions, and
+            # any LLM/parse failure leaves the heuristic verdict untouched.
+            answer_l = answer.lower()
+            is_abstention = "unable to answer" in answer_l or "could not find" in answer_l
+            if use_llm_judge and not is_abstention:
+                llm_result = self._evaluate_faithfulness_llm(
+                    answer, context_chunks, llm if llm is not None else self.llm
+                )
+                if llm_result is not None:
+                    llm_faith, llm_unsupported = llm_result
+                    faith = min(faith, llm_faith)
+                    seen = {u.casefold() for u in unsupported}
+                    for claim in llm_unsupported:
+                        if claim.casefold() not in seen:
+                            unsupported.append(claim)
+                            seen.add(claim.casefold())
 
         # Composite score calculation (PROJECT.md weights: 0.35 Faith + 0.30 Comp + 0.20 Cit + 0.15 Coh)
         composite = round(
