@@ -1,1 +1,0 @@
-{"nodes": [{"id": "requirements_full", "label": "Full development dependencies (incl. chainlit, jupyter, fastapi)", "file_type": "code", "source_file": "requirements.txt", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}

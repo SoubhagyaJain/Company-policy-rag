@@ -265,7 +265,13 @@ export default function HomePage() {
           background instead of tearing the hero down and rebuilding it (which
           is what caused the black flash between tabs). */}
       <SpaceHero light={!isDarkMode} className="fixed inset-0 z-0" />
-      <AnimatePresence mode="wait" custom={tabDir} initial={false}>
+      {/* Sync (crossfade) mode, NOT mode="wait": the incoming tab mounts
+          immediately while the outgoing one animates away, so switching tabs
+          works even while the chat is streaming (rapid re-renders would
+          otherwise stall mode="wait"'s exit-complete tracking and leave the new
+          tab unmounted). Panels are absolutely positioned so the two overlap
+          during the crossfade instead of stacking in flow. */}
+      <AnimatePresence custom={tabDir} initial={false}>
         <motion.div
           key={activeTab}
           custom={tabDir}
@@ -274,7 +280,7 @@ export default function HomePage() {
           animate="center"
           exit="exit"
           transition={panelTransition}
-          className="relative z-[1] h-[100dvh] w-full"
+          className="absolute inset-0 z-[1] h-[100dvh] w-full"
           style={{ willChange: 'transform, opacity, filter', transformOrigin: 'center' }}
         >
           {tabContent}
