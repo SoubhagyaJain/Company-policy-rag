@@ -611,6 +611,8 @@ class RAGPipeline:
             self.query_router.llm = self.llm
         if self.verifier.llm is None and self.llm is not None:
             self.verifier.llm = self.llm
+        if getattr(self.multi_query_gen, "llm", None) is None and self.llm is not None:
+            self.multi_query_gen.llm = self.llm
 
     def _resolve_document_file_path(self, meta: ChunkMetadata) -> Path | None:
         """Find the real document file path on disk across known storage and data folders."""

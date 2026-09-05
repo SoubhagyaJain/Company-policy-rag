@@ -313,6 +313,11 @@ class Settings(BaseSettings):
     # ── Query rewrite (pre-retrieval) ──────────────────────────────────────
     # Disabled by default for fast single-turn; conditional for multi-turn follow-ups
     enable_query_rewrite: bool = Field(default=False, alias="ENABLE_QUERY_REWRITE")
+    # LLM-based multi-query decomposition. When on and an LLM is available, one
+    # LLM call splits comprehensive/list questions into focused sub-queries
+    # (generalizes to any corpus); the keyword-table heuristic remains the
+    # fallback. Only runs where multi-query is already enabled (not fast-path).
+    enable_llm_multi_query: bool = Field(default=True, alias="ENABLE_LLM_MULTI_QUERY")
 
     # ── Dynamic Output Limits (Qwen 2.5 7B) ────────────────────────────────
     max_new_tokens_direct: int = Field(default=128, alias="MAX_NEW_TOKENS_DIRECT")
