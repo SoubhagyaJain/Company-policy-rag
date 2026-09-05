@@ -707,8 +707,9 @@ class DocumentService:
                 message="Building BM25 sparse search index...",
             )
 
-            existing_chunks = list(self.bm25_index.entries) + chunks
-            self.bm25_index.build_index(existing_chunks)
+            # Incrementally extend the index (tokenize only the new chunks)
+            # instead of re-tokenizing the whole corpus on every upload.
+            self.bm25_index.add_chunks(chunks)
             self.bm25_index.save()
             t_bm25 = round((time.perf_counter() - t_stage) * 1000, 2)
             self._update_job_stage(

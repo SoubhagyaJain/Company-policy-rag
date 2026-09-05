@@ -40,12 +40,34 @@ class BM25SearchIndex:
         self.storage_dir = Path(storage_dir)
         self.entries: list[Chunk] = []
         self._tokenized_corpus: list[list[str]] = []
+        # Filter views (chunk.metadata.model_dump) precomputed once per chunk so
+        # search() does not serialize every chunk's metadata on every query.
+        self._meta_dicts: list[dict[str, Any]] = []
         self._bm25: Any | None = None
+
+    @staticmethod
+    def _filter_view(chunk: Chunk) -> dict[str, Any]:
+        """Serialize a chunk's metadata once for fast repeated filter matching."""
+        return chunk.metadata.model_dump()
+
+    def _rebuild_scorer(self) -> None:
+        """(Re)build the BM25Okapi scorer from the current tokenized corpus."""
+        if not self._tokenized_corpus:
+            self._bm25 = None
+            return
+        try:
+            from rank_bm25 import BM25Okapi  # type: ignore
+
+            self._bm25 = BM25Okapi(self._tokenized_corpus)
+        except Exception as exc:
+            logger.warning("BM25Okapi import or build failed (%s). BM25 disabled.", exc)
+            self._bm25 = None
 
     def build_index(self, chunks: list[Chunk]) -> None:
         """Build BM25 index over a list of document chunks."""
         self.entries = []
         self._tokenized_corpus = []
+        self._meta_dicts = []
 
         for chunk in chunks:
             search_text = _searchable_text(chunk)
@@ -53,29 +75,48 @@ class BM25SearchIndex:
                 continue
             self.entries.append(chunk)
             self._tokenized_corpus.append(tokenize(search_text))
+            self._meta_dicts.append(self._filter_view(chunk))
 
-        if self._tokenized_corpus:
-            try:
-                from rank_bm25 import BM25Okapi  # type: ignore
+        self._rebuild_scorer()
+        if self._bm25 is not None:
+            logger.info("BM25 index built with %d chunks", len(self.entries))
 
-                self._bm25 = BM25Okapi(self._tokenized_corpus)
-                logger.info("BM25 index built with %d chunks", len(self.entries))
-            except Exception as exc:
-                logger.warning("BM25Okapi import or build failed (%s). BM25 disabled.", exc)
-                self._bm25 = None
-        else:
-            self._bm25 = None
+    def add_chunks(self, chunks: list[Chunk]) -> int:
+        """Incrementally add chunks: extend the corpus and rebuild only the
+        scorer, reusing existing tokenization instead of re-tokenizing the whole
+        corpus. Returns the number of chunks added."""
+        added = 0
+        for chunk in chunks:
+            search_text = _searchable_text(chunk)
+            if not search_text:
+                continue
+            self.entries.append(chunk)
+            self._tokenized_corpus.append(tokenize(search_text))
+            self._meta_dicts.append(self._filter_view(chunk))
+            added += 1
+        if added:
+            self._rebuild_scorer()
+            logger.info("BM25 index extended by %d chunks (now %d)", added, len(self.entries))
+        return added
 
-    def _matches_filters(self, chunk: Chunk, filters: dict[str, Any] | None) -> bool:
+    def _matches_filters(
+        self,
+        meta_dict: dict[str, Any],
+        metadata: Any,
+        filters: dict[str, Any] | None,
+    ) -> bool:
         if not filters:
             return True
-        meta_dict = chunk.metadata.model_dump()
+        extra = meta_dict.get("extra") or (getattr(metadata, "extra", None) or {})
         for key, value in filters.items():
             actual = meta_dict.get(key)
-            if actual is None and hasattr(chunk.metadata, key):
-                actual = getattr(chunk.metadata, key)
-            if actual is None and chunk.metadata.extra:
-                actual = chunk.metadata.extra.get(key)
+            # Precomputed model_dump covers every metadata field; the getattr
+            # fallback (cheap, no serialization) only catches computed/non-field
+            # attributes, and extra covers keys nested in the extra dict.
+            if actual is None and metadata is not None and hasattr(metadata, key):
+                actual = getattr(metadata, key)
+            if actual is None:
+                actual = extra.get(key)
             if actual is None:
                 return False
             if isinstance(value, list):
@@ -122,7 +163,7 @@ class BM25SearchIndex:
         results: list[ScoredChunk] = []
         for idx in ranked_indices:
             chunk = self.entries[idx]
-            if not self._matches_filters(chunk, filters):
+            if not self._matches_filters(self._meta_dicts[idx], chunk.metadata, filters):
                 continue
             bm25_score = float(scores[idx])
             results.append(
@@ -182,66 +223,36 @@ class BM25SearchIndex:
         else:
             self._tokenized_corpus = [tokenize(_searchable_text(c)) for c in self.entries]
 
-        if self._tokenized_corpus:
-            try:
-                from rank_bm25 import BM25Okapi  # type: ignore
+        self._meta_dicts = [self._filter_view(c) for c in self.entries]
+        self._rebuild_scorer()
+        return self._bm25 is not None
 
-                self._bm25 = BM25Okapi(self._tokenized_corpus)
-                return True
-            except Exception as exc:
-                logger.warning("BM25Okapi build from loaded corpus failed: %s", exc)
-                self._bm25 = None
-                return False
+    def _remove_where(self, predicate) -> None:
+        """Drop entries matching ``predicate`` and rebuild only the scorer,
+        keeping tokenization and precomputed filter views for the rest."""
+        kept_entries: list[Chunk] = []
+        kept_tokens: list[list[str]] = []
+        kept_meta: list[dict[str, Any]] = []
+        for chunk, tokens, meta in zip(self.entries, self._tokenized_corpus, self._meta_dicts):
+            if predicate(chunk):
+                continue
+            kept_entries.append(chunk)
+            kept_tokens.append(tokens)
+            kept_meta.append(meta)
 
-        return False
+        self.entries = kept_entries
+        self._tokenized_corpus = kept_tokens
+        self._meta_dicts = kept_meta
+        self._rebuild_scorer()
 
     def remove_by_source_file(self, source_file: str) -> None:
-        kept_entries: list[Chunk] = []
-        kept_tokens: list[list[str]] = []
-
-        for chunk, tokens in zip(self.entries, self._tokenized_corpus):
-            if chunk.metadata.source_file == source_file:
-                continue
-            kept_entries.append(chunk)
-            kept_tokens.append(tokens)
-
-        self.entries = kept_entries
-        self._tokenized_corpus = kept_tokens
-
-        if self._tokenized_corpus:
-            try:
-                from rank_bm25 import BM25Okapi  # type: ignore
-
-                self._bm25 = BM25Okapi(self._tokenized_corpus)
-            except Exception:
-                self._bm25 = None
-        else:
-            self._bm25 = None
+        self._remove_where(lambda c: c.metadata.source_file == source_file)
 
     def remove_by_document_id(self, document_id: str) -> None:
-        kept_entries: list[Chunk] = []
-        kept_tokens: list[list[str]] = []
-
-        for chunk, tokens in zip(self.entries, self._tokenized_corpus):
-            if chunk.metadata.document_id == document_id:
-                continue
-            kept_entries.append(chunk)
-            kept_tokens.append(tokens)
-
-        self.entries = kept_entries
-        self._tokenized_corpus = kept_tokens
-
-        if self._tokenized_corpus:
-            try:
-                from rank_bm25 import BM25Okapi  # type: ignore
-
-                self._bm25 = BM25Okapi(self._tokenized_corpus)
-            except Exception:
-                self._bm25 = None
-        else:
-            self._bm25 = None
+        self._remove_where(lambda c: c.metadata.document_id == document_id)
 
     def clear(self) -> None:
         self.entries.clear()
         self._tokenized_corpus.clear()
+        self._meta_dicts.clear()
         self._bm25 = None
