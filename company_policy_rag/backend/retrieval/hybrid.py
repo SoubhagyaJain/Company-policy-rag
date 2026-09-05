@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from backend.models.rag import ScoredChunk
@@ -75,6 +76,16 @@ class HybridRetriever:
         self.reranker = reranker or CrossEncoderReranker()
         self.rrf_k = rrf_k
 
+    def _warm_dense_model(self) -> None:
+        """Force the embedding model to load on the calling thread (idempotent)."""
+        embedding_service = getattr(self.dense_retriever, "embedding_service", None)
+        init = getattr(embedding_service, "_init_model", None)
+        if callable(init):
+            try:
+                init()
+            except Exception:
+                pass
+
     def retrieve(
         self,
         query: str,
@@ -89,12 +100,28 @@ class HybridRetriever:
 
         effective_rrf_k = rrf_k if rrf_k is not None else self.rrf_k
 
-        logger.info(f"Executing dense retrieval for query: {query}")
-        dense_hits = self.dense_retriever.retrieve(query, top_k=dense_top_k, filters=filters)
-        
-        logger.info(f"Executing BM25 retrieval for query: {query}")
-        bm25_hits = self.bm25_index.search(query, top_k=bm25_top_k, filters=filters)
-        logger.info("BM25 retrieval complete")
+        # Load the embedding model on THIS (calling) thread before fanning out:
+        # the first `import sentence_transformers` pulls in native libs (pyarrow)
+        # that can crash if first imported inside a worker thread on some
+        # platforms. Idempotent once loaded.
+        self._warm_dense_model()
+
+        # Dense and BM25 are independent and each releases the GIL during its
+        # heavy work (torch inference / native scoring / Chroma I/O), so running
+        # them concurrently overlaps rather than serializes. Fusion is unchanged,
+        # and an exception in either propagates identically to the sequential
+        # version (callers fall back to a single index on error).
+        logger.info(f"Executing dense + BM25 retrieval for query: {query}")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            dense_future = executor.submit(
+                self.dense_retriever.retrieve, query, top_k=dense_top_k, filters=filters
+            )
+            bm25_future = executor.submit(
+                self.bm25_index.search, query, top_k=bm25_top_k, filters=filters
+            )
+            dense_hits = dense_future.result()
+            bm25_hits = bm25_future.result()
+        logger.info("Dense + BM25 retrieval complete")
 
         if not bm25_hits:
             logger.debug("BM25 returned 0 hits; returning dense hits only.")

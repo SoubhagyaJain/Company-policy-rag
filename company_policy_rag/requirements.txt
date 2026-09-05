@@ -29,7 +29,6 @@ pypdf>=5.0.0
 pymupdf>=1.24.0
 
 # Chat UI
-streamlit>=1.32.0
 chainlit>=2.0.0
 
 # Aether API (FastAPI frontend bridge)
@@ -46,6 +45,7 @@ python-multipart>=0.0.9
 # Async Task Queue & Caching
 celery[redis]>=5.3.6
 redis>=5.0.0
+cachetools>=5.3.0  # TTLCache for conversation state + chat service
 
 # Evaluation & exploration (notebook)
 jupyter>=1.0.0

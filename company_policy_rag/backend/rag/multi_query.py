@@ -1,6 +1,64 @@
 from __future__ import annotations
 
+import json
 import re
+from typing import Any
+
+from backend.utils.logging import logger
+from src.config import settings
+
+_LLM_DECOMPOSE_PROMPT = """You split a user's question into focused search queries for a document retrieval system.
+Return 2 to {n} short, standalone search queries that together cover every aspect needed to answer the question.
+Each query must target one distinct aspect; do not repeat an aspect. Preserve the user's terminology and any specific names, numbers, or conditions.
+If the question is already simple and single-topic, return just that one question.
+
+Question: {query}
+
+Respond with ONLY a JSON array of strings and nothing else, for example:
+["first focused query", "second focused query"]
+JSON:"""
+
+
+def _dedupe_clean(items: list[str], max_queries: int) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        item = item.strip().strip('"').strip()
+        if len(item) < 3:
+            continue
+        key = item.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result[:max_queries]
+
+
+def _parse_subqueries(raw: str, max_queries: int) -> list[str]:
+    """Parse an LLM decomposition response — JSON array preferred, newline fallback.
+
+    A JSON array is trusted as-is. The newline/bullet fallback is trusted only
+    when 2+ list-like lines survive, so a single prose sentence (e.g. a model
+    that answered instead of decomposing) falls through to the heuristic rather
+    than becoming a bogus sub-query.
+    """
+    match = re.search(r"\[.*\]", raw, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group(0))
+            if isinstance(data, list):
+                return _dedupe_clean([str(x) for x in data], max_queries)
+        except Exception:
+            pass
+
+    lines: list[str] = []
+    for line in raw.splitlines():
+        cleaned = line.strip().strip("-*•0123456789.)() ").strip()
+        if cleaned and not cleaned.lower().startswith(("json", "here are", "sure", "```")):
+            lines.append(cleaned)
+    if len(lines) >= 2:
+        return _dedupe_clean(lines, max_queries)
+    return []
+
 
 _BUILDING_BLOCK_SUBQUERIES: tuple[str, ...] = (
     "5 Levels of Agentic AI Systems building blocks overview",
@@ -143,12 +201,63 @@ class MultiQueryGenerator:
     targeting specific document sections to maximize Context Recall.
     """
 
+    def __init__(self, llm: Any = None) -> None:
+        self.llm = llm
+        # Per-instance memo so the retry loop (which re-runs retrieval per
+        # attempt) does not re-hit the LLM for the same query.
+        self._llm_cache: dict[str, list[str]] = {}
+
     def generate_subqueries(self, query: str, max_queries: int = 8) -> list[str]:
-        """Generate deduplicated list of sub-queries for retrieval aggregation."""
+        """Decompose a query into sub-queries for retrieval aggregation.
+
+        Prefers one LLM decomposition (generalizes to any corpus); falls back to
+        the keyword-driven heuristic when the LLM is unavailable, disabled, or
+        returns nothing usable.
+        """
         core = query.strip()
         if not core:
             return []
 
+        if self.llm is not None and getattr(settings, "enable_llm_multi_query", True):
+            llm_subs = self._generate_subqueries_llm(core, max_queries)
+            if llm_subs:
+                merged: list[str] = []
+                seen: set[str] = set()
+                # Original query first, then LLM sub-queries, then the
+                # deterministic multi-part split as a cheap safety net for
+                # explicit "A and B" questions the model may have flattened.
+                for candidate in [core, *llm_subs, *decompose_multi_part(core)]:
+                    key = candidate.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        merged.append(candidate)
+                return merged[:max_queries]
+
+        return self._generate_subqueries_heuristic(core, max_queries)
+
+    def _generate_subqueries_llm(self, core: str, max_queries: int) -> list[str] | None:
+        """One LLM call decomposing the query. Returns None to fall back."""
+        cached = self._llm_cache.get(core)
+        if cached is not None:
+            return cached or None
+
+        prompt = _LLM_DECOMPOSE_PROMPT.format(n=max_queries, query=core)
+        try:
+            try:
+                raw = str(self.llm.complete(prompt, temperature=0.0, max_new_tokens=256)).strip()
+            except TypeError:
+                raw = str(self.llm.complete(prompt)).strip()
+        except Exception as exc:
+            logger.warning("LLM multi-query decomposition failed (%s); using heuristic.", exc)
+            self._llm_cache[core] = []
+            return None
+
+        subs = _parse_subqueries(raw, max_queries)
+        self._llm_cache[core] = subs
+        return subs or None
+
+    def _generate_subqueries_heuristic(self, core: str, max_queries: int = 8) -> list[str]:
+        """Keyword-driven sub-query expansion (corpus-specific fallback)."""
         queries: list[str] = []
         seen: set[str] = set()
 

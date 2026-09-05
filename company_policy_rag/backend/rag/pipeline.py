@@ -7,6 +7,7 @@ import re
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any, Callable
@@ -610,6 +611,8 @@ class RAGPipeline:
             self.query_router.llm = self.llm
         if self.verifier.llm is None and self.llm is not None:
             self.verifier.llm = self.llm
+        if getattr(self.multi_query_gen, "llm", None) is None and self.llm is not None:
+            self.multi_query_gen.llm = self.llm
 
     def _resolve_document_file_path(self, meta: ChunkMetadata) -> Path | None:
         """Find the real document file path on disk across known storage and data folders."""
@@ -1597,6 +1600,76 @@ class RAGPipeline:
         if ctx.is_fast_path:
             ctx.current_strategy.enable_multi_query = False
 
+    def _gather_hybrid_candidates(
+        self,
+        sub_queries: list[str],
+        filters: dict[str, Any] | None,
+        current_strategy: Any,
+        *,
+        bm25_fallback_on_error: bool = True,
+    ) -> tuple[list[ScoredChunk], bool]:
+        """Retrieve every sub-query concurrently and merge into one candidate pool.
+
+        Sub-queries are independent, so they run in a bounded thread pool instead
+        of a serial loop. Merge order follows ``sub_queries`` (executor.map keeps
+        input order), and keeping the max score per chunk id is order-independent,
+        so the merged result matches the previous sequential behavior. Returns the
+        deduped candidates and whether dense retrieval degraded to BM25.
+        """
+        def _hits_for(sq: str) -> tuple[list[ScoredChunk], bool]:
+            try:
+                return (
+                    self._retrieve_hybrid_hits(
+                        sq,
+                        dense_top_k=current_strategy.dense_top_k,
+                        bm25_top_k=current_strategy.bm25_top_k,
+                        filters=filters,
+                        rrf_k=current_strategy.rrf_k,
+                    ),
+                    False,
+                )
+            except Exception as ret_exc:
+                if not bm25_fallback_on_error:
+                    return [], False
+                logger.warning("Dense retrieval error (%s); falling back to BM25 index.", ret_exc)
+                try:
+                    return (
+                        self.hybrid_retriever.bm25_index.search(
+                            sq, top_k=current_strategy.bm25_top_k, filters=filters
+                        ),
+                        True,
+                    )
+                except Exception:
+                    return [], True
+
+        if not sub_queries:
+            return [], False
+
+        # Warm heavy models on THIS (main) thread before fanning sub-queries out
+        # to workers — a first `import sentence_transformers` inside a worker can
+        # crash on some platforms. Idempotent once loaded; tolerant of mock
+        # retrievers that don't implement the warm hook.
+        warm = getattr(self.hybrid_retriever, "_warm_dense_model", None)
+        if callable(warm):
+            warm()
+
+        max_workers = min(len(sub_queries), max(1, int(getattr(settings, "retrieval_max_workers", 4))))
+        if max_workers > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(_hits_for, sub_queries))
+        else:
+            results = [_hits_for(sq) for sq in sub_queries]
+
+        dense_degraded = False
+        candidate_map: dict[str, ScoredChunk] = {}
+        for hits, degraded in results:
+            dense_degraded = dense_degraded or degraded
+            for sc in hits:
+                cid = sc.chunk.id
+                if cid not in candidate_map or (sc.score or 0.0) > (candidate_map[cid].score or 0.0):
+                    candidate_map[cid] = sc
+        return list(candidate_map.values()), dense_degraded
+
     def _stage_retrieve(self, ctx: QueryContext, prefix: str) -> None:
         """Build sub-queries and run one attempt's hybrid retrieval onto ``ctx``.
 
@@ -1657,33 +1730,9 @@ class RAGPipeline:
                 cache_hit_retrieval = True
 
         if not candidate_chunks:
-            candidate_map: dict[str, ScoredChunk] = {}
-            for sq in sub_queries:
-                try:
-                    hits = self._retrieve_hybrid_hits(
-                        sq,
-                        dense_top_k=current_strategy.dense_top_k,
-                        bm25_top_k=current_strategy.bm25_top_k,
-                        filters=search_filters,
-                        rrf_k=current_strategy.rrf_k,
-                    )
-                except Exception as ret_exc:
-                    logger.warning("Dense retrieval error (%s); falling back to BM25 index.", ret_exc)
-                    dense_degraded = True
-                    try:
-                        hits = self.hybrid_retriever.bm25_index.search(
-                            sq, top_k=current_strategy.bm25_top_k, filters=search_filters
-                        )
-                    except Exception:
-                        hits = []
-
-                for sc in hits:
-                    cid = sc.chunk.id
-                    if cid not in candidate_map or (sc.score or 0.0) > (
-                        candidate_map[cid].score or 0.0
-                    ):
-                        candidate_map[cid] = sc
-            candidate_chunks = list(candidate_map.values())
+            candidate_chunks, dense_degraded = self._gather_hybrid_candidates(
+                sub_queries, search_filters, current_strategy
+            )
 
             if dense_degraded:
                 thinking_sm.degrade_stage(
@@ -1705,25 +1754,12 @@ class RAGPipeline:
                 relaxed_filters = relaxed_filters or None
                 ctx.filter_relaxed = relaxed_filters != search_filters
                 ctx.applied_filters = relaxed_filters or {}
-                candidate_map = {}
-                for sq in sub_queries:
-                    try:
-                        hits = self._retrieve_hybrid_hits(
-                            sq,
-                            dense_top_k=current_strategy.dense_top_k,
-                            bm25_top_k=current_strategy.bm25_top_k,
-                            filters=relaxed_filters,
-                            rrf_k=current_strategy.rrf_k,
-                        )
-                    except Exception:
-                        hits = []
-                    for sc in hits:
-                        cid = sc.chunk.id
-                        if cid not in candidate_map or (sc.score or 0.0) > (
-                            candidate_map[cid].score or 0.0
-                        ):
-                            candidate_map[cid] = sc
-                candidate_chunks = list(candidate_map.values())
+                # Relaxation retries the same sub-queries; on a per-query error it
+                # drops that query (no BM25 fallback), matching the original.
+                candidate_chunks, _ = self._gather_hybrid_candidates(
+                    sub_queries, relaxed_filters, current_strategy,
+                    bm25_fallback_on_error=False,
+                )
 
             # Enforce hard document scope validation
             if scope_decision.scope == DocumentRetrievalScope.CURRENT_DOCUMENT:
