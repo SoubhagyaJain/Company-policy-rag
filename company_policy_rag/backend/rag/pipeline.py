@@ -2177,6 +2177,93 @@ class RAGPipeline:
         thinking_sm.complete_stage(ThinkingStage.ANSWER_GENERATION)
         ctx.answer_text = answer_text
 
+    def _stage_verify(self, ctx: QueryContext, prefix: str, attempt: int) -> None:
+        """Extract citations and verify the generated answer for one attempt.
+
+        Builds citations, runs the (optionally LLM-backed) faithfulness verifier,
+        and folds in deterministic policy validation. Writes ``ctx.citations``
+        and ``ctx.report``; the retry loop reads those to accumulate the best
+        attempt and decide whether to retry.
+        """
+        thinking_sm = ctx.thinking_sm
+        answer_text = ctx.answer_text
+        expanded_chunks = ctx.expanded_chunks
+        user_query = ctx.user_query
+        response_mode_config = ctx.response_mode_config
+        telemetry_extra = ctx.telemetry_extra
+        policy_selection = ctx.policy_selection
+        req_llm = ctx.req_llm
+
+        # 7. Verifiable Citation Extraction
+        t0 = time.perf_counter()
+        thinking_sm.start_stage(ThinkingStage.CITATION_BUILDING)
+        citations = self.citation_engine.select_citations(
+            answer_text=answer_text,
+            generation_chunks=expanded_chunks,
+            user_query=user_query,
+            max_citations=response_mode_config.max_citations,
+        )
+        if telemetry_extra.get("requires_visual_abstention"):
+            # The deterministic abstention makes one claim only: the requested
+            # labels live in the referenced page visual. Keep only that primary
+            # page instead of attaching nearby chunks.
+            citations = citations[:1]
+        ctx.stage_timings[f"citation_extraction{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+        thinking_sm.complete_stage(
+            ThinkingStage.CITATION_BUILDING,
+            details={"citation_count": len(citations)},
+        )
+
+        # 8. Post-Generation Verification
+        t0 = time.perf_counter()
+        if ctx.enable_verification and self.verifier is not None:
+            # High-risk (policy / numeric) answers are already buffered before
+            # the user sees them (see _stage_plan), so an LLM claim-support audit
+            # here costs no perceived latency and catches hallucinations the
+            # lexical heuristic cannot. Ordinary factual answers keep the fast
+            # heuristic-only path.
+            use_llm_judge = bool(
+                ctx.is_high_risk
+                and req_llm is not None
+                and getattr(settings, "enable_llm_faithfulness_verification", True)
+            )
+            report = self.verifier.verify(
+                query=user_query,
+                answer=answer_text,
+                context_chunks=expanded_chunks,
+                citations=citations,
+                llm=req_llm,
+                allowed_derived_facts=allowed_derived_facts(policy_selection),
+                use_llm_judge=use_llm_judge,
+            )
+            report.retry_count = attempt
+        else:
+            report = VerificationReport(
+                faithfulness=1.0,
+                completeness=1.0,
+                citation_coverage=1.0,
+                coherence=1.0,
+                composite_score=1.0,
+                passed=True,
+                retry_count=attempt,
+            )
+        policy_validation = validate_policy_answer(answer_text, policy_selection)
+        report.incorrect_numbers = list(policy_validation.incorrect_numbers)
+        report.missed_conditions = list(policy_validation.missed_conditions)
+        report.missed_exceptions = list(policy_validation.missed_exceptions)
+        if policy_validation.unsupported_numbers:
+            report.unsupported_claims.extend(
+                f"Unsupported numerical claim: {item}"
+                for item in policy_validation.unsupported_numbers
+            )
+        if not policy_validation.passed:
+            report.passed = False
+            report.overall_grounded = False
+        ctx.stage_timings[f"verification{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+
+        ctx.citations = citations
+        ctx.report = report
+
     def _stage_classify_and_resolve(self, ctx: QueryContext) -> None:
         """Classify the query, resolve conversational context, set follow-up flags on ctx."""
         # 0a. Query Classification & Intent Selection
@@ -2746,72 +2833,10 @@ class RAGPipeline:
             self._stage_generate(ctx, prefix)
             answer_text = ctx.answer_text
 
-            # 7. Verifiable Citation Extraction
-            t0 = time.perf_counter()
-            thinking_sm.start_stage(ThinkingStage.CITATION_BUILDING)
-            citations = self.citation_engine.select_citations(
-                answer_text=answer_text,
-                generation_chunks=expanded_chunks,
-                user_query=user_query,
-                max_citations=response_mode_config.max_citations,
-            )
-            if telemetry_extra.get("requires_visual_abstention"):
-                # The deterministic abstention makes one claim only: the
-                # requested labels live in the referenced page visual. Keep
-                # only that primary page instead of attaching nearby chunks.
-                citations = citations[:1]
-            stage_timings[f"citation_extraction{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
-            thinking_sm.complete_stage(
-                ThinkingStage.CITATION_BUILDING,
-                details={"citation_count": len(citations)},
-            )
-
-            # 8. Post-Generation Verification
-            t0 = time.perf_counter()
-            if enable_verification and self.verifier is not None:
-                # High-risk (policy / numeric) answers are already buffered before
-                # the user sees them (see _stage_plan), so an LLM claim-support
-                # audit here costs no perceived latency and catches hallucinations
-                # the lexical heuristic cannot. Ordinary factual answers keep the
-                # fast heuristic-only path.
-                use_llm_judge = bool(
-                    ctx.is_high_risk
-                    and req_llm is not None
-                    and getattr(settings, "enable_llm_faithfulness_verification", True)
-                )
-                report = self.verifier.verify(
-                    query=user_query,
-                    answer=answer_text,
-                    context_chunks=expanded_chunks,
-                    citations=citations,
-                    llm=req_llm,
-                    allowed_derived_facts=allowed_derived_facts(policy_selection),
-                    use_llm_judge=use_llm_judge,
-                )
-                report.retry_count = attempt
-            else:
-                report = VerificationReport(
-                    faithfulness=1.0,
-                    completeness=1.0,
-                    citation_coverage=1.0,
-                    coherence=1.0,
-                    composite_score=1.0,
-                    passed=True,
-                    retry_count=attempt,
-                )
-            policy_validation = validate_policy_answer(answer_text, policy_selection)
-            report.incorrect_numbers = list(policy_validation.incorrect_numbers)
-            report.missed_conditions = list(policy_validation.missed_conditions)
-            report.missed_exceptions = list(policy_validation.missed_exceptions)
-            if policy_validation.unsupported_numbers:
-                report.unsupported_claims.extend(
-                    f"Unsupported numerical claim: {item}"
-                    for item in policy_validation.unsupported_numbers
-                )
-            if not policy_validation.passed:
-                report.passed = False
-                report.overall_grounded = False
-            stage_timings[f"verification{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+            # Citation extraction + post-generation verification.
+            self._stage_verify(ctx, prefix, attempt)
+            citations = ctx.citations
+            report = ctx.report
 
             if report.composite_score > best_score or best_report is None:
                 best_score = report.composite_score

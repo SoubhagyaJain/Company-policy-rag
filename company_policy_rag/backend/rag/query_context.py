@@ -96,6 +96,8 @@ class QueryContext:
     reranked_chunks: list["ScoredChunk"] = field(default_factory=list)
     expanded_chunks: list["ScoredChunk"] = field(default_factory=list)
     answer_text: str = ""
+    citations: list["Citation"] = field(default_factory=list)
+    report: "VerificationReport | None" = None
     formatted_context: str = ""
     context_tokens: int = 0
     cross_document_count: int = 0
