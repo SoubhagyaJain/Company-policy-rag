@@ -230,7 +230,9 @@ class Settings(BaseSettings):
         return self.text_model or self.llm_model
 
     llm_temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")
-    llm_request_timeout: float = Field(default=120.0, alias="LLM_REQUEST_TIMEOUT")
+    # 300s tolerates slow CPU-bound local generation; the API composition root
+    # reads this rather than defining its own default.
+    llm_request_timeout: float = Field(default=300.0, alias="LLM_REQUEST_TIMEOUT")
     # 4K keeps Qwen2.5 7B mostly GPU-resident on common 6 GB cards. The
     # model's 32K native default creates an oversized KV cache and CPU offload.
     llm_context_window: int = Field(default=4096, alias="LLM_CONTEXT_WINDOW")
@@ -285,19 +287,22 @@ class Settings(BaseSettings):
     )
 
     # ── Reranker (post-retrieval precision) ────────────────────────────────
-    # Base is the latency-safe default for CPU inference. Large can improve
-    # precision on dense legal text, but adds several seconds per query.
+    # Single source of truth for the reranker; the API composition root
+    # (backend/api/dependencies.py) reads these from here instead of its own
+    # os.getenv defaults, so the live pipeline and the eval/legacy stack agree.
+    # Base is the latency-safe default for CPU inference; set
+    # RERANKER_MODEL=BAAI/bge-reranker-large for higher precision on dense legal
+    # text at a few seconds/query. Defaults match the project's .env.
     enable_reranker: bool = Field(default=True, alias="ENABLE_RERANKER")
     reranker_model: str = Field(
         default="BAAI/bge-reranker-base", alias="RERANKER_MODEL"
     )
-    # Final context passed to generation (4 balances recall for Qwen 2.5 7B without context bloat)
-    reranker_top_n: int = Field(default=4, alias="RERANKER_TOP_N")
+    reranker_top_n: int = Field(default=5, alias="RERANKER_TOP_N")
     reranker_batch_size: int = Field(default=32, alias="RERANKER_BATCH_SIZE")
     reranker_device: str = Field(default="cpu", alias="RERANKER_DEVICE")
     # Drop chunks scoring below this fraction of the top reranker score
     enable_rerank_score_filter: bool = Field(default=True, alias="ENABLE_RERANK_SCORE_FILTER")
-    rerank_min_score_ratio: float = Field(default=0.50, alias="RERANK_MIN_SCORE_RATIO")
+    rerank_min_score_ratio: float = Field(default=0.40, alias="RERANK_MIN_SCORE_RATIO")
     rerank_min_keep: int = Field(default=3, alias="RERANK_MIN_KEEP")
 
     # ── Conditional Reranking & Retrieval Caching (Qwen 2.5 7B) ──────────
