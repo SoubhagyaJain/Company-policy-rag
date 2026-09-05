@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import subprocess
-import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -35,19 +33,6 @@ def _load_script_main(script: str) -> Callable[..., int]:
     )
 
 
-def _streamlit_app_path() -> Path:
-    package_root = Path(__file__).resolve().parent.parent
-    for candidate in (
-        package_root / "app" / "streamlit_app.py",
-        Path.cwd() / "app" / "streamlit_app.py",
-    ):
-        if candidate.is_file():
-            return candidate
-    raise SystemExit(
-        "streamlit_app.py not found. Clone the repo or set POLICY_RAG_ROOT to the project root."
-    )
-
-
 def index_main() -> None:
     """Index PDFs from data/policies/ and data/legal/."""
     raise SystemExit(_load_script_main("index_documents")())
@@ -56,21 +41,3 @@ def index_main() -> None:
 def eval_main() -> None:
     """Run golden-set evaluation."""
     raise SystemExit(_load_script_main("evaluate")())
-
-
-def chat_main() -> None:
-    """Launch the Streamlit chat UI."""
-    app_path = _streamlit_app_path()
-    raise SystemExit(
-        subprocess.call(
-            [
-                sys.executable,
-                "-m",
-                "streamlit",
-                "run",
-                str(app_path),
-                "--server.headless=true",
-                "--browser.gatherUsageStats=false",
-            ]
-        )
-    )

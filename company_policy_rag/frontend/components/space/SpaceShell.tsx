@@ -86,10 +86,28 @@ export function SpaceShell(props: SpaceShellProps) {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  // Auto-scroll the message pane on new content.
+  // Auto-scroll the message pane on new content — but only while the reader is
+  // parked near the bottom. If they scroll up during streaming to re-read
+  // something, we stop yanking them back down; a brand-new message (they just
+  // sent, or the assistant bubble appeared) always snaps to the latest.
+  const stickToBottomRef = useRef(true);
+  const prevMsgCountRef = useRef(messages.length);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop;
+    stickToBottomRef.current = distanceFromBottom < 120;
+  }, []);
+
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (messages.length !== prevMsgCountRef.current) {
+      prevMsgCountRef.current = messages.length;
+      stickToBottomRef.current = true;
+    }
+    if (stickToBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [messages, isStreaming]);
 
   const connected = health.status === 'ok' && health.vector_db;
@@ -156,7 +174,7 @@ export function SpaceShell(props: SpaceShellProps) {
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} className="sp-scroll mt-4 flex-1 overflow-y-auto">
+            <div ref={scrollRef} onScroll={handleMessagesScroll} className="sp-scroll mt-4 flex-1 overflow-y-auto">
               <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-4">
                 {empty ? (
                   <motion.div

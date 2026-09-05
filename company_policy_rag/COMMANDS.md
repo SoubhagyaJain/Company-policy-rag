@@ -68,7 +68,7 @@ cp .env.example .env
 cp .env.docker.example .env.docker
 ```
 
-- `.env` is used for local Python/Streamlit runs.
+- `.env` is used for local Python/backend runs.
 - `.env.docker` is used for Docker Compose runs.
 
 ---
@@ -115,21 +115,13 @@ python scripts/index_documents.py --dry-run
 
 ## 4. Run the application locally
 
-### Run the Streamlit UI
-
-```bash
-streamlit run app/streamlit_app.py
-```
-
-Open: `http://localhost:8501`
-
-### Run the FastAPI backend directly
-
-If you want to run the backend without Docker:
+### Run the FastAPI backend
 
 ```bash
 uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Open: `http://localhost:8000` (the Next.js frontend at the repo root talks to this API).
 
 > Replace `backend.api.main:app` with the actual backend app path if your repository uses a different import path.
 
@@ -337,7 +329,7 @@ python -c "from src.retriever import get_reranker; print('OK' if get_reranker() 
 - Use `.env` for local development and `.env.docker` for Docker.
 - Use `docker compose up --build -d` when you want a self-contained local stack with backend, frontend, Redis, and Chroma.
 - Use `npm run dev` only from the `company_policy_rag/frontend` folder.
-- The `streamlit` command runs the main UI from `app/streamlit_app.py`.
+- The `uvicorn backend.api.main:app` command runs the FastAPI backend that serves the frontend.
 
 ---
 
