@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import os
 import threading
 from pathlib import Path
 from dotenv import load_dotenv
 
 env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
+
+from src.config import settings
 
 try:
     from llama_index.llms.ollama import Ollama
@@ -88,17 +89,15 @@ def get_rag_pipeline() -> RAGPipeline:
                     vector_store=vector_store,
                     embedding_service=embedding_service,
                 )
-                # Initialize Reranker
-                reranker_device = os.getenv("RERANKER_DEVICE", "cpu")
-                reranker_model = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-large")
-                reranker_top_n = int(os.getenv("RERANKER_TOP_N", "5"))
-                reranker_min_ratio = float(os.getenv("RERANK_MIN_SCORE_RATIO", "0.40"))
-
+                # Reranker config comes from the single source of truth
+                # (src/config.Settings, which still honors the same env vars via
+                # its field aliases) instead of a parallel set of os.getenv
+                # defaults that had drifted from it.
                 reranker = CrossEncoderReranker(
-                    model_name=reranker_model,
-                    top_n=reranker_top_n,
-                    device=reranker_device,
-                    min_ratio=reranker_min_ratio,
+                    model_name=settings.reranker_model,
+                    top_n=settings.reranker_top_n,
+                    device=settings.reranker_device,
+                    min_ratio=settings.rerank_min_score_ratio,
                 )
 
                 hybrid_retriever = HybridRetriever(
@@ -107,12 +106,12 @@ def get_rag_pipeline() -> RAGPipeline:
                     reranker=reranker,
                 )
 
-                # Initialize LLM
-                ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-                ollama_model = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:7b")
-                temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
-                request_timeout = float(os.getenv("LLM_REQUEST_TIMEOUT", "300.0"))
-                context_window = int(os.getenv("LLM_CONTEXT_WINDOW", "4096"))
+                # LLM config likewise sourced from Settings (same env aliases).
+                ollama_url = settings.ollama_base_url
+                ollama_model = settings.llm_model
+                temperature = settings.llm_temperature
+                request_timeout = settings.llm_request_timeout
+                context_window = settings.llm_context_window
 
                 llm = None
                 global Ollama

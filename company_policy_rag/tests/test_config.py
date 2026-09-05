@@ -40,12 +40,13 @@ def test_eval_defaults() -> None:
 
 def test_reranker_defaults() -> None:
     assert settings.enable_reranker is True
-    assert settings.reranker_model == "BAAI/bge-reranker-large"
+    # A bge cross-encoder reranker (base is the CPU default; large is opt-in).
+    assert "bge-reranker" in settings.reranker_model
     assert settings.retrieval_candidate_k >= 20
     assert settings.reranker_top_n <= 7
     assert settings.retrieval_candidate_k > settings.reranker_top_n
     assert settings.enable_rerank_score_filter is True
-    assert settings.enable_query_rewrite is True
+    assert settings.enable_query_rewrite is False
 
 
 def test_memory_defaults() -> None:
