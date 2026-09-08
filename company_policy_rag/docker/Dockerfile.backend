@@ -16,8 +16,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir redis>=5.0.0
+    && pip install --no-cache-dir -r requirements.txt
 
 # ──────────────────────────────────────────────────────────────
 # Stage 2 — Runtime: lean production image
@@ -50,6 +49,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Copy application source
 COPY backend/ ./backend/
+COPY src/ ./src/
+COPY data/demo/ ./data/demo/
 
 # Create required directories
 RUN mkdir -p data/policies data/legal data/raw storage logs .cache/huggingface

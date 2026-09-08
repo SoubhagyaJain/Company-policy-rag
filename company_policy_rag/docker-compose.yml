@@ -7,8 +7,6 @@ services:
     container_name: rag-backend
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-    env_file:
-      - .env
     environment:
       PYTHONPATH: /app
       REDIS_HOST: redis
@@ -17,9 +15,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
-      CHROMA_HOST: chroma
-      CHROMA_PORT: 8100
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen2.5:7b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
@@ -29,10 +27,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      chroma:
-        condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      ollama_setup:
+        condition: service_completed_successfully
     networks:
       - rag-network
     restart: unless-stopped
@@ -44,8 +40,6 @@ services:
       dockerfile: docker/Dockerfile.backend
     container_name: rag-celery-worker
     command: celery -A backend.tasks.celery_app worker --loglevel=info
-    env_file:
-      - .env
     environment:
       PYTHONPATH: /app
       REDIS_HOST: redis
@@ -54,9 +48,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
-      CHROMA_HOST: chroma
-      CHROMA_PORT: 8100
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen2.5:7b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
@@ -66,10 +60,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      chroma:
-        condition: service_healthy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      ollama_setup:
+        condition: service_completed_successfully
     networks:
       - rag-network
     restart: unless-stopped
@@ -119,27 +111,42 @@ services:
       - rag-network
     restart: unless-stopped
 
-  # ── ChromaDB Vector Store ───────────────────────────────────
-  chroma:
-    image: chromadb/chroma:latest
-    container_name: rag-chroma
-    ports:
-      - "${CHROMA_PORT:-8100}:8000"
+  # Local model runtime. The setup job below pulls both required models once.
+  ollama:
+    image: ollama/ollama:0.11.10
+    container_name: rag-ollama
     environment:
-      IS_PERSISTENT: "TRUE"
-      PERSIST_DIRECTORY: /chroma/chroma
-      ANONYMIZED_TELEMETRY: "FALSE"
+      OLLAMA_KEEP_ALIVE: 10m
     volumes:
-      - chroma-data:/chroma/chroma
+      - ollama-data:/root/.ollama
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 15s
-      timeout: 10s
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
       start_period: 10s
-      retries: 5
+      retries: 12
     networks:
       - rag-network
     restart: unless-stopped
+
+  ollama_setup:
+    image: ollama/ollama:0.11.10
+    container_name: rag-ollama-setup
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen2.5:7b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        ollama pull "$${OLLAMA_LLM_MODEL}" &&
+        ollama pull "$${OLLAMA_EMBED_MODEL}"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - rag-network
+    restart: "no"
 
 networks:
   rag-network:
@@ -148,9 +155,9 @@ networks:
 volumes:
   redis-data:
     driver: local
-  chroma-data:
-    driver: local
   uploads:
     driver: local
   hf_cache:
+    driver: local
+  ollama-data:
     driver: local
