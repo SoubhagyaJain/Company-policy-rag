@@ -16,7 +16,6 @@ class HeadingAwareChunker(BaseChunker):
 
     def chunk(self, documents: list[RawDocument]) -> list[Chunk]:
         chunks: list[Chunk] = []
-        min_chunk_chars = 100  # Enforce minimum substantive length
         max_chunk_chars = self.chunk_size * 4
 
         for doc in documents:
@@ -33,7 +32,7 @@ class HeadingAwareChunker(BaseChunker):
             def flush_section(text_lines: list[str], ctx) -> list[Chunk]:
                 nonlocal chunk_idx
                 raw_text = "\n".join(text_lines).strip()
-                if not raw_text or len(raw_text) < 40:
+                if not raw_text:
                     return []
 
                 res: list[Chunk] = []
@@ -56,7 +55,7 @@ class HeadingAwareChunker(BaseChunker):
                     sub_splits = self.recursive_helper._split_text(raw_text, self.recursive_helper.separators)
                     for split_text in sub_splits:
                         s_clean = split_text.strip()
-                        if s_clean and len(s_clean) >= 40:
+                        if s_clean:
                             c = self._create_chunk(
                                 text=s_clean,
                                 document=doc,
@@ -75,9 +74,9 @@ class HeadingAwareChunker(BaseChunker):
             for line in lines:
                 heading = parse_section_heading(line)
                 if heading:
-                    # Only flush if the accumulated lines have enough substantive text
+                    # Preserve section ownership even for short clauses.
                     accumulated = "\n".join(current_lines).strip()
-                    if len(accumulated) >= min_chunk_chars:
+                    if accumulated:
                         chunks.extend(flush_section(current_lines, current_ctx))
                         current_lines = []
                     current_ctx = section_tracker.update(heading)

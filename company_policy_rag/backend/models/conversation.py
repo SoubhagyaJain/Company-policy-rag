@@ -127,6 +127,10 @@ class ConversationTurn(BaseModel):
     resolution: FollowUpResolution | None = None
     expansion_plan: ExpansionPlan | None = None
     evidence_context: ConversationEvidenceContext | None = None
+    retrieval_decision: str = "retrieve"
+    reference_resolution: dict[str, str] = Field(default_factory=dict)
+    returned_to_topic: bool = False
+    clarification_required: bool = False
 
     @field_validator("resolved_query", mode="before")
     @classmethod

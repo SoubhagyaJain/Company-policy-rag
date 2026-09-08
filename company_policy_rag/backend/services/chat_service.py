@@ -332,6 +332,18 @@ class ChatService:
             ],
             citations=rag_res.citations,
             answer=rag_res.answer,
+            retrieval_decision=(
+                rag_res.trace.retrieval_decision if rag_res.trace else "retrieve"
+            ),
+            reference_resolution=(
+                rag_res.trace.reference_resolution if rag_res.trace else {}
+            ),
+            returned_to_topic=(
+                rag_res.trace.returned_to_topic if rag_res.trace else False
+            ),
+            clarification_required=(
+                rag_res.trace.clarification_required if rag_res.trace else False
+            ),
         )
         # Build ConversationEvidenceContext
         evidence_ctx = ConversationEvidenceContext(
@@ -743,6 +755,18 @@ class ChatService:
                 ],
                 citations=final_citations,
                 answer=full_answer,
+                retrieval_decision=(
+                    final_rag_trace.retrieval_decision if final_rag_trace else "retrieve"
+                ),
+                reference_resolution=(
+                    final_rag_trace.reference_resolution if final_rag_trace else {}
+                ),
+                returned_to_topic=(
+                    final_rag_trace.returned_to_topic if final_rag_trace else False
+                ),
+                clarification_required=(
+                    final_rag_trace.clarification_required if final_rag_trace else False
+                ),
             )
             # Build ConversationEvidenceContext for streaming turn
             evidence_ctx = ConversationEvidenceContext(

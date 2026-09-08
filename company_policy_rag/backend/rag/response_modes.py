@@ -61,8 +61,8 @@ RESPONSE_MODES: dict[ResponseMode, ResponseModeConfig] = {
             "materially need support. Never omit a citation needed for truthfulness."
         ),
         follow_up_style=(
-            "For a follow-up, resolve the reference from conversation history, then "
-            "answer the current question directly from freshly retrieved evidence."
+            "The question is already standalone. Answer it directly from the supplied "
+            "verified evidence."
         ),
     ),
     "standard": ResponseModeConfig(
@@ -81,8 +81,8 @@ RESPONSE_MODES: dict[ResponseMode, ResponseModeConfig] = {
             "citation coverage balanced across the answer."
         ),
         follow_up_style=(
-            "Use conversation history to resolve references and intent, but ground the "
-            "current answer in freshly retrieved evidence rather than repeating the prior answer."
+            "The question is already standalone. Use the supplied verified evidence and "
+            "do not repeat earlier conversational work."
         ),
     ),
     "detailed": ResponseModeConfig(
@@ -102,8 +102,8 @@ RESPONSE_MODES: dict[ResponseMode, ResponseModeConfig] = {
             "Every citation must come from retrieved evidence that supports the associated claim."
         ),
         follow_up_style=(
-            "Resolve follow-up references from the conversation, retrieve fresh broad evidence, "
-            "and deepen the answer without blindly injecting or restating the previous response. "
+            "The question is already standalone. Deepen the answer from the supplied verified evidence "
+            "without restating prior conversational work. "
             "If the indexed evidence is insufficient for deeper coverage, say so explicitly."
         ),
     ),

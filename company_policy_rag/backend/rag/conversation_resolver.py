@@ -144,6 +144,11 @@ class ConversationResolutionResult(BaseModel):
     mode_directives: str = ""
     resolution: FollowUpResolution | None = None
     expansion_plan: ExpansionPlan | None = None
+    retrieval_decision: str = "retrieve"
+    reuse_turn_id: str | None = None
+    clarification_question: str | None = None
+    returned_to_topic: bool = False
+    resolved_references: dict[str, str] = Field(default_factory=dict)
 
 
 class FollowUpResolver:
@@ -210,8 +215,9 @@ class FollowUpResolver:
         # Remove common query prefixes like "What is the implementation code for", "Tell me about"
         topic = re.sub(
             r"^(what\s+is\s+(the\s+)?|what\s+are\s+(the\s+)?|how\s+to\s+|how\s+does\s+(the\s+)?|"
+            r"how\s+do\s+i\s+|how\s+can\s+i\s+|"
             r"tell\s+me\s+about\s+(the\s+)?|explain\s+(the\s+)?|show\s+me\s+(the\s+)?|"
-            r"give\s+me\s+(the\s+)?|implementation\s+code\s+for\s+(the\s+)?)",
+            r"give\s+me\s+(the\s+)?|compare\s+|implementation\s+code\s+for\s+(the\s+)?)",
             "",
             clean_q,
             flags=re.IGNORECASE,
@@ -517,6 +523,20 @@ class FollowUpResolver:
         # Robust Dynamic Synthesizer Fallback (Generic transformation)
         q_lower = query.lower()
         clean_q = query.strip().rstrip("?.")
+
+        # A retry asks to rerun the previous request, not to search the literal
+        # words "try again". Reuse the last standalone query when available so
+        # every downstream stage receives the original subject and intent.
+        if re.fullmatch(r"(?:please\s+)?(?:try|retry)(?:\s+it)?\s+again", clean_q, re.IGNORECASE):
+            previous_query = (state.last_resolved_query or state.last_user_query or "").strip()
+            if previous_query and not re.fullmatch(
+                r"(?:please\s+)?(?:try|retry)(?:\s+it)?\s+again[?.]*",
+                previous_query,
+                re.IGNORECASE,
+            ):
+                return previous_query
+            if active_topic:
+                return active_topic
 
         # Specific Mode Synthesizers
         if answer_mode == AnswerMode.CODE_EXPLANATION or any(k in q_lower for k in ("explain this code", "explain the code", "show the code", "code for it")):

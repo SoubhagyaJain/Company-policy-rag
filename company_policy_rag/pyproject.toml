@@ -40,6 +40,12 @@ dependencies = [
   "rank-bm25>=0.2.2",
   "celery[redis]>=5.3.6",
   "redis>=5.0.0",
+  "python-docx>=1.1,<2",
+  "beautifulsoup4>=4.12,<5",
+  "openpyxl>=3.1,<4",
+  "python-pptx>=1.0,<2",
+  "defusedxml>=0.7,<1",
+  "charset-normalizer>=3.3,<4",
 ]
 
 [project.optional-dependencies]
@@ -56,7 +62,7 @@ policy-rag-index = "src.cli:index_main"
 policy-rag-eval = "src.cli:eval_main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src", "backend"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "app" = "app"
@@ -66,6 +72,7 @@ packages = ["src"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/src",
+  "/backend",
   "/app",
   "/scripts",
   "/data/eval",

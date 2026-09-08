@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
+from backend.ingestion.loaders.validation import read_text
 from backend.models.document import DocumentType, RawDocument
 from backend.utils.section_tracker import SectionTracker
 
@@ -25,11 +26,7 @@ class MarkdownLoader(BaseLoader):
     ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.MARKDOWN, base_metadata)
 
-        content = ""
-        try:
-            content = file_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            content = file_path.read_text(encoding="latin-1", errors="replace")
+        content = read_text(file_path)
 
         section_tracker = SectionTracker()
         for line in content.splitlines():

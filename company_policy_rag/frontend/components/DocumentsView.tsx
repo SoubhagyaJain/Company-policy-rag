@@ -257,7 +257,7 @@ export function DocumentsView() {
               type="file"
               className="hidden"
               multiple
-              accept=".pdf,.docx,.txt,.csv,.json,.md,.py,.xlsx"
+              accept=".pdf,.docx,.xlsx,.pptx,.txt,.csv,.tsv,.json,.jsonl,.md,.markdown,.html,.htm,.py"
               onChange={handleFileSelect}
             />
 
@@ -270,7 +270,7 @@ export function DocumentsView() {
                 {isDragOver ? 'Drop files here to upload' : 'Drag & drop files or click to browse'}
               </p>
               <p className="text-xs text-charcoal-muted dark:text-cream-400 mt-1">
-                PDF, DOCX, TXT, CSV, JSON, MD — max 100 MB per file
+                PDF, DOCX, XLSX, PPTX, TXT, CSV/TSV, JSON/JSONL, Markdown, HTML - max 100 MB
               </p>
             </div>
 

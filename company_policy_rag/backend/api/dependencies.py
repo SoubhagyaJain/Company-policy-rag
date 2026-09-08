@@ -49,7 +49,7 @@ def get_document_service() -> DocumentService:
     if _document_service is None:
         with _lock:  
             if _document_service is None:
-                _document_service = DocumentService()
+                _document_service = DocumentService(fresh_start=True)
     return _document_service
 
 
@@ -71,6 +71,7 @@ def get_semantic_cache_manager() -> SemanticCacheManager:
                 _semantic_cache_manager = SemanticCacheManager(
                     vector_store=doc_service.vector_store,
                     embedding_service=doc_service.embedding_service,
+                    persist_dir=doc_service.vector_store.persist_dir,
                 )
     return _semantic_cache_manager
 

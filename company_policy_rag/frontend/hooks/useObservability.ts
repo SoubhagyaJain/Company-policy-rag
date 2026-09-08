@@ -43,13 +43,19 @@ export function useObservability() {
   const [timeRange, setTimeRange] = useState<string>('24h');
   const [filters, setFilters] = useState<TelemetryFilterOptions>({ timeRange: '24h' });
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
-  const [refreshIntervalMs, setRefreshIntervalMs] = useState<number>(3000);
+  const [refreshIntervalMs, setRefreshIntervalMs] = useState<number>(30000);
 
   const filtersRef = useRef(filters);
   const requestSequenceRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
   filtersRef.current = filters;
 
   const fetchTelemetry = useCallback(async (isBackground = false) => {
+    // A filter change or manual refresh supersedes an older request. Cancelling
+    // it prevents slow telemetry reads from piling up behind the polling timer.
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     const requestSequence = ++requestSequenceRef.current;
     if (!isBackground) {
       setLoading(true);
@@ -59,7 +65,7 @@ export function useObservability() {
     setError(null);
 
     try {
-      const summaryData = await apiClient.getObservabilitySummary(filtersRef.current);
+      const summaryData = await apiClient.getObservabilitySummary(filtersRef.current, controller.signal);
       if (requestSequence !== requestSequenceRef.current) return;
 
       setSummary(summaryData);
@@ -86,11 +92,13 @@ export function useObservability() {
       });
       setLastUpdated(new Date());
     } catch (e: any) {
+      if (e?.name === 'AbortError') return;
       if (requestSequence !== requestSequenceRef.current) return;
       console.warn('Observability telemetry fetch error:', e);
       setError(e.message || 'Failed to fetch observability telemetry');
     } finally {
       if (requestSequence === requestSequenceRef.current) {
+        requestControllerRef.current = null;
         setLoading(false);
         setIsRefreshing(false);
       }
@@ -113,17 +121,38 @@ export function useObservability() {
 
   useEffect(() => {
     fetchTelemetry(false);
+    return () => {
+      requestSequenceRef.current += 1;
+      requestControllerRef.current?.abort();
+    };
   }, [fetchTelemetry]);
 
   useEffect(() => {
     if (!autoRefresh || refreshIntervalMs <= 0) return;
 
     const interval = setInterval(() => {
-      fetchTelemetry(true);
+      if (document.visibilityState === 'visible') {
+        fetchTelemetry(true);
+      }
     }, refreshIntervalMs);
 
     return () => clearInterval(interval);
   }, [autoRefresh, refreshIntervalMs, fetchTelemetry]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchTelemetry(true);
+      } else {
+        requestControllerRef.current?.abort();
+      }
+    };
+
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => document.removeEventListener('visibilitychange', refreshWhenVisible);
+  }, [autoRefresh, fetchTelemetry]);
 
   const clearData = useCallback(async () => {
     setLoading(true);

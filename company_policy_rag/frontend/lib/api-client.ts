@@ -319,7 +319,10 @@ export class ApiClient {
     thinkingDetailLevel: ThinkingDetailLevel = 'standard',
     responseMode: ResponseMode = 'standard'
   ): Promise<void> {
-    const url = `${this.baseUrl}/api/chat/stream`;
+    // SSE must bypass the Next.js dev proxy (next.config rewrites buffer/break
+    // streaming responses), so hit the backend directly like uploads do. The
+    // backend runs on the same host with open CORS.
+    const url = `${directBackendBase()}/api/chat/stream`;
     const payload = {
       message,
       session_id: sessionId,
@@ -592,7 +595,10 @@ export class ApiClient {
   /**
    * Unified Production Observability Summary: GET /api/admin/observability
    */
-  async getObservabilitySummary(filters?: TelemetryFilterOptions): Promise<ObservabilitySummaryData> {
+  async getObservabilitySummary(
+    filters?: TelemetryFilterOptions,
+    signal?: AbortSignal,
+  ): Promise<ObservabilitySummaryData> {
     const params = new URLSearchParams();
     if (filters?.timeRange) params.set('time_range', filters.timeRange);
     if (filters?.documentId) params.set('document_id', filters.documentId);
@@ -606,7 +612,7 @@ export class ApiClient {
     if (filters?.hasError !== undefined) params.set('has_error', String(filters.hasError));
 
     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal });
     if (!res.ok) {
       throw new Error(`Failed to fetch observability summary (${res.status})`);
     }

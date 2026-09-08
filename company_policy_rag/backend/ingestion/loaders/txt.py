@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
+from backend.ingestion.loaders.validation import read_text
 from backend.models.document import DocumentType, RawDocument
 from backend.utils.section_tracker import SectionTracker
 
@@ -16,7 +17,21 @@ class TxtLoader(BaseLoader):
     """Loader for plain text (.txt) documents."""
 
     def supports(self, file_path: Path) -> bool:
-        return file_path.suffix.lower() == ".txt"
+        return file_path.suffix.lower() in {
+            ".txt",
+            ".py",
+            ".js",
+            ".ts",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+            ".rs",
+            ".go",
+            ".sql",
+            ".log",
+            ".rst",
+        }
 
     def load(
         self,
@@ -25,11 +40,7 @@ class TxtLoader(BaseLoader):
     ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.TXT, base_metadata)
 
-        content = ""
-        try:
-            content = file_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            content = file_path.read_text(encoding="latin-1", errors="replace")
+        content = read_text(file_path)
 
         section_tracker = SectionTracker()
         for line in content.splitlines():

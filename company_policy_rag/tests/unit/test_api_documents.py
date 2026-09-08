@@ -1,6 +1,21 @@
 from __future__ import annotations
 
 import io
+import time
+
+
+def _wait_until_ready(client, document_id: str) -> dict:
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        response = client.get(f"/api/documents/{document_id}/status")
+        assert response.status_code == 200
+        payload = response.json()
+        if payload["status"] in {"READY", "FAILED"}:
+            return payload
+        time.sleep(0.02)
+    raise AssertionError("Document ingestion did not finish within 15 seconds")
+
+
 def test_upload_document_text_file(isolated_document_client):
     client = isolated_document_client
     file_content = b"Section 1: Work Hours\nStandard working hours are 9:00 AM to 5:00 PM Monday through Friday."
@@ -13,11 +28,13 @@ def test_upload_document_text_file(isolated_document_client):
     res = response.json()
     assert "document_id" in res
     assert res["filename"] == "work_hours_policy.txt"
-    assert res["chunks_indexed"] > 0
-    assert res["status"] == "READY"
+    assert res["status"] == "TEXT_INDEXING"
     assert res["category"] == "policy"
 
     doc_id = res["document_id"]
+    status = _wait_until_ready(client, doc_id)
+    assert status["status"] == "READY"
+    assert status["chunks_indexed"] > 0
 
     # Test GET /api/documents
     list_resp = client.get("/api/documents")
@@ -56,7 +73,9 @@ def test_upload_markdown_file_adaptive(isolated_document_client):
     assert response.status_code == 201
     res = response.json()
     assert res["filename"] == "hr_policy.md"
-    assert res["chunks_indexed"] >= 1
+    status = _wait_until_ready(client, res["document_id"])
+    assert status["status"] == "READY"
+    assert status["chunks_indexed"] >= 1
 
 
 def test_upload_oversized_file_rejected(isolated_document_client):

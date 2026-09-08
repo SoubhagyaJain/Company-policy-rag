@@ -55,13 +55,16 @@ async def upload_document_file(
     doc_service: DocumentService = Depends(get_document_service),
 ) -> DocumentUploadResponse:
     """
-    Upload and index document file up to 100MB supporting PDF, DOCX, TXT, MD, HTML, CSV, JSON.
+    Upload and index document file up to 100MB supporting PDF, DOCX, XLSX, PPTX, TXT, MD, HTML, CSV/TSV, JSON/JSONL.
     Applies adaptive chunking strategy, batched embeddings, and indexes into Vector Store and BM25 search.
     """
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename cannot be empty.")
 
-    content = await _read_upload_with_limit(file)
+    try:
+        content = await _read_upload_with_limit(file)
+    finally:
+        await file.close()
 
     try:
         res = await run_in_threadpool(
