@@ -125,8 +125,8 @@ html.dark {
   --sp-pill-glow: rgba(158,196,255,0.42);
   --sp-item-text: rgba(232,242,255,0.78);
 
-  --sp-card-bg: rgba(9,15,30,0.34);
-  --sp-card-border: rgba(255,255,255,0.14);
+  --sp-card-bg: rgba(10,16,32,0.62);
+  --sp-card-border: rgba(255,255,255,0.16);
 
   --sp-field-bg: rgba(255,255,255,0.06);
   --sp-field-border: rgba(255,255,255,0.16);
@@ -214,15 +214,16 @@ html.dark {
   }
 
   /* ── Text roles (type scale) ──────────────────────────────────── */
-  .sp-heading  { color: var(--sp-heading); font-weight: 650; letter-spacing: -0.01em; }
+  .sp-heading  { color: var(--sp-heading); font-weight: 650; letter-spacing: -0.01em; text-shadow: var(--sp-halo); }
   .sp-text     { color: var(--sp-text); font-weight: 450; text-shadow: var(--sp-halo); }
-  .sp-muted    { color: var(--sp-text-muted); }
-  .sp-faint    { color: var(--sp-text-faint); }
+  .sp-muted    { color: var(--sp-text-muted); text-shadow: var(--sp-halo); }
+  .sp-faint    { color: var(--sp-text-faint); text-shadow: var(--sp-halo); }
   .sp-disabled { color: var(--sp-disabled); }
   .sp-mono     {
     font-family: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     color: var(--sp-mono-color);
     font-weight: 500;
+    text-shadow: var(--sp-halo);
   }
 
   /* ── Buttons / chips ──────────────────────────────────────────── */
@@ -256,6 +257,8 @@ html.dark {
   .sp-card {
     background: var(--sp-card-bg);
     border: 1px solid var(--sp-card-border);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
   }
 
   /* Hero welcome glass panel — heavy blur so text stays legible over the WebGL */

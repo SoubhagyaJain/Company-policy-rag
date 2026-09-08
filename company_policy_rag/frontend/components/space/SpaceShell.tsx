@@ -132,7 +132,7 @@ export function SpaceShell(props: SpaceShellProps) {
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 z-[1]"
-          style={{ background: 'radial-gradient(120% 80% at 48% 40%, rgba(4,6,12,0) 42%, rgba(3,5,11,0.55) 100%)', opacity: isLight ? 0 : 1, transition: 'opacity 700ms cubic-bezier(0.22, 1, 0.36, 1)' }}
+          style={{ background: 'radial-gradient(135% 92% at 50% 36%, rgba(4,6,12,0.14) 0%, rgba(4,6,12,0.38) 48%, rgba(2,4,10,0.74) 100%)', opacity: isLight ? 0 : 1, transition: 'opacity 700ms cubic-bezier(0.22, 1, 0.36, 1)' }}
         />
 
         {/* Chrome */}

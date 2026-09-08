@@ -666,7 +666,7 @@ export const AdminView: React.FC = () => {
     <div ref={scrollRef} className="flex-1 h-full overflow-y-auto p-4 sm:p-6 lg:p-8 sp-scroll sp-text">
       <div className="w-full space-y-6 pb-12">
         {/* ── HEADER & AUTO-REFRESH CONTROLS ─────────────────────── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
           <div>
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-terracotta-500/10 dark:bg-terracotta-500/20 border border-terracotta-500/30 text-terracotta-600 dark:text-terracotta-500">
@@ -781,7 +781,7 @@ export const AdminView: React.FC = () => {
         )}
 
         {/* ── GLOBAL RAG HEALTH BAR (10 SUBSYSTEMS) ───────────────── */}
-        <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+        <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-charcoal-muted dark:text-cream-400 flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-terracotta-600 dark:text-terracotta-500" />
@@ -834,7 +834,7 @@ export const AdminView: React.FC = () => {
 
         {/* ── THRESHOLD ALERTS (IF ACTIVE) ────────────────────────── */}
         {alerts.some((a) => a.active) && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs space-y-2 dark:bg-amber-950/30">
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs space-y-2 dark:bg-amber-950/60 backdrop-blur-xl">
             <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-200">
               <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               Active Performance &amp; Operational Alerts
@@ -858,7 +858,7 @@ export const AdminView: React.FC = () => {
         {/* ── TOP KPI METRIC CARDS ────────────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {/* Total Queries */}
-          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
+          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>Total Queries</span>
               <Search className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
@@ -874,7 +874,7 @@ export const AdminView: React.FC = () => {
           </div>
 
           {/* P95 Latency */}
-          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
+          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>P95 Latency</span>
               <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -890,7 +890,7 @@ export const AdminView: React.FC = () => {
           </div>
 
           {/* Avg TTFT */}
-          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
+          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>Avg TTFT</span>
               <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -906,7 +906,7 @@ export const AdminView: React.FC = () => {
           </div>
 
           {/* Token Consumption */}
-          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
+          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>Token Consumption</span>
               <Flame className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -922,7 +922,7 @@ export const AdminView: React.FC = () => {
           </div>
 
           {/* Retrieval Hit Rate */}
-          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
+          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>Retrieval Hit Rate</span>
               <Layers className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
@@ -938,7 +938,7 @@ export const AdminView: React.FC = () => {
           </div>
 
           {/* Error Rate */}
-          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
+          <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>Error Rate</span>
               <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400" />
@@ -991,7 +991,7 @@ export const AdminView: React.FC = () => {
             {/* Latency Waterfall & Retrieval Quality Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:grid">
               {/* Waterfall Latency Card */}
-              <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+              <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
                     <Clock className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
@@ -1045,7 +1045,7 @@ export const AdminView: React.FC = () => {
               {/* Retrieval Quality & Grounding Card */}
               <div className="space-y-6">
                 {/* Retrieval Quality Card */}
-                <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+                <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
                       <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -1089,7 +1089,7 @@ export const AdminView: React.FC = () => {
                 </div>
 
                 {/* Grounding & Faithfulness Card */}
-                <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+                <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
                       <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -1125,7 +1125,7 @@ export const AdminView: React.FC = () => {
             </div>
 
             {/* Quick Traces Table in Overview */}
-            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
                   <Activity className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
@@ -1147,7 +1147,7 @@ export const AdminView: React.FC = () => {
         {/* 2. QUERY TRACES TAB */}
         {activeTab === 'queries' && (
           <div className="space-y-4">
-            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                 <div>
                   <h2 className="text-base font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
@@ -1192,7 +1192,7 @@ export const AdminView: React.FC = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:grid">
               {/* Text Model Card (qwen2.5:7b) */}
-              <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-4">
+              <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-4">
                 <div className="flex items-center justify-between border-b border-sand-border dark:border-sand-darkBorder pb-3">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-terracotta-500/10 text-terracotta-600 dark:text-terracotta-500 border border-terracotta-500/20">
@@ -1237,7 +1237,7 @@ export const AdminView: React.FC = () => {
               </div>
 
               {/* Vision Model Card (Qwen3-VL-2B-Instruct) */}
-              <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-4">
+              <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-4">
                 <div className="flex items-center justify-between border-b border-sand-border dark:border-sand-darkBorder pb-3">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
@@ -1309,7 +1309,7 @@ export const AdminView: React.FC = () => {
                 { title: 'Negative Vision Cache', stats: caches?.negative_vision_cache, desc: 'Short-lived failure cache protecting against repetitive timeouts' },
                 { title: 'Retrieval Candidates Cache', stats: caches?.retrieval_cache, desc: 'Cached RRF ranked candidates pool for identical sub-queries' },
               ].map((cache, i) => (
-                <div key={i} className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-3">
+                <div key={i} className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-sm text-charcoal dark:text-cream-100 font-serif">{cache.title}</h3>
                     <span className="px-2 py-0.5 rounded-full bg-cream-200 text-charcoal-muted dark:bg-sand-darkBorder dark:text-cream-400 border border-sand-border dark:border-sand-darkBorder text-xs font-mono font-semibold">
@@ -1340,7 +1340,7 @@ export const AdminView: React.FC = () => {
         {/* 5. DOCUMENT INGESTION TAB */}
         {activeTab === 'ingestion' && (
           <div className="space-y-4">
-            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
               <h2 className="text-base font-bold text-charcoal dark:text-cream-100 mb-4 flex items-center gap-2 font-serif">
                 <FileText className="w-5 h-5 text-terracotta-600 dark:text-terracotta-500" />
                 Document Ingestion &amp; Indexing Pipeline
@@ -1409,7 +1409,7 @@ export const AdminView: React.FC = () => {
         {/* 6. ERROR INCIDENTS TAB */}
         {activeTab === 'errors' && (
           <div className="space-y-4">
-            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/80 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
+            <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
               <h2 className="text-base font-bold text-charcoal dark:text-cream-100 mb-2 flex items-center gap-2 font-serif">
                 <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                 Error &amp; Incident Tracking Center ({recentIncidents.length})
