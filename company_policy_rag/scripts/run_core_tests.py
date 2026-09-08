@@ -27,6 +27,7 @@ CORE_TEST_PATHS = (
     "tests/test_production_observability_full.py",
     "tests/unit/test_api_admin.py",
     "tests/unit/test_conversation_benchmark.py",
+    "tests/unit/test_production_retrieval_smoke.py",
 )
 
 

@@ -26,7 +26,7 @@ The versioned [conversation benchmark](data/eval/conversation_benchmark.json) ho
 
 The model-backed run used `qwen2.5:7b` at temperature 0 and seed 42 on an Intel Core i5-13420H and NVIDIA RTX 4050 Laptop GPU. The unsupported-claim rate is an LLM-judged hallucination proxy, not a human score. The dataset is deliberately small and fictional, so the repository includes every query, retrieved section, answer, citation mapping, judge count, and timing for review in the [full benchmark report](docs/BENCHMARK_RESULTS.md) and [machine-readable results](data/eval/conversation_benchmark_results.json).
 
-The separate eight-case hybrid-retrieval CI smoke set records **100% hit rate**, **89.6% context precision**, and **75.0% context recall** in [its checked-in baseline](data/eval/ci_smoke_baseline.json).
+The separate eight-case production retrieval smoke set records **100% hit@3** and **85.4% mean reciprocal rank**. It runs the shipped Markdown loader, adaptive chunker, Chroma and BM25 indexes, and hybrid reciprocal-rank fusion against the [public smoke dataset](data/eval/retrieval_smoke.json).
 
 ## Architecture
 
@@ -124,6 +124,12 @@ Run the deterministic conversation gate used by CI:
 python scripts/benchmark_conversation.py --assert-minimums
 ```
 
+Exercise the production ingestion and hybrid retrieval components without network downloads:
+
+```bash
+python scripts/production_retrieval_smoke.py --assert-minimums
+```
+
 Regenerate the complete model-backed portfolio report:
 
 ```bash
@@ -137,7 +143,7 @@ python scripts/run_core_tests.py
 cd frontend && npm test && npm run build
 ```
 
-The root [RAG CI workflow](../.github/workflows/rag-ci.yml) runs backend tests, the conversation regression gate, and a live Ollama retrieval smoke gate. CI fails when the improved path falls below 90% hit@3 or policy accuracy, or when it regresses below the baseline.
+The root [RAG CI workflow](../.github/workflows/rag-ci.yml) runs backend tests, frontend tests and build, the conversation regression gate, and the self-contained production retrieval smoke gate. CI fails when the conversation path regresses below its baseline or retrieval falls below 100% hit@3 and 80% mean reciprocal rank.
 
 ## Document and answer flow
 
@@ -158,6 +164,7 @@ The root [RAG CI workflow](../.github/workflows/rag-ci.yml) runs backend tests, 
 | `backend/services/telemetry_service.py` | SQLite WAL traces, metrics, health, and retention |
 | `frontend/` | Next.js chat, document library, and observability interface |
 | `scripts/benchmark_conversation.py` | Reproducible before/after conversation benchmark |
+| `scripts/production_retrieval_smoke.py` | Production loader, chunker, Chroma, BM25, and hybrid retrieval gate |
 | `data/demo/` | Fictional, portfolio-safe sample documents |
 
 ## API surface
