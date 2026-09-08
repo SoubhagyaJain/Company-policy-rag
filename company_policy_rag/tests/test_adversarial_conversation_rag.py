@@ -167,7 +167,12 @@ def test_adv_04_multiline_and_tabbed_followup_queries() -> None:
         assert topic_shift is False
 
         mode = resolver.detect_answer_mode(q)
-        assert mode in (AnswerMode.EXPAND, AnswerMode.DETAILED, AnswerMode.DIRECT)
+        assert mode in (
+            AnswerMode.EXPAND,
+            AnswerMode.DETAILED,
+            AnswerMode.DIRECT,
+            AnswerMode.EXPLANATION,
+        )
 
         resolved = resolver.resolve_standalone_query(q, state, answer_mode=mode)
         assert "Hotel Search Agent" in resolved

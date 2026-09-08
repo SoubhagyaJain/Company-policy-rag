@@ -28,3 +28,4 @@ README2.md
 # Docker build context noise
 *.md
 !data/eval/**
+!data/demo/**

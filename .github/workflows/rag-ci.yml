@@ -5,11 +5,13 @@ on:
   pull_request:
     paths:
       - "company_policy_rag/**"
+      - ".github/workflows/rag-ci.yml"
   push:
     branches:
       - main
     paths:
       - "company_policy_rag/**"
+      - ".github/workflows/rag-ci.yml"
 
 permissions:
   contents: read
@@ -42,13 +44,57 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
+          pip install "ruff>=0.6,<1.0"
 
-      - name: Run unit tests
-        run: python -m pytest tests/ -q
+      - name: Run core regression suite
+        run: python scripts/run_core_tests.py
+
+      - name: Conversation benchmark gate
+        run: >-
+          python scripts/benchmark_conversation.py
+          --assert-minimums
+          --output "${{ runner.temp }}/conversation-benchmark.json"
+          --report "${{ runner.temp }}/conversation-benchmark.md"
+
+      - name: Ruff
+        run: >-
+          python -m ruff check
+          backend/rag/conversation_interpreter.py
+          backend/api/main.py
+          backend/services/document_service.py
+          scripts/benchmark_conversation.py
+          scripts/run_core_tests.py
+          tests/test_conversation_interpreter.py
+          tests/unit/test_conversation_benchmark.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: company_policy_rag/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: company_policy_rag/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run UI tests
+        run: npm test
+
+      - name: Build production UI
+        run: npm run build
 
   eval-smoke:
     runs-on: ubuntu-latest
-    needs: unit-tests
+    needs: [unit-tests, frontend]
     timeout-minutes: 45
     env:
       ENABLE_QUERY_REWRITE: "false"

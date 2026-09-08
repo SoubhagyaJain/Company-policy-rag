@@ -37,11 +37,12 @@ COPY frontend/components/ ./components/
 COPY frontend/hooks/ ./hooks/
 COPY frontend/lib/ ./lib/
 COPY frontend/preview/ ./preview/
+COPY frontend/public/ ./public/
 
-    # Copy styles if they exist (Next.js 15 requires the globals.css)
-    COPY frontend/styles/ ./styles/
+# Next.js global styles
+COPY frontend/styles/ ./styles/
 
-    # Build-time environment variables
+# Build-time environment variables
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -72,7 +73,7 @@ RUN addgroup --system --gid 1001 nodejs \
 # Copy standalone build output
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public 2>/dev/null || true
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
 

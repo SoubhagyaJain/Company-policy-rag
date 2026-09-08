@@ -1,0 +1,220 @@
+{
+  "schema_version": "1.0",
+  "name": "Northstar multi-turn grounding benchmark",
+  "description": "A deterministic, fictional employee-policy benchmark covering follow-ups, references, fragments, topic switches, topic returns, evidence reuse, ambiguity, and multi-part requests.",
+  "document": "data/demo/sample_employee_handbook.md",
+  "license": "CC0-1.0",
+  "cases": [
+    {
+      "id": "maternity_probation_pronoun",
+      "behavior": "pronoun_resolution",
+      "history": [
+        {
+          "user_query": "What is maternity leave?",
+          "resolved_query": "What is maternity leave?",
+          "active_topic": "maternity leave",
+          "evidence_section": "parental_maternity_leave",
+          "answer": "Employees may take up to 16 weeks of paid leave. [Source 1]"
+        }
+      ],
+      "user_message": "Does it apply during probation?",
+      "expected_action": "retrieve",
+      "expected_sections": ["parental_maternity_leave"],
+      "expected_query_terms": ["maternity", "probation"]
+    },
+    {
+      "id": "travel_international_fragment",
+      "behavior": "incomplete_followup",
+      "history": [
+        {
+          "user_query": "What is the travel limit?",
+          "resolved_query": "What is the business travel limit?",
+          "active_topic": "business travel limit",
+          "evidence_section": "business_travel_expenses",
+          "answer": "Domestic lodging is limited to USD 180 per night. [Source 1]"
+        }
+      ],
+      "user_message": "International?",
+      "expected_action": "retrieve",
+      "expected_sections": ["business_travel_expenses"],
+      "expected_query_terms": ["international", "travel"]
+    },
+    {
+      "id": "remote_eligibility_fragment",
+      "behavior": "incomplete_followup",
+      "history": [
+        {
+          "user_query": "Explain remote work.",
+          "resolved_query": "Explain the remote work policy.",
+          "active_topic": "remote work policy",
+          "evidence_section": "remote_work",
+          "answer": "Eligible employees may request up to three remote days per week. [Source 1]"
+        }
+      ],
+      "user_message": "Who qualifies?",
+      "expected_action": "retrieve",
+      "expected_sections": ["remote_work"],
+      "expected_query_terms": ["qualifies", "remote", "work"]
+    },
+    {
+      "id": "remote_contractors_followup",
+      "behavior": "nested_followup",
+      "history": [
+        {
+          "user_query": "Explain remote work.",
+          "resolved_query": "Explain the remote work policy.",
+          "active_topic": "remote work policy",
+          "evidence_section": "remote_work",
+          "answer": "Employees may request remote work under the policy. [Source 1]"
+        },
+        {
+          "user_query": "Who qualifies?",
+          "resolved_query": "Who qualifies for the remote work policy?",
+          "active_topic": "remote work policy",
+          "evidence_section": "remote_work",
+          "answer": "Full-time and part-time employees qualify after 30 days. [Source 1]"
+        }
+      ],
+      "user_message": "And contractors?",
+      "expected_action": "retrieve",
+      "expected_sections": ["remote_work"],
+      "expected_query_terms": ["remote", "contractors"]
+    },
+    {
+      "id": "leave_to_vpn_topic_switch",
+      "behavior": "topic_switch",
+      "history": [
+        {
+          "user_query": "Tell me about leave.",
+          "resolved_query": "Tell me about annual leave.",
+          "active_topic": "annual leave",
+          "evidence_section": "annual_leave_probation",
+          "answer": "Full-time employees receive 20 annual-leave days. [Source 1]"
+        }
+      ],
+      "user_message": "How do I reset VPN?",
+      "expected_action": "retrieve",
+      "expected_sections": ["vpn_access_recovery"],
+      "expected_query_terms": ["reset", "vpn"]
+    },
+    {
+      "id": "return_to_leave_probation",
+      "behavior": "topic_return",
+      "history": [
+        {
+          "user_query": "Tell me about leave.",
+          "resolved_query": "Tell me about annual leave.",
+          "active_topic": "annual leave",
+          "evidence_section": "annual_leave_probation",
+          "answer": "Full-time employees receive 20 annual-leave days. [Source 1]"
+        },
+        {
+          "user_query": "How do I reset VPN?",
+          "resolved_query": "How do I reset VPN access?",
+          "active_topic": "VPN access",
+          "evidence_section": "vpn_access_recovery",
+          "answer": "Use the identity portal and complete multifactor verification. [Source 1]"
+        }
+      ],
+      "user_message": "Going back to leave, what about probation?",
+      "expected_action": "retrieve",
+      "expected_sections": ["annual_leave_probation"],
+      "expected_query_terms": ["leave", "probation"]
+    },
+    {
+      "id": "reuse_point_two",
+      "behavior": "evidence_reuse",
+      "history": [
+        {
+          "user_query": "What are the VPN reset steps?",
+          "resolved_query": "What are the VPN reset steps?",
+          "active_topic": "VPN access and account recovery",
+          "evidence_section": "vpn_access_recovery",
+          "answer": "1. Open the identity portal. [Source 1]\n2. Complete multifactor identity verification. [Source 1]\n3. Use the new device-registration link. [Source 1]"
+        }
+      ],
+      "user_message": "Explain point 2 more simply.",
+      "expected_action": "reuse_previous",
+      "expected_sections": ["vpn_access_recovery"],
+      "expected_query_terms": ["identity", "verification"]
+    },
+    {
+      "id": "reuse_show_source",
+      "behavior": "evidence_reuse",
+      "history": [
+        {
+          "user_query": "How many annual-leave days do employees receive?",
+          "resolved_query": "How many annual-leave days do full-time employees receive?",
+          "active_topic": "annual leave",
+          "evidence_section": "annual_leave_probation",
+          "answer": "Full-time employees receive 20 days per calendar year. [Source 1]"
+        }
+      ],
+      "user_message": "Show the source.",
+      "expected_action": "reuse_previous",
+      "expected_sections": ["annual_leave_probation"],
+      "expected_query_terms": ["annual", "leave"]
+    },
+    {
+      "id": "ambiguous_plural_reference",
+      "behavior": "ambiguity_clarification",
+      "history": [
+        {
+          "user_query": "Compare employees and contractors.",
+          "resolved_query": "Compare employees and contractors for remote work.",
+          "active_topic": "employees and contractors",
+          "evidence_section": "remote_work",
+          "answer": "Employees and contractors have different remote-work conditions. [Source 1]"
+        }
+      ],
+      "user_message": "Does it apply to them?",
+      "expected_action": "ask_clarification",
+      "expected_sections": [],
+      "expected_query_terms": []
+    },
+    {
+      "id": "travel_comparison_multi_part",
+      "behavior": "comparison_multi_part",
+      "history": [],
+      "user_message": "Compare domestic and international travel limits, and explain what contractors can claim.",
+      "expected_action": "retrieve",
+      "accepted_actions": ["retrieve", "decompose"],
+      "expected_sections": ["business_travel_expenses"],
+      "expected_query_terms": ["domestic", "international", "contractors"]
+    },
+    {
+      "id": "annual_leave_how_much",
+      "behavior": "incomplete_followup",
+      "history": [
+        {
+          "user_query": "Tell me about annual leave.",
+          "resolved_query": "Tell me about annual leave.",
+          "active_topic": "annual leave",
+          "evidence_section": "annual_leave_probation",
+          "answer": "Annual leave is provided to eligible employees. [Source 1]"
+        }
+      ],
+      "user_message": "How much?",
+      "expected_action": "retrieve",
+      "expected_sections": ["annual_leave_probation"],
+      "expected_query_terms": ["annual", "leave"]
+    },
+    {
+      "id": "vpn_why_verification",
+      "behavior": "reason_followup",
+      "history": [
+        {
+          "user_query": "How do I reset VPN access?",
+          "resolved_query": "How do I reset VPN access?",
+          "active_topic": "VPN access",
+          "evidence_section": "vpn_access_recovery",
+          "answer": "Use the identity portal and complete verification. [Source 1]"
+        }
+      ],
+      "user_message": "Why?",
+      "expected_action": "retrieve",
+      "expected_sections": ["vpn_access_recovery"],
+      "expected_query_terms": ["why", "vpn"]
+    }
+  ]
+}

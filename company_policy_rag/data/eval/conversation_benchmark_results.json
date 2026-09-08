@@ -1,0 +1,985 @@
+{
+  "schema_version": "1.0",
+  "benchmark": "Northstar multi-turn grounding benchmark",
+  "generated_at": "2026-09-08T03:36:45.187338+00:00",
+  "configuration": {
+    "dataset": "data\\eval\\conversation_benchmark.json",
+    "document": "data\\demo\\sample_employee_handbook.md",
+    "corpus_sections": 6,
+    "top_k": 3,
+    "generation_enabled": true,
+    "answer_and_judge_model": "qwen2.5:7b",
+    "temperature": 0,
+    "seed": 42,
+    "baseline": "legacy QueryRewriter fallback with latest user turn",
+    "improved": "production ConversationInterpreter deterministic policy path",
+    "retriever": "production BM25SearchIndex (identical for both systems)"
+  },
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "hardware_note": "Intel Core i5-13420H, NVIDIA RTX 4050 Laptop GPU 6 GB; Ollama reported 39% CPU / 61% GPU model placement"
+  },
+  "systems": {
+    "baseline": {
+      "case_count": 12,
+      "retrieval_cases": 11,
+      "retrieval_hit_at_3": 0.9091,
+      "mean_reciprocal_rank": 0.8636,
+      "retrieval_policy_accuracy": 0.75,
+      "standalone_query_term_coverage": 0.8636,
+      "conversation_logic_and_retrieval_latency": {
+        "samples": 12,
+        "mean_ms": 0.338,
+        "p50_ms": 0.232,
+        "p95_ms": 0.841
+      },
+      "citation_correctness": 0.8125,
+      "citation_answer_pass_rate": 0.7273,
+      "hallucination_rate": 0.0789,
+      "answer_generation_latency": {
+        "samples": 11,
+        "mean_ms": 5141.164,
+        "p50_ms": 5957.058,
+        "p95_ms": 7293.284
+      },
+      "end_to_end_latency": {
+        "samples": 11,
+        "mean_ms": 5141.514,
+        "p50_ms": 5957.288,
+        "p95_ms": 7293.48
+      },
+      "factual_claim_count": 38,
+      "unsupported_claim_count": 3
+    },
+    "improved": {
+      "case_count": 12,
+      "retrieval_cases": 11,
+      "retrieval_hit_at_3": 1.0,
+      "mean_reciprocal_rank": 0.9545,
+      "retrieval_policy_accuracy": 1.0,
+      "standalone_query_term_coverage": 1.0,
+      "conversation_logic_and_retrieval_latency": {
+        "samples": 12,
+        "mean_ms": 0.616,
+        "p50_ms": 0.428,
+        "p95_ms": 1.706
+      },
+      "citation_correctness": 1.0,
+      "citation_answer_pass_rate": 1.0,
+      "hallucination_rate": 0.0714,
+      "answer_generation_latency": {
+        "samples": 11,
+        "mean_ms": 4687.536,
+        "p50_ms": 4250.193,
+        "p95_ms": 7214.467
+      },
+      "end_to_end_latency": {
+        "samples": 11,
+        "mean_ms": 4688.19,
+        "p50_ms": 4250.441,
+        "p95_ms": 7215.147
+      },
+      "factual_claim_count": 28,
+      "unsupported_claim_count": 2
+    }
+  },
+  "cases": [
+    {
+      "id": "maternity_probation_pronoun",
+      "behavior": "pronoun_resolution",
+      "user_message": "Does it apply during probation?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "parental_maternity_leave"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Does it apply during probation? What is maternity leave?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 1.491,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 0.5,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "parental_maternity_leave",
+            "remote_work"
+          ]
+        },
+        "answer": "Maternity leave applies during the probationary period, allowing eligible employees to take up to 16 weeks of paid leave following the birth, adoption, or placement of a child [Source 2].",
+        "generation_ms": 2669.757,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "parental_maternity_leave"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "Does maternity leave apply during probation?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 2.48,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 0.5,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "parental_maternity_leave",
+            "business_travel_expenses"
+          ]
+        },
+        "answer": "Maternity leave is applicable during the probationary period as it applies from the employee's first day, including during a probationary period [Source 2].",
+        "generation_ms": 2184.976,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "parental_maternity_leave"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "travel_international_fragment",
+      "behavior": "incomplete_followup",
+      "user_message": "International?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "business_travel_expenses"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "International? What is the travel limit?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.247,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "business_travel_expenses",
+            "vpn_access_recovery",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "The travel limit for international travel is up to USD 250 per night for lodging and USD 100 per day for meals, and all international travel requires written manager approval before booking [Source 1].",
+        "generation_ms": 3106.956,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "business_travel_expenses"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "What are the international rules and limits for business travel limit?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.792,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "business_travel_expenses",
+            "annual_leave_probation",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "International travel for business purposes allows for lodging up to USD 250 per night and meals up to USD 100 per day, but all international travel requires written manager approval before booking [Source 1]. The sources do not provide specific international rules and limits beyond these travel expense guidelines [Source 1].",
+        "generation_ms": 4452.965,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 2,
+          "citation_correct": true,
+          "cited_sections": [
+            "business_travel_expenses",
+            "business_travel_expenses"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "remote_eligibility_fragment",
+      "behavior": "incomplete_followup",
+      "user_message": "Who qualifies?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "remote_work"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Who qualifies? Explain remote work.",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.309,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "remote_work",
+            "business_travel_expenses",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "Full-time and part-time employees who have completed 30 days of service may request up to three remote-work days per week, provided they have satisfactory performance, a manager-approved schedule, and a workspace that meets security requirements. Roles that require continuous on-site access may be excluded. Interns may request one remote-work day per week after completing their first 30 days. [Source 1]",
+        "generation_ms": 6289.545,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "remote_work"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "Who qualifies for remote work policy?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.463,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "remote_work",
+            "annual_leave_probation",
+            "business_travel_expenses"
+          ]
+        },
+        "answer": "Full-time and part-time employees who have completed 30 days of service may request up to three remote-work days per week, provided they have satisfactory performance, a manager-approved schedule, and a workspace that meets security requirements. Roles that require continuous on-site access may be excluded. Interns may request one remote-work day per week after completing their first 30 days. [Source 1]",
+        "generation_ms": 6339.716,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "remote_work"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "remote_contractors_followup",
+      "behavior": "nested_followup",
+      "user_message": "And contractors?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "remote_work"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "And contractors? Who qualifies?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.296,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 0.5,
+          "retrieved_sections": [
+            "remote_work",
+            "information_security_data_handling",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "Contractors may work remotely only when both their company sponsor and service agreement permit it [Source 1]. Contractors and agency workers are not covered by the employee leave benefit and their leave entitlement is controlled by their signed service agreement and applicable law [Source 3].",
+        "generation_ms": 3921.533,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 1,
+          "citation_correct": false,
+          "cited_sections": [
+            "remote_work",
+            "parental_maternity_leave"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "What does remote work policy specify for contractors?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.396,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "remote_work",
+            "annual_leave_probation",
+            "business_travel_expenses"
+          ]
+        },
+        "answer": "Contractors may work remotely only when both their company sponsor and service agreement permit it. Interns may request one remote-work day per week after completing their first 30 days [Source 1].",
+        "generation_ms": 3179.277,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "remote_work"
+          ]
+        },
+        "judge": {
+          "claim_count": 3,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "leave_to_vpn_topic_switch",
+      "behavior": "topic_switch",
+      "user_message": "How do I reset VPN?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "vpn_access_recovery"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "How do I reset VPN?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.199,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "vpn_access_recovery",
+            "annual_leave_probation",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "To reset VPN access, open the identity portal at `https://identity.northstar.example/reset`, select **VPN access**, and complete multifactor identity verification. The service desk sends a new device-registration link after verification. If the portal is unavailable or the employee has lost every registered factor, contact the service desk and provide the employee ID; support will verify identity before restoring access. [Source 1]",
+        "generation_ms": 7021.598,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "vpn_access_recovery"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "How do I reset VPN?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 1.073,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "vpn_access_recovery",
+            "annual_leave_probation",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "To reset VPN access, open the identity portal at `https://identity.northstar.example/reset`, select **VPN access**, and complete multifactor identity verification. The service desk sends a new device-registration link after verification. If the portal is unavailable or the employee has lost every registered factor, contact the service desk and provide the employee ID; support will verify identity before restoring access. [Source 1]",
+        "generation_ms": 6681.533,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "vpn_access_recovery"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "return_to_leave_probation",
+      "behavior": "topic_return",
+      "user_message": "Going back to leave, what about probation?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "annual_leave_probation"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Going back to leave, what about probation? How do I reset VPN?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.23,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "vpn_access_recovery",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "Regarding probation, annual leave accrues during the probationary period but can typically be used after 90 days of service, with up to five unused days carrying into the next calendar year [Source 1]. For resetting VPN access, you should use the identity portal at `https://identity.northstar.example/reset` to complete multifactor identity verification and follow the prompts to regain access [Source 2].",
+        "generation_ms": 5957.058,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 1,
+          "citation_correct": false,
+          "cited_sections": [
+            "annual_leave_probation",
+            "vpn_access_recovery"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 1,
+          "unsupported_claims": [
+            "['Up to five unused days carry into the next calendar year and must be used by 31 March.', 'The sources do not specify the deadline for using unused days.']"
+          ]
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "What does annual leave specify about probation?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.46,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "parental_maternity_leave",
+            "business_travel_expenses"
+          ]
+        },
+        "answer": "The sources do not contain specific information about annual leave and probation. According to the provided sources, annual leave accrues during the probationary period for full-time employees but typically cannot be used until after 90 days of service, with some flexibility for urgent circumstances [Source 1].",
+        "generation_ms": 4152.581,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "annual_leave_probation"
+          ]
+        },
+        "judge": {
+          "claim_count": 0,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "reuse_point_two",
+      "behavior": "evidence_reuse",
+      "user_message": "Explain point 2 more simply.",
+      "expected_action": "reuse_previous",
+      "expected_sections": [
+        "vpn_access_recovery"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Explain point 2 more simply.",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.169,
+        "metrics": {
+          "action_correct": false,
+          "retrieval_hit": false,
+          "reciprocal_rank": 0.0,
+          "query_term_coverage": 0.0,
+          "retrieved_sections": [
+            "business_travel_expenses",
+            "parental_maternity_leave",
+            "remote_work"
+          ]
+        },
+        "answer": "Point 2 explains the policy on business travel and expenses. Employees can claim for lodging and meals during travel, with different limits for domestic and international trips, and require manager approval for international travel. [Source 1]",
+        "generation_ms": 3479.671,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 0,
+          "citation_correct": false,
+          "cited_sections": [
+            "business_travel_expenses"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "reuse_previous",
+        "query": "Explain the item labeled \u201cComplete multifactor identity verification.\u201d from What are the VPN reset steps? more simply.",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.545,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "vpn_access_recovery"
+          ]
+        },
+        "answer": "To reset your VPN access, you need to complete multifactor identity verification, which is a process to confirm your identity using multiple methods, such as a password and a security token. This step helps ensure that only the rightful user can regain access to the company's systems. [Source 1]",
+        "generation_ms": 4775.206,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "vpn_access_recovery"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "reuse_show_source",
+      "behavior": "evidence_reuse",
+      "user_message": "Show the source.",
+      "expected_action": "reuse_previous",
+      "expected_sections": [
+        "annual_leave_probation"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Show the source. How many annual-leave days do employees receive?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.272,
+        "metrics": {
+          "action_correct": false,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "parental_maternity_leave",
+            "remote_work"
+          ]
+        },
+        "answer": "Full-time employees receive 20 paid annual-leave days per calendar year, prorated for partial years [Source 1]. Part-time employees receive prorated annual leave according to their contracted weekly hours [Source 1].",
+        "generation_ms": 3470.864,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 2,
+          "citation_correct": true,
+          "cited_sections": [
+            "annual_leave_probation",
+            "annual_leave_probation"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 1,
+          "unsupported_claims": [
+            "A manager may approve earlier use for urgent circumstances."
+          ]
+        }
+      },
+      "improved": {
+        "action": "reuse_previous",
+        "query": "Show the sources for How many annual-leave days do full-time employees receive?.",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.216,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation"
+          ]
+        },
+        "answer": "Full-time employees receive 20 paid annual-leave days per calendar year, prorated for partial years [Source 1]. Up to five unused days carry into the next calendar year and must be used by 31 March [Source 1].",
+        "generation_ms": 4239.126,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 2,
+          "citation_correct": true,
+          "cited_sections": [
+            "annual_leave_probation",
+            "annual_leave_probation"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 1,
+          "unsupported_claims": [
+            "Up to five unused days carry into the next calendar year and must be used by 31 March."
+          ]
+        }
+      }
+    },
+    {
+      "id": "ambiguous_plural_reference",
+      "behavior": "ambiguity_clarification",
+      "user_message": "Does it apply to them?",
+      "expected_action": "ask_clarification",
+      "expected_sections": [],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Does it apply to them? Compare employees and contractors.",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.205,
+        "metrics": {
+          "action_correct": false,
+          "retrieval_hit": null,
+          "reciprocal_rank": null,
+          "query_term_coverage": null,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "remote_work",
+            "information_security_data_handling"
+          ]
+        },
+        "answer": null,
+        "generation_ms": null,
+        "citations": null,
+        "judge": null
+      },
+      "improved": {
+        "action": "ask_clarification",
+        "query": "Does it apply to them?",
+        "sub_queries": [],
+        "clarification_question": "Which people or group do you mean?",
+        "logic_retrieval_ms": 0.193,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": null,
+          "reciprocal_rank": null,
+          "query_term_coverage": null,
+          "retrieved_sections": []
+        },
+        "answer": null,
+        "generation_ms": null,
+        "citations": null,
+        "judge": null
+      }
+    },
+    {
+      "id": "travel_comparison_multi_part",
+      "behavior": "comparison_multi_part",
+      "user_message": "Compare domestic and international travel limits, and explain what contractors can claim.",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "business_travel_expenses"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Compare domestic and international travel limits, and explain what contractors can claim.",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.192,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "business_travel_expenses",
+            "information_security_data_handling",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "Domestic travel allows employees to claim up to USD 180 per night for lodging and USD 75 per day for meals, while international travel permits claims of up to USD 250 per night for lodging and USD 100 per day for meals, with international travel requiring manager approval [Source 1]. Contractors can claim travel expenses only if authorized in their statement of work, and they must submit itemized receipts within 15 days of return [Source 1].",
+        "generation_ms": 7564.971,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 2,
+          "citation_correct": true,
+          "cited_sections": [
+            "business_travel_expenses",
+            "business_travel_expenses"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "decompose",
+        "query": "Compare domestic and international travel limits, and explain what contractors can claim.",
+        "sub_queries": [
+          "Compare domestic and international travel limits",
+          "explain what contractors can claim"
+        ],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.287,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "business_travel_expenses",
+            "information_security_data_handling",
+            "vpn_access_recovery"
+          ]
+        },
+        "answer": "Employees can claim up to USD 180 per night for lodging and USD 75 per day for meals when traveling domestically, while international travel allows claims of up to USD 250 per night for lodging and USD 100 per day for meals, with written manager approval required for international travel [Source 1]. Contractors can claim travel expenses only if authorized in their statement of work, and they must submit itemized receipts within 15 days of return [Source 1].",
+        "generation_ms": 7747.401,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 2,
+          "citation_correct": true,
+          "cited_sections": [
+            "business_travel_expenses",
+            "business_travel_expenses"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "annual_leave_how_much",
+      "behavior": "incomplete_followup",
+      "user_message": "How much?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "annual_leave_probation"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "How much? Tell me about annual leave.",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.235,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "parental_maternity_leave",
+            "business_travel_expenses"
+          ]
+        },
+        "answer": "Full-time employees receive 20 paid annual-leave days per calendar year, prorated for partial years, and may begin using it after 90 days of service, with up to five unused days carrying into the next calendar year and must be used by 31 March [Source 1]. Part-time employees receive prorated annual leave according to their contracted weekly hours, and contractors do not accrue employee annual leave [Source 1].",
+        "generation_ms": 6930.811,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 2,
+          "citation_correct": true,
+          "cited_sections": [
+            "annual_leave_probation",
+            "annual_leave_probation"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "How much does annual leave provide or allow?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.248,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "annual_leave_probation",
+            "vpn_access_recovery",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "Full-time employees receive 20 paid annual-leave days per calendar year, prorated for partial years [Source 1]. Part-time employees receive prorated annual leave according to their contracted weekly hours, and contractors do not accrue employee annual leave [Source 1].",
+        "generation_ms": 4250.193,
+        "citations": {
+          "citation_count": 2,
+          "correct_citation_count": 2,
+          "citation_correct": true,
+          "cited_sections": [
+            "annual_leave_probation",
+            "annual_leave_probation"
+          ]
+        },
+        "judge": {
+          "claim_count": 3,
+          "unsupported_claim_count": 0,
+          "unsupported_claims": []
+        }
+      }
+    },
+    {
+      "id": "vpn_why_verification",
+      "behavior": "reason_followup",
+      "user_message": "Why?",
+      "expected_action": "retrieve",
+      "expected_sections": [
+        "vpn_access_recovery"
+      ],
+      "baseline": {
+        "action": "retrieve",
+        "query": "Why? How do I reset VPN access?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.207,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "vpn_access_recovery",
+            "annual_leave_probation",
+            "parental_maternity_leave"
+          ]
+        },
+        "answer": "To reset VPN access, open the identity portal at `https://identity.northstar.example/reset`, select **VPN access**, and complete multifactor identity verification. The service desk sends a new device-registration link after verification. If the portal is unavailable or the employee has lost every registered factor, contact the service desk and provide the employee ID; support will verify identity before restoring access. [Source 1]",
+        "generation_ms": 6140.039,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "vpn_access_recovery"
+          ]
+        },
+        "judge": {
+          "claim_count": 4,
+          "unsupported_claim_count": 1,
+          "unsupported_claims": [
+            "The verification step protects company systems when a password, device, or authentication factor is lost or compromised."
+          ]
+        }
+      },
+      "improved": {
+        "action": "retrieve",
+        "query": "Why does VPN access apply?",
+        "sub_queries": [],
+        "clarification_question": null,
+        "logic_retrieval_ms": 0.234,
+        "metrics": {
+          "action_correct": true,
+          "retrieval_hit": true,
+          "reciprocal_rank": 1.0,
+          "query_term_coverage": 1.0,
+          "retrieved_sections": [
+            "vpn_access_recovery",
+            "parental_maternity_leave",
+            "business_travel_expenses"
+          ]
+        },
+        "answer": "The policy for VPN access applies to protect company systems when an employee's password, device, or authentication factor is lost or compromised. This is to ensure that only authorized individuals can access the company's network and data [Source 1].",
+        "generation_ms": 3559.926,
+        "citations": {
+          "citation_count": 1,
+          "correct_citation_count": 1,
+          "citation_correct": true,
+          "cited_sections": [
+            "vpn_access_recovery"
+          ]
+        },
+        "judge": {
+          "claim_count": 2,
+          "unsupported_claim_count": 1,
+          "unsupported_claims": [
+            "The policy for VPN access applies to protect company systems when an employee's password, device, or authentication factor is lost or compromised."
+          ]
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "The corpus and cases are fictional and intentionally small; these scores do not predict every production corpus.",
+    "Hallucination rate is an unsupported-claim proxy judged by the same local model family, not a human adjudication.",
+    "Latency is hardware-dependent and represents one local run; logic/retrieval timings are more stable than generation timings."
+  ]
+}

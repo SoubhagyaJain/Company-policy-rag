@@ -1,0 +1,8 @@
+# Optional training and adapter-export dependencies.
+# Install only when running the LoRA/QLoRA toolchain or its test suite.
+accelerate>=1.0,<2.0
+datasets>=3.0,<6.0
+peft>=0.13,<1.0
+PyYAML>=6.0,<7.0
+transformers>=4.46,<6.0
+trl>=0.12,<2.0

@@ -50,12 +50,20 @@ dependencies = [
 
 [project.optional-dependencies]
 marker = ["marker-pdf>=1.0.0"]
+finetuning = [
+  "accelerate>=1.0,<2.0",
+  "datasets>=3.0,<6.0",
+  "peft>=0.13,<1.0",
+  "PyYAML>=6.0,<7.0",
+  "transformers>=4.46,<6.0",
+  "trl>=0.12,<2.0",
+]
 
 [project.urls]
-Homepage = "https://github.com/SoubhagyaJain/Rag-chatbot"
-Repository = "https://github.com/SoubhagyaJain/Rag-chatbot"
-Issues = "https://github.com/SoubhagyaJain/Rag-chatbot/issues"
-Documentation = "https://github.com/SoubhagyaJain/Rag-chatbot/tree/main/company_policy_rag"
+Homepage = "https://github.com/SoubhagyaJain/Company-policy-rag"
+Repository = "https://github.com/SoubhagyaJain/Company-policy-rag"
+Issues = "https://github.com/SoubhagyaJain/Company-policy-rag/issues"
+Documentation = "https://github.com/SoubhagyaJain/Company-policy-rag/tree/main/company_policy_rag"
 
 [project.scripts]
 policy-rag-index = "src.cli:index_main"
@@ -68,6 +76,7 @@ packages = ["src", "backend"]
 "app" = "app"
 "scripts" = "scripts"
 "data/eval" = "data/eval"
+"data/demo" = "data/demo"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -76,6 +85,7 @@ include = [
   "/app",
   "/scripts",
   "/data/eval",
+  "/data/demo",
   "/README.md",
   "/pyproject.toml",
 ]

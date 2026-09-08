@@ -1,251 +1,178 @@
-# 🚀 Enterprise Policy RAG AI Assistant & Observability Platform
+# Grounded Policy RAG
 
-![Architecture: Microservices](https://img.shields.io/badge/Architecture-Microservices-blue)
-![Backend: FastAPI](https://img.shields.io/badge/Backend-FastAPI_|_Python_3.11-009688?logo=fastapi)
-![Frontend: Next.js](https://img.shields.io/badge/Frontend-Next.js_16_|_React_19-000000?logo=next.js)
-![VectorDB: Chroma](https://img.shields.io/badge/VectorDB-ChromaDB-FF4F00)
-![LLM: Ollama](https://img.shields.io/badge/LLM-Ollama_(Local)-7C3AED?logo=ollama)
-![Vision: Qwen VL](https://img.shields.io/badge/Vision-Qwen_2.5_VL_7B-00B4D8?logo=ollama)
-![GPU: CUDA](https://img.shields.io/badge/GPU-RTX_4050_CUDA-76B900?logo=nvidia)
-![Observability: SQLite WAL](https://img.shields.io/badge/Observability-SQLite_WAL_Write--Behind-success)
-![Tests: 192/192](https://img.shields.io/badge/Tests-192%2F192_Passed_(100%25)-brightgreen)
+[![RAG CI](https://github.com/SoubhagyaJain/Company-policy-rag/actions/workflows/rag-ci.yml/badge.svg)](https://github.com/SoubhagyaJain/Company-policy-rag/actions/workflows/rag-ci.yml)
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/UI-Next.js-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 
-A production-grade **Retrieval-Augmented Generation (RAG)** platform designed to eliminate hallucinations in high-stakes domains (legal, HR, compliance, technical architecture). Built with a decoupled microservices architecture, advanced hybrid retrieval, cross-encoder reranking, **conversational memory**, an **Agentic Intelligence Layer** (query routing, self-reflection & verification, dynamic metadata filtering), **dual-model vision pipeline** (code screenshot extraction, diagram understanding, table OCR via `Qwen3-VL-2B-Instruct`), **end-to-end model fine-tuning & Ollama export**, and a **Full-Screen Production Observability & Telemetry Dashboard** with persistent SQLite storage.
+A local-first document assistant that answers from retrieved evidence, preserves citations across follow-ups, and keeps conversation state isolated by session. It combines a FastAPI backend, Next.js interface, hybrid retrieval, neural reranking, local Ollama models, and built-in evaluation and observability.
 
----
+## Measured results
 
-## ✨ System Capabilities
+The versioned [conversation benchmark](data/eval/conversation_benchmark.json) holds the fictional corpus, production BM25 retriever, top-3 cutoff, answer prompt, and Qwen model constant. It compares the legacy query-rewriter path with the current conversation interpreter over 12 multi-turn cases.
 
-### 📊 Production Observability & Telemetry Platform
-- **Full-Screen Fluid Dashboard** — Edge-to-edge widescreen dashboard with interactive native fullscreen mode (`document.requestFullscreen()`), responsive multi-column layouts, and a warm paper design aesthetic (`#FAF9F5` light, `#141413` dark, Terracotta, Cream, Sand, and Charcoal).
-- **Persistent SQLite Telemetry DB** — Zero-latency async write-behind queue with a dedicated background thread, SQLite WAL mode, and indexed aggregations across `5m`, `15m`, `1h`, `6h`, `24h`, and `7d` time horizons.
-- **10-Subsystem Live Health Probes** — Continuous health monitoring across API Gateway, Ollama Daemon, Chroma Vector DB, BM25 Index, Embedding Model, Text Generation Model, Vision VLM, Semantic Cache, Vision Cache, and Session Memory.
-- **16-Stage Waterfall Latency Breakdown** — Microsecond-accurate latency accounting from request intake, memory resolution, rewrite, dense/sparse search, RRF fusion, neural reranking, vision extraction, TTFT, to SSE token streaming.
-- **Strict Multi-Model Separation** — Clear separation between Text Synthesis (`qwen2.5:7b`) and Vision VLM (`Qwen3-VL-2B-Instruct`) with distinct latency percentiles, throughput counters, and circuit breaker states.
-- **Multi-Tier Cache Telemetry** — Independent metrics for Semantic Response Cache, Embedding Cache, Vision Cache, Negative Vision Cache, and Retrieval Candidates Cache.
-- **Evidence & Grounding Claims Inspection** — Classification of retrieved evidence into `TEXT`, `CODE`, `DIAGRAM`, and `TABLE`, combined with self-reflection grounding claim verifications (`SUPPORTED`, `UNSUPPORTED`, `INFERRED`).
-- **Query Trace Inspection Drawer** — Slide-over drawer visualizer for waterfall timings, extracted visual snippets, citation sources, and raw JSON export.
+| Metric | Before | After |
+|---|---:|---:|
+| Retrieval hit@3 | 90.9% | **100.0%** |
+| Mean reciprocal rank | 86.4% | **95.5%** |
+| Retrieval-policy accuracy | 75.0% | **100.0%** |
+| Standalone-query term coverage | 86.4% | **100.0%** |
+| Citation correctness | 81.2% | **100.0%** |
+| Answers with only correct citations | 72.7% | **100.0%** |
+| Unsupported-claim rate | 7.9% | **7.1%** |
+| Conversation logic + retrieval, p50 | **0.23 ms** | 0.43 ms |
+| End-to-end answer latency, p50 | 5.96 s | **4.25 s** |
 
-### 🧠 Conversational Memory & Multi-Turn Reasoning
-- **Multi-turn context awareness** — Session-based conversation memory preserving multi-turn context.
-- **Pronoun & referent resolution** — Follow-up questions (*"Are there any exceptions for it?"*, *"What does it do?"*) resolve referents from past turns.
-- **Context-aware query rewriting** — Dynamic query expansion informed by prior dialogue.
+The model-backed run used `qwen2.5:7b` at temperature 0 and seed 42 on an Intel Core i5-13420H and NVIDIA RTX 4050 Laptop GPU. The unsupported-claim rate is an LLM-judged hallucination proxy, not a human score. The dataset is deliberately small and fictional, so the repository includes every query, retrieved section, answer, citation mapping, judge count, and timing for review in the [full benchmark report](docs/BENCHMARK_RESULTS.md) and [machine-readable results](data/eval/conversation_benchmark_results.json).
 
-### 🔀 Dynamic Model Switching
-- **In-chat model selector** — Switch LLM backends dynamically directly from the UI without service restarts.
-- **Thread-safe model proxy** — Concurrent multi-user requests with different target models execute safely.
-- **Supported backends**: `qwen2.5:7b`, `qwen2.5:14b`, `llama3.1:8b`, `mistral:7b`, `gemma2:9b`, and custom fine-tuned adapters.
+The separate eight-case hybrid-retrieval CI smoke set records **100% hit rate**, **89.6% context precision**, and **75.0% context recall** in [its checked-in baseline](data/eval/ci_smoke_baseline.json).
 
-### ⚡ Real-Time Streaming & Semantic Cache
-- **Server-Sent Events (SSE)** — Token-by-token streaming response delivery with sub-second Time-To-First-Token (TTFT).
-- **Semantic Caching** — Sub-100ms cosine similarity cache lookup in ChromaDB; cache hits stream simulated tokens smoothly for UI consistency.
-
-### 🎯 High-Precision Hybrid Retrieval & Reranking
-- **Hybrid Dense + Sparse Search** — Combines dense vector similarity (`BAAI/bge-small-en-v1.5`) with sparse BM25 keyword matching via Reciprocal Rank Fusion (RRF).
-- **Cross-Encoder Neural Reranker** — `BAAI/bge-reranker-large` on CUDA GPU re-scores candidates with high precision.
-- **Cross-Page Section Expansion** — Expands adjacent pages and sections for complete contextual grounding.
-
-### 🛡️ Agentic Self-Reflection & Grounding
-- **5-Type Query Router** — Classifies queries into `factual`, `comparison`, `enumeration`, `procedural`, or `conversational` with conversational bypass semantics (`retrieval_required=False`).
-- **4D Verifier Gate** — Evaluates **Faithfulness**, **Completeness**, **Citation Coverage**, and **Coherence**.
-- **Autonomous Retry Engine** — Automatically adjusts retrieval parameters and retries (up to 2 cycles) if unverified claims or missing aspects are detected.
-
-### 👁️ Multimodal Vision RAG
-- **Dual-Model Architecture** — `qwen2.5:7b` (Text) and `Qwen3-VL-2B-Instruct` (Vision).
-- **Visual Asset Detection** — Classifies PDF pages (`CODE_SCREENSHOT`, `DIAGRAM_ARCHITECTURE`, `TABLE_DATA`) and caches OCR/diagram structures with SHA-256 content addressing.
-- **Lazy Vision Fallback** — Triggers on-demand extraction for visual pages during query execution when references are detected.
-
-### 🛠️ LoRA Fine-Tuning & Custom Ollama Registration
-- **End-to-End Fine-Tuning Pipeline** — Custom LoRA training scripts (`scripts/finetune_qwen_coder.py`, `src/finetuning/trainer.py`) for Alpaca, ShareGPT, and Messages formats.
-- **GGUF Export & Quantization** — Automatic conversion to GGUF (`q4_k_m`, `q8_0`, `f16`), `Modelfile` generation, and one-command registration into local Ollama.
-
----
-
-## 📐 System Architecture
+## Architecture
 
 ```mermaid
-flowchart TD
-    UserClient["Next.js 16 Client (React 19 + Tailwind)"] -->|SSE / REST| FastAPIGateway["FastAPI Gateway (/api/chat, /api/admin)"]
-    FastAPIGateway --> RequestIDContext["Request ID & Telemetry Context"]
-    RequestIDContext --> MemoryResolver["Session Memory Resolver"]
-    MemoryResolver --> QueryRouter["Query Router (5-Type Classifier)"]
-
-    QueryRouter -->|Conversational Bypass| DirectSynthesis["Direct LLM Synthesis (qwen2.5:7b)"]
-    QueryRouter -->|Retrieval Required| CacheCheck["Semantic Cache Lookup"]
-
-    CacheCheck -->|Cache Hit| ReturnCached["Return Cached Stream + Trace"]
-    CacheCheck -->|Cache Miss| HybridSearch["Dense Embedding + BM25 Sparse Search"]
-
-    HybridSearch --> RRFFusion["Reciprocal Rank Fusion (RRF)"]
-    RRFFusion --> CrossEncoderRerank["Cross-Encoder Reranker (BGE-Large CUDA)"]
-    CrossEncoderRerank --> EvidenceClassifier["Evidence Gate (TEXT, CODE, DIAGRAM, TABLE)"]
-
-    EvidenceClassifier -->|Visual Detection| VisionExtraction["Vision VLM Fallback (Qwen3-VL-2B-Instruct)"]
-    EvidenceClassifier -->|Context Ready| ContextAssembly["Context Compression & Assembly"]
-    VisionExtraction --> ContextAssembly
-
-    ContextAssembly --> LLMStream["LLM Generation & SSE Streaming"]
-    LLMStream --> VerifierGate["4D Self-Reflection & Grounding Verifier"]
-
-    VerifierGate -->|Failed| RetryEngine["Autonomous Retry & Precision Refinement"]
-    VerifierGate -->|Passed| TelemetryPipeline["Telemetry Event Hub"]
-    DirectSynthesis --> TelemetryPipeline
-    ReturnCached --> TelemetryPipeline
-    RetryEngine --> TelemetryPipeline
-
-    TelemetryPipeline --> WriteBehindQueue["Async Write-Behind Buffer (Queue)"]
-    WriteBehindQueue --> SQLiteWAL["SQLite Database (WAL Mode + Indices)"]
-    SQLiteWAL --> ObservabilityAPI["Admin REST APIs (/summary, /health, /queries, /errors)"]
-    ObservabilityAPI --> FullScreenUI["Full-Screen Observability UI & Drawer"]
+flowchart LR
+    U[User / Next.js] --> A[FastAPI chat API]
+    A --> I[Conversation Interpreter]
+    I --> P{Retrieval Policy}
+    P -->|reuse verified evidence| E[Evidence Context]
+    P -->|retrieve or decompose| R[Chroma + BM25]
+    R --> X[Cross-encoder reranker]
+    X --> E
+    E --> G[Qwen grounded answer]
+    G --> C[Citations + verification]
+    C --> U
+    A -. traces .-> O[SQLite observability]
 ```
 
----
+One structured Pydantic interpretation resolves intent, topic, references, standalone query, and retrieval action. The policy then chooses fresh retrieval, evidence reuse, decomposition, clarification, or no retrieval. Only retrieved chunks and verified citations enter evidence context; previous assistant text is navigation context and never becomes trusted evidence.
 
-## 💻 Tech Stack
+The conversation layer supports:
 
-| Component | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Frontend** | Next.js 16 (Turbopack), React 19, Tailwind CSS, Framer Motion | Full-screen liquid glass UI, real-time SSE streaming, slide-over drawer |
-| **Backend API** | FastAPI, Uvicorn, Python 3.11, Pydantic v2 | High-throughput asynchronous REST gateway and SSE streaming |
-| **Observability DB** | SQLite3 (WAL Mode, write-behind threading) | Zero-latency persistent query traces, metrics bucketing, and error tracking |
-| **Vector Store** | ChromaDB | High-speed dense vector similarity index |
-| **Embeddings** | `BAAI/bge-small-en-v1.5` | Dense document and query vector representations |
-| **Reranker** | `BAAI/bge-reranker-large` (CUDA GPU) | Neural cross-encoder reranking |
-| **Text Generation** | Ollama (`qwen2.5:7b` default) | Local, privacy-first grounded response generation |
-| **Vision VLM** | Ollama (`Qwen3-VL-2B-Instruct`) | Multimodal diagram, code screenshot, and table understanding |
-| **Hardware** | NVIDIA RTX 4050 (CUDA) | Accelerated neural inference, embeddings, and reranking |
+- Pronouns and short follow-ups such as “Does it apply to them?”, “International?”, and “How much?”
+- Topic changes without leaking earlier retrieval context
+- Explicit returns such as “Going back to leave…”
+- Safe evidence reuse for “Explain point 2 simply” and “Show the source”
+- Clarification when a reference has several plausible meanings
+- Comparison and multi-part query decomposition
+- Deep-copy session state with per-conversation document scope
 
----
+## One-command demo
 
-## 🚀 Quick Start
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then run:
 
-### Prerequisites
+```bash
+git clone https://github.com/SoubhagyaJain/Company-policy-rag.git
+cd Company-policy-rag/company_policy_rag
+docker compose up --build
+```
 
-- **Python 3.11+**
-- **Node.js 18+** & `npm`
-- **Ollama** installed and running ([ollama.com](https://ollama.com))
-- **NVIDIA GPU** with CUDA (optional, falls back gracefully to CPU)
+No `.env` file or host Ollama installation is required. Compose starts the UI, API with embedded Chroma, worker, Redis, and Ollama, then pulls `qwen2.5:7b` and `nomic-embed-text`. The first boot downloads the models and reranker, so it takes longer than later starts.
 
-### 1. Pull Required Models
+Open:
+
+- App: [http://localhost:3000](http://localhost:3000)
+- API documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Health check: [http://localhost:8000/api/health](http://localhost:8000/api/health)
+
+The document library starts clean. Upload [the fictional Northstar Labs handbook](data/demo/sample_employee_handbook.md) from the Document Library, wait for indexing to finish, and try:
+
+```text
+What is maternity leave?
+Does it apply during probation?
+How do I reset VPN?
+Going back to maternity leave, what about contractors?
+```
+
+Stop the stack with `docker compose down`. Defaults can be changed through environment variables listed in [.env.docker.example](.env.docker.example).
+
+## Local development
+
+Prerequisites: Python 3.11+, Node.js 20+, and Ollama.
 
 ```bash
 ollama pull qwen2.5:7b
-ollama pull Qwen3-VL-2B-Instruct
 ollama pull nomic-embed-text
 
-# Optional alternative models
-ollama pull llama3.1:8b
-ollama pull mistral:7b
-ollama pull gemma2:9b
-```
-
-### 2. Backend Setup
-
-```bash
-cd company_policy_rag
-
-# Create virtual environment
 python -m venv .venv
-
-# Activate environment
-# Windows:
-.venv\Scripts\Activate.ps1
-# Linux/macOS:
-source .venv/bin/activate
-
-# Install dependencies
+# Windows: .venv\Scripts\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
+
+uvicorn backend.api.main:app --reload
 ```
 
-### 3. Frontend Setup
+In a second terminal:
 
 ```bash
 cd frontend
-npm install
-```
-
-### 4. Configuration
-
-Configure your environment settings in `.env`:
-
-```env
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_LLM_MODEL=qwen2.5:7b
-VISION_MODEL=Qwen3-VL-2B-Instruct
-VISION_ENABLED=true
-RERANKER_DEVICE=cuda
-TELEMETRY_DB_PATH=storage/telemetry.sqlite3
-```
-
-### 5. Run the Application
-
-Open **two terminals**:
-
-**Terminal 1 — Backend:**
-```bash
-cd company_policy_rag
-.venv\Scripts\Activate.ps1
-uvicorn backend.api.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-**Terminal 2 — Frontend:**
-```bash
-cd company_policy_rag/frontend
+npm ci
 npm run dev
 ```
 
-Visit `http://localhost:3000` in your browser.
+LoRA/QLoRA tools are optional:
 
----
-
-## 📡 Observability API Endpoints
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Subsystem health probe and system ready status |
-| `GET` | `/api/admin/observability/summary` | Full canonical observability summary with percentiles and metrics |
-| `GET` | `/api/admin/observability/health` | Detailed 10-subsystem live probe status report |
-| `GET` | `/api/admin/observability/queries` | Filtered list of query traces with latency and token metrics |
-| `GET` | `/api/admin/observability/queries/{id}` | Detailed trace inspection by trace ID or request ID |
-| `GET` | `/api/admin/observability/errors` | Incident and error logging center |
-| `POST` | `/api/admin/observability/clear` | Purge persistent telemetry logs and traces |
-
----
-
-## 🧪 Test Verification & Quality Gates
-
-The platform includes comprehensive end-to-end, boundary, adversarial, and unit test suites:
-
-### 1. Frontend Test Suite (`npm test`)
-```text
-================================================================================
-  TEST EXECUTION SUMMARY
-================================================================================
-  Total Suites:   6 (Tiers 1-4, Adversarial Challenger 1 & 2)
-  Total Tests:    192
-  Passed:         192
-  Failed:         0
-  Success Rate:   100.0%
-================================================================================
-✅ ALL TESTS PASSED (100% Pass Rate)
-```
-
-### 2. Next.js Production Build
-```text
-▲ Next.js 16.3.0 (Turbopack)
-✓ Compiled successfully in 1304ms
-  Running TypeScript ... Finished TypeScript in 2.1s
-✓ Generating static pages (5/5) in 708ms
-```
-
-### 3. Backend Pytest Suite
 ```bash
-pytest tests/test_production_observability_full.py -v
-# 5/5 PASSED (100%)
+pip install -r requirements-finetuning.txt
 ```
 
----
+## Evaluation and tests
 
-## 📄 License
+Run the deterministic conversation gate used by CI:
 
-This project is licensed under the Apache License 2.0.
+```bash
+python scripts/benchmark_conversation.py --assert-minimums
+```
+
+Regenerate the complete model-backed portfolio report:
+
+```bash
+python scripts/benchmark_conversation.py --with-generation --assert-minimums
+```
+
+Run the full backend and frontend suites when changing their wider subsystems:
+
+```bash
+python scripts/run_core_tests.py
+cd frontend && npm test && npm run build
+```
+
+The root [RAG CI workflow](../.github/workflows/rag-ci.yml) runs backend tests, the conversation regression gate, and a live Ollama retrieval smoke gate. CI fails when the improved path falls below 90% hit@3 or policy accuracy, or when it regresses below the baseline.
+
+## Document and answer flow
+
+1. Upload PDF, DOCX, XLSX, PPTX, TXT, Markdown, HTML, CSV/TSV, JSON, or JSONL up to 100 MB.
+2. The ingestion service validates the file, extracts content, creates section-aware chunks, and updates vector and BM25 indexes.
+3. The conversation interpreter turns context-dependent input into a validated standalone request and retrieval decision.
+4. Dense and lexical candidates are fused and reranked; visual extraction runs only when the evidence requires it.
+5. Qwen receives verified source blocks and produces a streamed answer with `[Source N]` citations.
+6. The verifier checks grounding and citation coverage before state is updated with trusted evidence.
+
+## Main components
+
+| Path | Responsibility |
+|---|---|
+| `backend/rag/conversation_interpreter.py` | Structured follow-up, reference, topic, and retrieval decisions |
+| `backend/rag/pipeline.py` | Retrieval, evidence assembly, generation, verification, and streaming |
+| `backend/services/document_service.py` | Multi-format ingestion and document lifecycle |
+| `backend/services/telemetry_service.py` | SQLite WAL traces, metrics, health, and retention |
+| `frontend/` | Next.js chat, document library, and observability interface |
+| `scripts/benchmark_conversation.py` | Reproducible before/after conversation benchmark |
+| `data/demo/` | Fictional, portfolio-safe sample documents |
+
+## API surface
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/chat` | Grounded chat response |
+| `POST` | `/api/chat/stream` | Server-sent event response stream |
+| `POST` | `/api/documents/upload` | Validate, store, and index a document |
+| `GET` | `/api/documents` | List documents in the active scope |
+| `GET` | `/api/documents/{id}/status` | Read ingestion progress |
+| `DELETE` | `/api/documents/{id}` | Remove a document and its index entries |
+| `GET` | `/api/admin/observability` | Dashboard telemetry snapshot |
+| `GET` | `/api/health` | Service and dependency readiness |
+
+## License
+
+MIT. The Northstar Labs handbook is fictional demo content released as CC0-1.0.
