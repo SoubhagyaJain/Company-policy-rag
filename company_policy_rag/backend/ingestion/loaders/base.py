@@ -41,7 +41,7 @@ class BaseLoader(ABC):
 
         meta_dict: dict[str, Any] = {
             "document_id": custom_meta.get("document_id") if custom_meta else None,
-            "source_file": file_path.name,
+            "source_file": (custom_meta or {}).get("source_file", file_path.name),
             "file_path": rel_path,
             "file_hash": file_hash,
             "document_type": doc_type,

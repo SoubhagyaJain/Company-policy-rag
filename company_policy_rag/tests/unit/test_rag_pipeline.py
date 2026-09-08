@@ -5,11 +5,11 @@ import shutil
 import tempfile
 import pytest
 
-from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole, ContentType
-from backend.models.rag import Citation, RAGResponse, RAGTrace, ScoredChunk
-from backend.embeddings.embeddings import EmbeddingCache, EmbeddingService, normalize_vector
-from backend.embeddings.vector_store import ChromaVectorStore, MetadataFilter
-from backend.retrieval.bm25 import BM25SearchIndex, tokenize
+from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole
+from backend.models.rag import RAGResponse, RAGTrace, ScoredChunk
+from backend.embeddings.embeddings import EmbeddingService, normalize_vector
+from backend.embeddings.vector_store import ChromaVectorStore
+from backend.retrieval.bm25 import BM25SearchIndex
 from backend.retrieval.vector import DenseVectorRetriever
 from backend.retrieval.hybrid import HybridRetriever, reciprocal_rank_fusion
 from backend.retrieval.reranker import CrossEncoderReranker, RelativeScoreThresholdPostprocessor
@@ -335,9 +335,11 @@ def test_pipeline_with_history_and_model(sample_chunks: list[Chunk]):
             def __init__(self):
                 self.model = "qwen2.5:7b"
                 self.last_prompt = ""
+                self.prompts = []
 
             def complete(self, prompt: str) -> str:
                 self.last_prompt = prompt
+                self.prompts.append(prompt)
                 return "Part-time employees are not eligible for annual leave [Source 1]."
 
         dummy_llm = DummyLLM()
@@ -357,8 +359,14 @@ def test_pipeline_with_history_and_model(sample_chunks: list[Chunk]):
         assert response.model == "llama3.1:8b"
         # Verify Fix 4: shared singleton dummy_llm.model is NOT mutated
         assert dummy_llm.model == "qwen2.5:7b"
-        assert "Recent Conversation History:" in dummy_llm.last_prompt
-        assert "User: What is the employee annual leave policy?" in dummy_llm.last_prompt
+        # A shallow per-model client copy shares the prompt sink. The final
+        # answer call receives the standalone query, never raw chat history.
+        assert dummy_llm.prompts
+        final_prompt = dummy_llm.prompts[-1]
+        assert "STANDALONE QUESTION:" in final_prompt
+        assert "annual leave" in final_prompt.lower()
+        assert "Recent Conversation History:" not in final_prompt
+        assert "Employees get 15 days of annual leave." not in final_prompt
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 

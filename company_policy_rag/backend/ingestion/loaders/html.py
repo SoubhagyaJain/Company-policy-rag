@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
+from backend.ingestion.loaders.validation import read_text
 from backend.models.document import DocumentType, RawDocument
 from backend.utils.logging import logger
 from backend.utils.section_tracker import SectionTracker
@@ -28,11 +29,7 @@ class HTMLLoader(BaseLoader):
             logger.error("beautifulsoup4 is not installed: %s", e)
             raise RuntimeError("beautifulsoup4 required for html files") from e
 
-        html_text = ""
-        try:
-            html_text = file_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            html_text = file_path.read_text(encoding="latin-1", errors="replace")
+        html_text = read_text(file_path)
 
         soup = BeautifulSoup(html_text, "html.parser")
 

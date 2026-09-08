@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
+from backend.ingestion.loaders.validation import read_text
 from backend.models.document import DocumentType, RawDocument
 
 
@@ -21,12 +22,14 @@ class JSONLoader(BaseLoader):
     ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.JSON, base_metadata)
 
-        content_str = file_path.read_text(encoding="utf-8", errors="replace")
+        content_str = read_text(file_path)
 
         if file_path.suffix.lower() == ".jsonl":
             documents: list[RawDocument] = []
-            lines = [line.strip() for line in content_str.splitlines() if line.strip()]
+            lines = content_str.splitlines()
             for idx, line in enumerate(lines, start=1):
+                if not line.strip():
+                    continue
                 try:
                     obj = json.loads(line)
                     text = self._format_json_object(obj)
@@ -36,8 +39,8 @@ class JSONLoader(BaseLoader):
                         }
                     )
                     documents.append(RawDocument(content=text, metadata=item_meta))
-                except Exception:
-                    continue
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid JSONL at line {idx}: {exc.msg}") from exc
             return documents if documents else [RawDocument(content=content_str, metadata=base_meta)]
 
         try:
@@ -47,14 +50,18 @@ class JSONLoader(BaseLoader):
                 formatted_blocks: list[str] = []
                 for i, item in enumerate(parsed, start=1):
                     if isinstance(item, dict):
-                        title = item.get("title") or item.get("name") or item.get("policy") or item.get("topic") or f"Record {i}"
+                        title = (
+                            item.get("title")
+                            or item.get("name")
+                            or item.get("policy")
+                            or item.get("topic")
+                            or f"Record {i}"
+                        )
                         formatted_blocks.append(f"### {title}\n\n" + self._format_json_object(item))
                     else:
                         formatted_blocks.append(str(item))
                 formatted_text = "\n\n---\n\n".join(formatted_blocks)
-                final_meta = base_meta.model_copy(
-                    update={"extra": {"record_count": len(parsed), **base_meta.extra}}
-                )
+                final_meta = base_meta.model_copy(update={"extra": {"record_count": len(parsed), **base_meta.extra}})
                 return [RawDocument(content=formatted_text, metadata=final_meta)]
             elif isinstance(parsed, dict):
                 formatted_text = self._format_json_object(parsed)
@@ -62,8 +69,8 @@ class JSONLoader(BaseLoader):
             else:
                 formatted_text = json.dumps(parsed, indent=2, ensure_ascii=False)
                 return [RawDocument(content=formatted_text, metadata=base_meta)]
-        except Exception:
-            return [RawDocument(content=content_str, metadata=base_meta)]
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}") from exc
 
     def _format_json_object(self, obj: Any) -> str:
         if isinstance(obj, dict):

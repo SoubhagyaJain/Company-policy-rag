@@ -13,18 +13,21 @@ import { SpaceHero } from '@/components/space/SpaceHero';
 
 import { useChatStream } from '@/hooks/useChatStream';
 import { useSessions } from '@/hooks/useSessions';
-import { useObservability } from '@/hooks/useObservability';
 import { apiClient } from '@/lib/api-client';
 
-import type { FilterOptions, ResponseMode } from '@/lib/types';
+import type { FilterOptions, HealthStatus, ResponseMode } from '@/lib/types';
 
 
 /* Direction-aware blur crossfade for tab content. Custom = travel direction:
  * +1 → new tab is to the right (old exits left, new enters from right), -1 → reverse. */
+// Compositor-only properties (opacity + transform). No animated `blur()` — a
+// full-screen blur filter re-rasterizes every frame over the live WebGL hero,
+// which is what made tab switches stutter. Opacity/translate/scale stay on the
+// GPU and cross-fade cleanly.
 const panelVariants = {
-  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 26 : d < 0 ? -26 : 0, scale: 0.985, filter: 'blur(6px)' }),
-  center: { opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' },
-  exit: (d: number) => ({ opacity: 0, x: d > 0 ? -26 : d < 0 ? 26 : 0, scale: 0.98, filter: 'blur(6px)' }),
+  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 24 : d < 0 ? -24 : 0, scale: 0.99 }),
+  center: { opacity: 1, x: 0, scale: 1 },
+  exit: (d: number) => ({ opacity: 0, x: d > 0 ? -24 : d < 0 ? 24 : 0, scale: 0.99 }),
 };
 
 const reducedVariants = {
@@ -103,8 +106,36 @@ export default function HomePage() {
     closeCitationDrawer,
   } = useChatStream([]);
 
-  /* ─── Observability (health for header) ──────── */
-  const { health } = useObservability();
+  /* ─── Lightweight backend health for the header ─────────── */
+  const [health, setHealth] = useState<HealthStatus>({
+    status: 'degraded',
+    redis: false,
+    vector_db: false,
+    models_loaded: false,
+    backend_version: 'Connecting',
+  });
+
+  useEffect(() => {
+    let active = true;
+    const refreshHealth = async () => {
+      const nextHealth = await apiClient.getHealth().catch(() => ({
+        status: 'error',
+        redis: false,
+        vector_db: false,
+        models_loaded: false,
+      } as HealthStatus));
+      if (active) setHealth(nextHealth);
+    };
+
+    void refreshHealth();
+    window.addEventListener('focus', refreshHealth);
+    window.addEventListener('online', refreshHealth);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refreshHealth);
+      window.removeEventListener('online', refreshHealth);
+    };
+  }, []);
 
   /* Sync messages from active session on initial load and session switch */
   const prevActiveSessionIdRef = React.useRef<string>('');
@@ -253,7 +284,6 @@ export default function HomePage() {
         x: { type: 'spring' as const, stiffness: 460, damping: 44, mass: 0.9 },
         scale: { type: 'spring' as const, stiffness: 460, damping: 44, mass: 0.9 },
         opacity: { duration: 0.26, ease: [0.22, 1, 0.36, 1] as const },
-        filter: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const },
       };
 
   return (
@@ -281,7 +311,7 @@ export default function HomePage() {
           exit="exit"
           transition={panelTransition}
           className="absolute inset-0 z-[1] h-[100dvh] w-full"
-          style={{ willChange: 'transform, opacity, filter', transformOrigin: 'center' }}
+          style={{ willChange: 'transform, opacity', transformOrigin: 'center' }}
         >
           {tabContent}
         </motion.div>

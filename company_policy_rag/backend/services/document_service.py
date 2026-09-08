@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import threading
 import time
@@ -14,7 +15,7 @@ from typing import Any
 from backend.embeddings.embeddings import EmbeddingService
 from backend.embeddings.vector_store import ChromaVectorStore, unpack_chroma_metadata
 from backend.ingestion.chunkers.adaptive_chunker import AdaptiveChunker
-from backend.ingestion.loaders.loader_factory import load_document
+from backend.ingestion.loaders.loader_factory import get_loader_for_file, load_document
 from backend.ingestion.metadata_extractor import DocumentMetadataExtractor
 from backend.models.api_dto import (
     DocumentDetailResponse,
@@ -64,12 +65,21 @@ class DocumentService:
         image_asset_manager: ImageAssetManager | None = None,
         vision_cache_manager: VisionCacheManager | None = None,
         storage_dir: str = "app/storage/uploads",
+        fresh_start: bool = False,
     ) -> None:
+        # Each interactive app run gets an isolated library. Keep earlier files
+        # intact while excluding their indexes and hashes from this run.
+        session_root = Path(storage_dir).parent / "sessions" / uuid.uuid4().hex if fresh_start else None
+        if session_root is not None:
+            storage_dir = str(session_root / "uploads")
         self.vector_store = vector_store or ChromaVectorStore(
             collection_name=settings.chroma_collection_name,
-            persist_dir=settings.chroma_persist_dir,
+            persist_dir=str(session_root / "chroma") if session_root is not None else settings.chroma_persist_dir,
         )
-        self.bm25_index = bm25_index or BM25SearchIndex()
+        self.bm25_index = bm25_index or (
+            BM25SearchIndex(storage_dir=str(session_root / "bm25"))
+            if session_root is not None else BM25SearchIndex()
+        )
         self.embedding_service = embedding_service or EmbeddingService()
         self.docstore = docstore if docstore is not None else {}
         self.image_asset_manager = image_asset_manager or ImageAssetManager()
@@ -84,12 +94,13 @@ class DocumentService:
         self._stored_files: dict[str, Path] = {}
         self._pending_hashes: dict[str, str] = {}
         self._hash_catalog = self._load_hash_catalog()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         # Single-worker queue for the heavy parse→chunk→embed→index pipeline, so
         # large uploads run off the request thread (no proxy/browser timeout) and
         # ingestions are serialized (BM25/vector writes never race each other).
         self._ingestion_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ingest")
-        self._restore_document_registry()
+        if not fresh_start:
+            self._restore_document_registry()
 
     def _load_hash_catalog(self) -> dict[str, dict[str, Any]]:
         if not self._hash_catalog_path.is_file():
@@ -124,9 +135,10 @@ class DocumentService:
         return f"doc_{digest}", source_file or None
 
     def _save_hash_catalog(self) -> None:
-        temp_path = self._hash_catalog_path.with_suffix(".tmp")
-        temp_path.write_text(json.dumps(self._hash_catalog, indent=2, sort_keys=True), encoding="utf-8")
-        temp_path.replace(self._hash_catalog_path)
+        with self._lock:
+            temp_path = self._hash_catalog_path.with_suffix(".tmp")
+            temp_path.write_text(json.dumps(self._hash_catalog, indent=2, sort_keys=True), encoding="utf-8")
+            temp_path.replace(self._hash_catalog_path)
 
     def _hash_stored_file(self, document_id: str, file_path: Path) -> str:
         stat = file_path.stat()
@@ -265,6 +277,14 @@ class DocumentService:
             record["file_hash"] = self._hash_stored_file(document_id, file_path)
             record["pages_count"] = len(page_numbers.get(document_id, set()))
             record["storage_state"] = "HEALTHY" if record["chunk_count"] > 0 else "FILE_ONLY"
+            if not record["chunk_count"]:
+                record.update(
+                    status="FAILED",
+                    progress=0,
+                    current_stage="FAILED",
+                    text_ready=False,
+                    error="Stored file has no searchable index. Retry indexing.",
+                )
             self._stored_files[document_id] = file_path
 
         self._documents.update(aggregated)
@@ -330,10 +350,7 @@ class DocumentService:
         """Preview or remove only exact-content duplicate documents."""
         groups = self.get_duplicate_groups()
         remove_ids = [
-            document["document_id"]
-            for group in groups
-            for document in group["documents"]
-            if not document["keep"]
+            document["document_id"] for group in groups for document in group["documents"] if not document["keep"]
         ]
         removed: list[dict[str, Any]] = []
         if not dry_run:
@@ -389,7 +406,8 @@ class DocumentService:
                     vision_status=doc.get("vision_status", "NONE"),
                     created_at=doc.get("created_at", datetime.now(UTC).isoformat()),
                     updated_at=datetime.now(UTC).isoformat(),
-                    can_retry=False,
+                    can_retry=doc.get("status") == "FAILED",
+                    error=doc.get("error"),
                 )
         return None
 
@@ -447,6 +465,7 @@ class DocumentService:
         Execute core text ingestion pipeline with structured logging, batched embeddings,
         per-stage timing, forward-progress chunk verification, and strict failure isolation.
         """
+        index_started = False
         t_global_start = time.perf_counter()
         file_size = file_path.stat().st_size if file_path.exists() else 0
         ext = file_path.suffix.lower()
@@ -573,7 +592,7 @@ class DocumentService:
             chunks = chunker.chunk(raw_docs)
 
             if not chunks:
-                logger.warning("Chunking produced 0 chunks for document.")
+                raise ValueError("No searchable chunks were produced. Check the document text or run OCR.")
 
             used_strategy = "auto"
             for idx, c in enumerate(chunks):
@@ -629,7 +648,14 @@ class DocumentService:
 
                 t_batch_start = time.perf_counter()
                 batch_embs = self.embedding_service.embed_chunks(batch_texts)
-                all_embeddings.extend(batch_embs)
+                if len(batch_embs) != len(batch_texts):
+                    raise RuntimeError("Embedding provider returned an incomplete batch.")
+                for embedding in batch_embs:
+                    if not embedding or not all(math.isfinite(value) for value in embedding):
+                        raise RuntimeError("Embedding provider returned an empty or non-finite vector.")
+                    if all_embeddings and len(embedding) != len(all_embeddings[0]):
+                        raise RuntimeError("Embedding provider returned inconsistent vector dimensions.")
+                    all_embeddings.append(embedding)
                 b_duration = round((time.perf_counter() - t_batch_start) * 1000, 2)
 
                 # Progress scales from 50% to 75%
@@ -681,6 +707,7 @@ class DocumentService:
                 message="Indexing chunks in ChromaDB vector store...",
             )
 
+            index_started = True
             self.vector_store.add_chunks(chunks)
             t_vec = round((time.perf_counter() - t_stage) * 1000, 2)
             self._update_job_stage(
@@ -828,6 +855,7 @@ class DocumentService:
 
             try:
                 from backend.api.dependencies import get_telemetry_service
+
                 get_telemetry_service().record_ingestion_trace(
                     document_id=document_id,
                     filename=filename,
@@ -878,6 +906,23 @@ class DocumentService:
 
         except Exception as exc:
             logger.exception("[INGESTION] FAILED for document_id=%s file=%s: %s", document_id, filename, exc)
+            if index_started:
+                # Compensate partial writes; retain the source file for retry.
+                for cleanup in (
+                    lambda: self.vector_store.delete_by_document_id(document_id),
+                    lambda: self.bm25_index.remove_by_document_id(document_id),
+                    lambda: self.bm25_index.save(),
+                ):
+                    try:
+                        cleanup()
+                    except Exception:
+                        logger.exception("Failed to clean partial index for %s", document_id)
+                for chunk_id, chunk in list(self.docstore.items()):
+                    if chunk.metadata.document_id == document_id:
+                        self.docstore.pop(chunk_id, None)
+                with self._lock:
+                    self._documents.pop(document_id, None)
+
             with self._lock:
                 if document_id in self._ingestion_jobs:
                     j = self._ingestion_jobs[document_id]
@@ -891,6 +936,7 @@ class DocumentService:
 
             try:
                 from backend.api.dependencies import get_telemetry_service
+
                 get_telemetry_service().record_ingestion_trace(
                     document_id=document_id,
                     filename=filename,
@@ -933,6 +979,27 @@ class DocumentService:
         if not filename or not content_bytes:
             raise ValueError("File content or filename cannot be empty.")
 
+        safe_filename = Path(filename.replace("\\", "/")).name
+        if (
+            not safe_filename.strip(" .")
+            or len(safe_filename) > 180
+            or any(ord(c) < 32 or c in '<>:"|?*' for c in safe_filename)
+        ):
+            raise ValueError("Invalid document filename.")
+        get_loader_for_file(Path(safe_filename))
+        if chunk_strategy and chunk_strategy not in {
+            "auto",
+            "recursive",
+            "semantic",
+            "markdown",
+            "markdown_aware",
+            "heading",
+            "heading_aware",
+            "table",
+            "table_aware",
+        }:
+            raise ValueError("Unsupported chunk strategy.")
+        filename = safe_filename
         content_hash = hashlib.sha256(content_bytes).hexdigest()
         document_id = f"doc_{uuid.uuid4().hex[:12]}"
         safe_filename = Path(filename).name
@@ -942,12 +1009,13 @@ class DocumentService:
             for record in self._documents.values():
                 existing_id = str(record.get("document_id") or "")
                 existing_path = self._stored_files.get(existing_id)
-                if (
-                    record.get("file_hash") == content_hash
-                    and existing_path is not None
-                    and existing_path.is_file()
-                ):
+                if record.get("file_hash") == content_hash and existing_path is not None and existing_path.is_file():
                     raise DuplicateDocumentError(existing_id, str(record.get("filename") or filename), content_hash)
+            for existing_id, existing_path in self._stored_files.items():
+                cached_hash = self._hash_catalog.get(existing_id, {}).get("sha256")
+                if cached_hash == content_hash and existing_path.is_file():
+                    stored_name = existing_path.name.removeprefix(f"{existing_id}_")
+                    raise DuplicateDocumentError(existing_id, stored_name, content_hash)
             pending_id = self._pending_hashes.get(content_hash)
             if pending_id:
                 raise DuplicateDocumentError(pending_id, safe_filename, content_hash)
@@ -955,8 +1023,10 @@ class DocumentService:
 
         try:
             target_path.write_bytes(content_bytes)
-            self._hash_stored_file(document_id, target_path)
-            self._save_hash_catalog()
+            with self._lock:
+                self._hash_stored_file(document_id, target_path)
+                self._hash_catalog[document_id].update(category=category, chunk_strategy=chunk_strategy)
+                self._save_hash_catalog()
 
             with self._lock:
                 self._stored_files[document_id] = target_path
@@ -974,6 +1044,10 @@ class DocumentService:
         except Exception:
             with self._lock:
                 self._pending_hashes.pop(content_hash, None)
+                self._hash_catalog.pop(document_id, None)
+                self._stored_files.pop(document_id, None)
+                self._ingestion_jobs.pop(document_id, None)
+            target_path.unlink(missing_ok=True)
             raise
 
         # Run the heavy pipeline (parse → chunk → embed → index) off the request
@@ -999,7 +1073,17 @@ class DocumentService:
                 with self._lock:
                     self._pending_hashes.pop(content_hash, None)
 
-        self._ingestion_executor.submit(_run_ingestion)
+        try:
+            self._ingestion_executor.submit(_run_ingestion)
+        except RuntimeError:
+            with self._lock:
+                self._pending_hashes.pop(content_hash, None)
+                self._stored_files.pop(document_id, None)
+                self._ingestion_jobs.pop(document_id, None)
+                self._hash_catalog.pop(document_id, None)
+                self._save_hash_catalog()
+            target_path.unlink(missing_ok=True)
+            raise
 
         file_type = Path(filename).suffix.lstrip(".").lower() or "unknown"
         return DocumentUploadResponse(
@@ -1022,7 +1106,12 @@ class DocumentService:
 
     def retry_document(self, document_id: str) -> IngestionStatusResponse:
         """Retry indexing for a previously uploaded document without re-uploading the file."""
+        if not re.fullmatch(r"doc_[0-9a-f]{12}", document_id):
+            raise ValueError("Invalid document ID.")
         with self._lock:
+            existing_job = self._ingestion_jobs.get(document_id)
+            if existing_job and existing_job.status != "FAILED":
+                return existing_job.model_copy(deep=True)
             file_path = self._stored_files.get(document_id)
             if not file_path or not file_path.is_file():
                 # Search disk for stored file matching document_id
@@ -1034,7 +1123,7 @@ class DocumentService:
             if not file_path or not file_path.is_file():
                 raise ValueError(f"No stored document file found for ID '{document_id}' to retry.")
 
-            filename = file_path.name.replace(f"{document_id}_", "")
+            filename = file_path.name.removeprefix(f"{document_id}_")
             job = IngestionStatusResponse(
                 document_id=document_id,
                 job_id=f"job_{uuid.uuid4().hex[:10]}",
@@ -1052,6 +1141,7 @@ class DocumentService:
         # a large document must not block the retry request. The client polls
         # /status for progress until READY/FAILED.
         retry_path = file_path
+        saved_options = self._hash_catalog.get(document_id, {})
 
         def _run_retry() -> None:
             try:
@@ -1059,11 +1149,21 @@ class DocumentService:
                     document_id=document_id,
                     filename=filename,
                     file_path=retry_path,
+                    category=saved_options.get("category")
+                    or self._documents.get(document_id, {}).get("category", "general"),
+                    chunk_strategy=saved_options.get("chunk_strategy"),
                 )
             except Exception:
                 logger.exception("[INGESTION] background retry crashed for document_id=%s", document_id)
 
-        self._ingestion_executor.submit(_run_retry)
+        try:
+            self._ingestion_executor.submit(_run_retry)
+        except RuntimeError:
+            with self._lock:
+                job.status = "FAILED"
+                job.error = "Ingestion queue is unavailable. Retry the document."
+                job.can_retry = True
+            raise
 
         return job
 
@@ -1161,7 +1261,14 @@ class DocumentService:
         with self._lock:
             doc_record = self._documents.get(document_id)
             if not doc_record:
-                return None
+                stored_path = self._stored_files.get(document_id)
+                job = self._ingestion_jobs.get(document_id)
+                if stored_path is None and job is None:
+                    return None
+                filename = (
+                    job.filename if job is not None else stored_path.name.removeprefix(f"{document_id}_")  # type: ignore[union-attr]
+                )
+                doc_record = {"filename": filename}
             filename = doc_record["filename"]
 
         # 1. Purge from Vector Store. Legacy chunks without a usable document_id
@@ -1178,8 +1285,7 @@ class DocumentService:
 
         # 3. Purge from Docstore
         chunk_ids_to_del = [
-            cid for cid, chunk in list(self.docstore.items())
-            if chunk.metadata.document_id == document_id
+            cid for cid, chunk in list(self.docstore.items()) if chunk.metadata.document_id == document_id
         ]
         for cid in chunk_ids_to_del:
             self.docstore.pop(cid, None)
@@ -1203,7 +1309,9 @@ class DocumentService:
                 file_path.unlink()
                 deleted_source_files += 1
 
-        logger.info("Deleted document id=%s, filename=%s (%d chunks purged)", document_id, filename, len(chunk_ids_to_del))
+        logger.info(
+            "Deleted document id=%s, filename=%s (%d chunks purged)", document_id, filename, len(chunk_ids_to_del)
+        )
 
         return {
             "status": "deleted",

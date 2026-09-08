@@ -54,3 +54,10 @@ ipykernel>=6.0.0
 # Testing
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
+# Multi-format document ingestion
+python-docx>=1.1,<2
+beautifulsoup4>=4.12,<5
+openpyxl>=3.1,<4
+python-pptx>=1.0,<2
+defusedxml>=0.7,<1
+charset-normalizer>=3.3,<4

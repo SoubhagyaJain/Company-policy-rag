@@ -50,6 +50,14 @@ def _build_section_patterns() -> list[SectionPattern]:
     return sorted(
         [
             SectionPattern(
+                name="hash_numbered_heading",
+                level=1,
+                regex=re.compile(r"^#\s*(\d+)\s*[.)]\s+(.+)$"),
+                number_group=1,
+                title_group=2,
+                priority=4,
+            ),
+            SectionPattern(
                 name="article_section_clause",
                 level=4,
                 regex=re.compile(

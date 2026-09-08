@@ -241,6 +241,11 @@ class RAGTrace(BaseModel):
     merged_chunk_count: int = 0
     previous_chunk_count: int = 0
     new_chunk_count: int = 0
+    retrieval_decision: str = "retrieve"
+    reference_resolution: dict[str, str] = Field(default_factory=dict)
+    clarification_required: bool = False
+    returned_to_topic: bool = False
+    reused_evidence_turn_id: str | None = None
     # High-Observability fields (Phase 14)
     anchor_section: str | None = None
     page_identity: str | None = None

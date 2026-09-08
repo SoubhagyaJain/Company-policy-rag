@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
+
 import pytest
 
-from backend.models.document import DocumentCategory, DocumentMetadata, DocumentType, RawDocument
-from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole, ContentType
-
-from backend.ingestion.loaders.base import BaseLoader
 from backend.ingestion.loaders.pdf import PDFLoader
 from backend.ingestion.loaders.docx import DocxLoader
 from backend.ingestion.loaders.txt import TxtLoader
@@ -17,17 +13,15 @@ from backend.ingestion.loaders.markdown import MarkdownLoader
 from backend.ingestion.loaders.html import HTMLLoader
 from backend.ingestion.loaders.csv import CSVLoader
 from backend.ingestion.loaders.json import JSONLoader
-from backend.ingestion.loaders.loader_factory import LoaderFactory, get_loader_for_file, load_document
+from backend.ingestion.loaders.loader_factory import load_document
 
-from backend.ingestion.chunkers.base import BaseChunker
 from backend.ingestion.chunkers.recursive import RecursiveChunker
-from backend.ingestion.chunkers.semantic import SemanticChunker
 from backend.ingestion.chunkers.markdown_aware import MarkdownAwareChunker
 from backend.ingestion.chunkers.heading_aware import HeadingAwareChunker
 from backend.ingestion.chunkers.table_aware import TableAwareChunker
 from backend.ingestion.chunkers.adaptive_chunker import AdaptiveChunker
 
-from backend.utils.section_tracker import SectionTracker, parse_section_heading
+from backend.models.document import DocumentType
 
 
 # ── Category 1: Empty / Zero-Byte Files ──────────────────────────────────────
@@ -90,14 +84,8 @@ def test_empty_json_file(tmp_path: Path):
     loader = JSONLoader()
     assert loader.supports(json_file)
 
-    docs = loader.load(json_file)
-    assert len(docs) == 1
-    assert docs[0].content == ""
-    assert docs[0].metadata.document_type == DocumentType.JSON
-
-    chunker = RecursiveChunker()
-    chunks = chunker.chunk(docs)
-    assert chunks == []
+    with pytest.raises(ValueError, match="Invalid JSON"):
+        loader.load(json_file)
 
 
 def test_empty_jsonl_file(tmp_path: Path):
@@ -159,36 +147,20 @@ def test_empty_valid_docx_file(tmp_path: Path):
 
 
 def test_zero_byte_docx_file_handled_gracefully(tmp_path: Path):
-    docx_file = tmp_path / "zero_byte.docx"
-    docx_file.write_bytes(b"")
-
-    loader = DocxLoader()
-    assert loader.supports(docx_file)
-
-    # Verify that DocxLoader safely catches file open exceptions on zero-byte docx
-    docs = loader.load(docx_file)
-    assert len(docs) == 1
-    assert docs[0].content == ""
-
-    # Verify corrupt docx binary file is also handled gracefully
-    corrupt_file = tmp_path / "corrupt.docx"
-    corrupt_file.write_bytes(b"PK\x03\x04not_a_valid_docx_zip_structure")
-    corrupt_docs = loader.load(corrupt_file)
-    assert len(corrupt_docs) == 1
-    assert corrupt_docs[0].content == ""
-
+    for content in (b"", b"PK invalid archive"):
+        path = tmp_path / "broken.docx"
+        path.write_bytes(content)
+        with pytest.raises(ValueError, match="Invalid Office"):
+            DocxLoader().load(path)
 
 
 def test_loader_factory_with_empty_files(tmp_path: Path):
     txt_file = tmp_path / "empty_factory.txt"
     txt_file.write_bytes(b"")
 
-    docs = load_document(txt_file)
-    assert len(docs) == 1
-    assert docs[0].content == ""
+    with pytest.raises(ValueError, match="No readable"):
+        load_document(txt_file)
 
-
-# ── Category 2: Extremely Large Text/Markdown Files (>5MB) ────────────────────
 
 def test_large_text_file(tmp_path: Path):
     large_txt = tmp_path / "large_policy.txt"
@@ -285,10 +257,8 @@ def test_malformed_json_syntax(tmp_path: Path):
     json_file.write_text(broken_content, encoding="utf-8")
 
     loader = JSONLoader()
-    docs = loader.load(json_file)
-    assert len(docs) == 1
-    assert docs[0].content == broken_content
-    assert docs[0].metadata.document_type == DocumentType.JSON
+    with pytest.raises(ValueError, match="Invalid JSON"):
+        loader.load(json_file)
 
 
 def test_malformed_jsonl_partially_corrupt(tmp_path: Path):
@@ -303,13 +273,8 @@ def test_malformed_jsonl_partially_corrupt(tmp_path: Path):
     jsonl_file.write_text("\n".join(lines), encoding="utf-8")
 
     loader = JSONLoader()
-    docs = loader.load(jsonl_file)
-    # Valid lines (3 of them) should be extracted as RawDocuments
-    assert len(docs) == 3
-    assert "id" in docs[0].content
-    assert docs[0].metadata.extra["record_index"] == 1
-    assert docs[1].metadata.extra["record_index"] == 3
-    assert docs[2].metadata.extra["record_index"] == 5
+    with pytest.raises(ValueError, match="line 2"):
+        loader.load(jsonl_file)
 
 
 def test_malformed_html_unclosed_tags(tmp_path: Path):
@@ -470,9 +435,7 @@ def test_non_utf8_latin1_encoding(tmp_path: Path):
 
     loader = TxtLoader()
     docs = loader.load(txt_file)
-    assert len(docs) == 1
-    assert "rôle" in docs[0].content or "r\xf4le" in docs[0].content
-    assert "privil\xe8ge" in docs[0].content or "privilège" in docs[0].content
+    assert docs[0].content == latin1_content
 
 
 def test_utf16_le_encoding_fallback(tmp_path: Path):
@@ -483,7 +446,8 @@ def test_utf16_le_encoding_fallback(tmp_path: Path):
     loader = TxtLoader()
     docs = loader.load(txt_file)
     assert len(docs) == 1
-    # Fallback to latin-1/errors=replace should handle non-UTF8 without crash
+    assert docs[0].content == utf16_content
+    # Unicode BOM selects the correct decoder.
     assert docs[0].metadata.document_type == DocumentType.TXT
 
 
@@ -493,10 +457,5 @@ def test_binary_garbage_and_null_bytes(tmp_path: Path):
     txt_file.write_bytes(garbage_bytes)
 
     loader = TxtLoader()
-    docs = loader.load(txt_file)
-    assert len(docs) == 1
-    assert "HEADER" in docs[0].content
-
-    chunker = RecursiveChunker()
-    chunks = chunker.chunk(docs)
-    assert len(chunks) > 0
+    with pytest.raises(ValueError, match="Binary"):
+        loader.load(txt_file)

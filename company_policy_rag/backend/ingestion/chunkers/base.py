@@ -53,7 +53,7 @@ class BaseChunker(ABC):
         node_role: ChunkRole = ChunkRole.STANDALONE,
         parent_id: str | None = None,
         child_ids: list[str] | None = None,
-        content_type: ContentType = ContentType.PROSE,
+        content_type: ContentType | None = None,
         is_atomic: bool = False,
     ) -> Chunk:
         doc_meta = document.metadata
@@ -67,9 +67,9 @@ class BaseChunker(ABC):
             clause_parts = str(clause_id).split(".")
             parent_section = ".".join(clause_parts[:-1]) or clause_parts[0]
 
-        # Determine content type based on document metadata hints if default PROSE was passed
-        final_content_type = content_type
-        if final_content_type == ContentType.PROSE:
+        # Infer only when the caller has not classified this particular chunk.
+        final_content_type = content_type or ContentType.PROSE
+        if content_type is None:
             raw_ct = doc_meta.extra.get("content_type")
             if raw_ct == "code" or doc_meta.has_code:
                 final_content_type = ContentType.CODE
@@ -89,11 +89,7 @@ class BaseChunker(ABC):
             chunk_type = "prose"
 
         image_assets = [dict(asset) for asset in (doc_meta.image_assets or [])]
-        visual_asset_ids = [
-            str(asset["asset_id"])
-            for asset in image_assets
-            if asset.get("asset_id")
-        ]
+        visual_asset_ids = [str(asset["asset_id"]) for asset in image_assets if asset.get("asset_id")]
         if doc_meta.extra.get("asset_id"):
             extra_asset_id = str(doc_meta.extra["asset_id"])
             if extra_asset_id not in visual_asset_ids:

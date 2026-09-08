@@ -723,11 +723,9 @@ export const AdminView: React.FC = () => {
                 disabled={!autoRefresh}
                 className="bg-transparent text-charcoal dark:text-cream-300 focus:outline-none cursor-pointer text-xs"
               >
-                <option value={2000} className="bg-white dark:bg-sand-dark text-charcoal dark:text-cream-100">2s</option>
-                <option value={3000} className="bg-white dark:bg-sand-dark text-charcoal dark:text-cream-100">3s</option>
-                <option value={5000} className="bg-white dark:bg-sand-dark text-charcoal dark:text-cream-100">5s</option>
-                <option value={10000} className="bg-white dark:bg-sand-dark text-charcoal dark:text-cream-100">10s</option>
+                <option value={15000} className="bg-white dark:bg-sand-dark text-charcoal dark:text-cream-100">15s</option>
                 <option value={30000} className="bg-white dark:bg-sand-dark text-charcoal dark:text-cream-100">30s</option>
+                <option value={60000} className="bg-white dark:bg-sand-dark text-charcoal dark:text-cream-100">1m</option>
               </select>
             </div>
 

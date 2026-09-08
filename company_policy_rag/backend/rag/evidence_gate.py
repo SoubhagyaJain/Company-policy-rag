@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from backend.models.logical_document import detect_continuation_signals
 from backend.models.rag import EvidenceStatus, QueryCategory, ScoredChunk
 from backend.utils.logging import logger
+from backend.rag.section_matching import named_section_matches
 
 _CODE_DETECTION_REGEX = re.compile(
     r"(?:```(?:python|bash|sh|json|yaml|yml|javascript|ts|js)?\s*[\s\S]*?```|"
@@ -181,11 +183,34 @@ class EvidenceSufficiencyGate:
         intent_str = intent.value.lower() if isinstance(intent, QueryCategory) else str(intent).lower()
         query_lower = query.lower()
 
+        # Stack/workflow overviews can be answered from explicit prose. Asking
+        # how to build something does not by itself request literal source code.
+        stack_overview = bool(re.search(r"\b(?:tech(?:nology)?\s+stack|technologies|frameworks|components)\b", query_lower))
+        explicit_code = bool(re.search(r"\b(?:code|snippet|source code|function|class|method)\b", query_lower))
+        named_chunks = named_section_matches(query, candidate_chunks)
+        named_section_text = unicodedata.normalize(
+            "NFKC", "\n".join(sc.chunk.text for sc in named_chunks)
+        ).lower()
+        has_named_build_overview = bool(
+            named_chunks
+            and re.search(r"\btech(?:nology)?\s+stack\b", named_section_text)
+            and re.search(r"\b(?:workflow|steps?|process)\b", named_section_text)
+        )
+        # When the user names a document section, evidence from other sections
+        # must not impose requirements on that answer. This prevents an
+        # unrelated "depicted below" passage from forcing visual fallback.
+        if named_chunks:
+            pages = {(sc.chunk.metadata.document_id, sc.chunk.metadata.page_number) for sc in named_chunks}
+            candidate_chunks = [sc for sc in candidate_chunks
+                                if (sc.chunk.metadata.document_id, sc.chunk.metadata.page_number) in pages]
+
         # Check if query specifically demands code or implementation
         requires_code = (
             intent_str in _IMPLEMENTATION_INTENTS
             or any(k in query_lower for k in ("how can i make", "how to make", "how to build", "show me the code", "give me the code", "code for", "implementation of", "task defined", "how is the", "agent defined"))
         )
+        if (stack_overview or has_named_build_overview) and not explicit_code:
+            requires_code = False
 
         requires_diagram = (
             intent_str in _VISUAL_INTENTS
@@ -242,6 +267,10 @@ class EvidenceSufficiencyGate:
             meta = sc.chunk.metadata
             c_type = str(getattr(meta, "content_type", "")).lower()
             extra = getattr(meta, "extra", {}) or {}
+            # An asset link proves that an image exists, not that it was read.
+            if extra.get("visual_status") == "ASSET_AVAILABLE":
+                has_visual_asset = True
+                continue
 
             # Check if chunk has visual asset attached
             if meta.image_assets or meta.visual_asset_ids or extra.get("image_url") or extra.get("image_hash") or extra.get("is_visual_extraction"):

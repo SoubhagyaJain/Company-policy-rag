@@ -1,5 +1,6 @@
 import time
 import asyncio
+import logging
 import uuid
 from contextlib import asynccontextmanager
 
@@ -24,6 +25,36 @@ ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
+
+_QUIET_SUCCESS_PATHS = frozenset({"/api/admin/observability"})
+
+
+class _SuccessfulPollingAccessFilter(logging.Filter):
+    """Hide routine successful telemetry polls while preserving every failure."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if not isinstance(args, tuple) or len(args) < 5:
+            return True
+
+        try:
+            method = str(args[1]).upper()
+            path = str(args[2]).split("?", 1)[0]
+            status_code = int(args[4])
+        except (TypeError, ValueError):
+            return True
+
+        return not (
+            method == "GET"
+            and path in _QUIET_SUCCESS_PATHS
+            and 200 <= status_code < 400
+        )
+
+
+def _install_access_log_filter() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(item, _SuccessfulPollingAccessFilter) for item in access_logger.filters):
+        access_logger.addFilter(_SuccessfulPollingAccessFilter())
 
 
 def warmup_rag_system() -> None:
@@ -120,6 +151,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """FastAPI application factory configuring CORS, routers, and global error handling."""
+    _install_access_log_filter()
     app = FastAPI(
         title="Enterprise Policy RAG System API",
         description="FastAPI backend providing RAG chat, sub-1s TTFT SSE streaming, document ingestion, and admin observability.",

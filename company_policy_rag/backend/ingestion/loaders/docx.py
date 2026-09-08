@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import zipfile
 from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
+from backend.ingestion.loaders.validation import validate_office_archive
 from backend.models.document import DocumentType, RawDocument
 from backend.utils.logging import logger
 from backend.utils.section_tracker import SectionTracker
@@ -14,13 +14,14 @@ class DocxLoader(BaseLoader):
     """Loader for Microsoft Word (.docx) documents."""
 
     def supports(self, file_path: Path) -> bool:
-        return file_path.suffix.lower() in [".docx", ".doc"]
+        return file_path.suffix.lower() == ".docx"
 
     def load(
         self,
         file_path: Path,
         base_metadata: dict[str, Any] | None = None,
     ) -> list[RawDocument]:
+        validate_office_archive(file_path, "word/document.xml")
         base_meta = self._build_base_metadata(file_path, DocumentType.DOCX, base_metadata)
 
         try:
@@ -30,12 +31,11 @@ class DocxLoader(BaseLoader):
             logger.error("python-docx is not installed: %s", e)
             raise RuntimeError("python-docx required for docx files") from e
 
-
         try:
             doc = docx.Document(str(file_path))
-        except (Exception, zipfile.BadZipFile, docx.opc.exceptions.PackageNotFoundError, KeyError) as e:
+        except Exception as e:
             logger.warning("Failed to parse DOCX file %s: %s", file_path, e)
-            return [RawDocument(content="", metadata=base_meta)]
+            raise ValueError("Unable to parse DOCX. Export an unlocked, valid DOCX copy.") from e
 
         section_tracker = SectionTracker()
         content_parts: list[str] = []
@@ -48,7 +48,7 @@ class DocxLoader(BaseLoader):
 
             if tag_name == "p":
                 # Paragraph element
-                p_text = "".join(node.text for node in element.iter() if node.text).strip()
+                p_text = "".join(node.text for node in element.iter() if node.tag.endswith("}t") and node.text).strip()
                 if not p_text:
                     continue
 
@@ -82,7 +82,9 @@ class DocxLoader(BaseLoader):
                         cells = []
                         for cell in row.iter():
                             if cell.tag.endswith("tc"):
-                                cell_text = "".join(node.text for node in cell.iter() if node.text).strip()
+                                cell_text = "".join(
+                                    node.text for node in cell.iter() if node.tag.endswith("}t") and node.text
+                                ).strip()
                                 cells.append(cell_text.replace("\n", " "))
                         if cells:
                             table_lines.append("| " + " | ".join(cells) + " |")

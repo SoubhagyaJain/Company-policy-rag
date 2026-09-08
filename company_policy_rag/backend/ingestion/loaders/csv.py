@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import csv
+import io
 from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
+from backend.ingestion.loaders.validation import read_text
 from backend.models.document import DocumentType, RawDocument
 
 
@@ -12,7 +14,7 @@ class CSVLoader(BaseLoader):
     """Loader for CSV (.csv) tabular data documents."""
 
     def supports(self, file_path: Path) -> bool:
-        return file_path.suffix.lower() == ".csv"
+        return file_path.suffix.lower() in (".csv", ".tsv")
 
     def load(
         self,
@@ -21,31 +23,33 @@ class CSVLoader(BaseLoader):
     ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.CSV, base_metadata)
 
-        rows: list[list[str]] = []
         try:
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                reader = csv.reader(f)
-                for row in reader:
-                    if row:
-                        rows.append(row)
-        except Exception:
-            # Fallback reading
-            content = file_path.read_text(encoding="latin-1", errors="replace")
-            lines = content.splitlines()
-            rows = [line.split(",") for line in lines if line.strip()]
+            reader = csv.reader(
+                io.StringIO(read_text(file_path), newline=""),
+                delimiter="\t" if file_path.suffix.lower() == ".tsv" else ",",
+                strict=True,
+            )
+            rows = [row for row in reader if row]
+        except csv.Error as exc:
+            raise ValueError(f"Invalid delimited document: {exc}") from exc
 
         if not rows:
             return [RawDocument(content="", metadata=base_meta)]
 
-        headers = rows[0]
+        width = max(map(len, rows))
+        headers = rows[0] + [f"Column {i + 1}" for i in range(len(rows[0]), width)]
+
+        def escape(cell: str) -> str:
+            return cell.replace("|", "&#124;").replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+
         markdown_lines = []
-        markdown_lines.append("| " + " | ".join(headers) + " |")
+        markdown_lines.append("| " + " | ".join(escape(cell) for cell in headers) + " |")
         markdown_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
 
         for row in rows[1:]:
-            # Pad or truncate row to match header length
+            # Keep extra columns instead of silently truncating records.
             padded_row = (row + [""] * len(headers))[: len(headers)]
-            markdown_lines.append("| " + " | ".join(cell.replace("\n", " ") for cell in padded_row) + " |")
+            markdown_lines.append("| " + " | ".join(escape(cell) for cell in padded_row) + " |")
 
         content_str = "\n".join(markdown_lines)
 

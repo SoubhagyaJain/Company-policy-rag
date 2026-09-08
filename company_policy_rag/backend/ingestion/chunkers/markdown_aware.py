@@ -64,7 +64,7 @@ class MarkdownAwareChunker(BaseChunker):
                     def flush_block(text_lines: list[str], ctx) -> list[Chunk]:
                         nonlocal chunk_idx
                         raw = "\n".join(text_lines).strip()
-                        if not raw or len(raw) < 30:
+                        if not raw:
                             return []
 
                         res: list[Chunk] = []
@@ -86,7 +86,7 @@ class MarkdownAwareChunker(BaseChunker):
                             splits = self.recursive_helper._split_text(raw, self.recursive_helper.separators)
                             for s in splits:
                                 s_clean = s.strip()
-                                if s_clean and len(s_clean) >= 30:
+                                if s_clean:
                                     c = self._create_chunk(
                                         text=s_clean,
                                         document=doc,

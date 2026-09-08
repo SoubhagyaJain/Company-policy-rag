@@ -3,9 +3,12 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from backend.models.page_identity import PageIdentity
 
 
 class DocumentType(str, Enum):
@@ -16,6 +19,8 @@ class DocumentType(str, Enum):
     HTML = "html"
     CSV = "csv"
     JSON = "json"
+    XLSX = "xlsx"
+    PPTX = "pptx"
     UNKNOWN = "unknown"
 
 
@@ -40,7 +45,9 @@ class DocumentMetadata(BaseModel):
     topic_tags: list[str] = Field(default_factory=list, description="Extracted domain topic tags")
     page_number: int | None = Field(default=None, description="1-indexed physical page number")
     internal_page_index: int | None = Field(default=None, description="0-indexed internal page index")
-    display_page_number: str | int | None = Field(default=None, description="Human-visible printed page number/label e.g. 98")
+    display_page_number: str | int | None = Field(
+        default=None, description="Human-visible printed page number/label e.g. 98"
+    )
     page_label: str | None = Field(default=None, description="Printed / display page number e.g. '82'")
     total_pages: int | None = Field(default=None)
     section_title: str | None = Field(default=None)
@@ -54,6 +61,7 @@ class DocumentMetadata(BaseModel):
 
     def get_page_identity(self) -> PageIdentity:
         from backend.models.page_identity import PageIdentity
+
         return PageIdentity.from_indices(
             internal_page_index=self.internal_page_index,
             physical_page_number=self.page_number,
@@ -63,14 +71,21 @@ class DocumentMetadata(BaseModel):
 
 
 class ExtractedDocumentMetadata(BaseModel):
-    department: str = Field(default="General", description="Normalized canonical department code (HR, IT, Finance, Legal, Operations, Engineering, General)")
+    department: str = Field(
+        default="General",
+        description="Normalized canonical department code (HR, IT, Finance, Legal, Operations, Engineering, General)",
+    )
     category: str = Field(default="general", description="Document category (policy, legal, guidebook, general)")
     effective_date: str | None = Field(default=None, description="ISO 8601 formatted date string YYYY-MM-DD")
     policy_id: str | None = Field(default=None, description="Alphanumeric policy identifier/code e.g. POL-HR-001")
-    key_entities: list[str] = Field(default_factory=list, description="Extracted roles, monetary limits, durations, deadlines")
+    key_entities: list[str] = Field(
+        default_factory=list, description="Extracted roles, monetary limits, durations, deadlines"
+    )
     topic_tags: list[str] = Field(default_factory=list, description="Categorized topic taxonomy tags")
     confidence: float = Field(default=1.0, description="Overall confidence metric (0.0 - 1.0)")
-    confidence_scores: dict[str, float] = Field(default_factory=dict, description="Confidence metric per extracted field (0.0 - 1.0)")
+    confidence_scores: dict[str, float] = Field(
+        default_factory=dict, description="Confidence metric per extracted field (0.0 - 1.0)"
+    )
     extraction_method: str = Field(default="heuristic", description="heuristic | llm | hybrid")
     extra: dict[str, Any] = Field(default_factory=dict, description="Additional unstructured extracted attributes")
 

@@ -10,6 +10,8 @@ from backend.ingestion.loaders.html import HTMLLoader
 from backend.ingestion.loaders.json import JSONLoader
 from backend.ingestion.loaders.markdown import MarkdownLoader
 from backend.ingestion.loaders.pdf import PDFLoader
+from backend.ingestion.loaders.office import SpreadsheetLoader, PresentationLoader
+from backend.ingestion.loaders.validation import MAX_DOCUMENT_BYTES
 from backend.ingestion.loaders.txt import TxtLoader
 from backend.models.document import RawDocument
 
@@ -20,6 +22,8 @@ class LoaderFactory:
     def __init__(self) -> None:
         self.loaders: list[BaseLoader] = [
             PDFLoader(),
+            SpreadsheetLoader(),
+            PresentationLoader(),
             DocxLoader(),
             MarkdownLoader(),
             HTMLLoader(),
@@ -37,7 +41,9 @@ class LoaderFactory:
         for loader in self.loaders:
             if loader.supports(file_path):
                 return loader
-        return TxtLoader()
+        raise ValueError(
+            f"Unsupported document format: {file_path.suffix or '(no extension)'}. Export to PDF, DOCX, XLSX, PPTX, TXT, MD, HTML, CSV, TSV, JSON or JSONL."
+        )
 
     def load_document(
         self,
@@ -46,7 +52,14 @@ class LoaderFactory:
     ) -> list[RawDocument]:
         """Convenience method to load a document file using the appropriate loader."""
         loader = self.get_loader_for_file(file_path)
-        return loader.load(file_path, base_metadata=base_metadata)
+        if file_path.stat().st_size > MAX_DOCUMENT_BYTES:
+            raise ValueError("Document exceeds the 100MB limit.")
+        documents = loader.load(file_path, base_metadata=base_metadata)
+        if not any(doc.content.strip() for doc in documents):
+            raise ValueError(
+                "No readable text found. For scans or image-only documents, run OCR and upload a searchable PDF."
+            )
+        return documents
 
 
 # Global factory instance

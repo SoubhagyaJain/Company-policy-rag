@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:  # pragma: no cover - annotations only
     from backend.models.conversation import ConversationRAGState
-    from backend.models.rag import Citation, RAGTrace, ScoredChunk, VerificationReport
+    from backend.models.rag import Citation, ScoredChunk, VerificationReport
     from backend.rag.thinking import ThinkingStateMachine
 
 
@@ -59,6 +59,11 @@ class QueryContext:
     strategy: Any = None
     fidelity_mode: str = "explain"
     conv_res: Any = None
+    conversation_interpretation: Any = None
+    retrieval_decision: str = "retrieve"
+    reuse_turn_id: str | None = None
+    reused_evidence_status: str | None = None
+    clarification_question: str | None = None
     is_history_followup: bool = False
     effective_search_query: str = ""
 

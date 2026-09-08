@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.dependencies import reset_dependencies
-from backend.api.main import app
+from backend.api.main import _SuccessfulPollingAccessFilter, app
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +25,25 @@ def test_get_admin_observability():
     assert "avg_latency_ms" in data
     assert "token_usage" in data
     assert "recent_traces" in data
+
+
+def test_successful_observability_poll_access_logs_are_quiet_but_errors_remain():
+    access_filter = _SuccessfulPollingAccessFilter()
+
+    def record(path: str, status_code: int) -> logging.LogRecord:
+        return logging.LogRecord(
+            name="uvicorn.access",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg='%s - "%s %s HTTP/%s" %d',
+            args=("127.0.0.1:1234", "GET", path, "1.1", status_code),
+            exc_info=None,
+        )
+
+    assert access_filter.filter(record("/api/admin/observability?time_range=24h", 200)) is False
+    assert access_filter.filter(record("/api/admin/observability?time_range=24h", 500)) is True
+    assert access_filter.filter(record("/api/chat", 200)) is True
 
 
 def test_get_admin_traces():
