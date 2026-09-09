@@ -25,7 +25,7 @@ The checked-in benchmark holds the corpus, retriever, answer prompt, and `qwen2.
 
 The unsupported-claim rate is an LLM-judged hallucination proxy. The sample is small and fictional, so every query, rewrite, retrieved section, answer, citation mapping, and judge count is available in the [benchmark report](company_policy_rag/docs/BENCHMARK_RESULTS.md), [raw results](company_policy_rag/data/eval/conversation_benchmark_results.json), and [dataset](company_policy_rag/data/eval/conversation_benchmark.json).
 
-An independent eight-case hybrid-retrieval smoke set records **100% hit rate**, **89.6% context precision**, and **75.0% context recall** in its [CI baseline](company_policy_rag/data/eval/ci_smoke_baseline.json).
+An independent eight-case production retrieval smoke set records **100% hit@3** and **85.4% mean reciprocal rank**. It runs the shipped Markdown loader, adaptive chunker, Chroma and BM25 indexes, and hybrid reciprocal-rank fusion against the [public smoke dataset](company_policy_rag/data/eval/retrieval_smoke.json).
 
 ## Architecture
 
@@ -77,11 +77,12 @@ The Document Library starts clean. API documentation is available at [http://loc
 cd company_policy_rag
 python scripts/run_core_tests.py
 python scripts/benchmark_conversation.py --assert-minimums
+python scripts/production_retrieval_smoke.py --assert-minimums
 python scripts/benchmark_conversation.py --with-generation --assert-minimums
 cd frontend && npm test && npm run build
 ```
 
-The active [GitHub Actions workflow](.github/workflows/rag-ci.yml) runs 302 deterministic backend regressions, 216 frontend checks, a production UI build, the conversation benchmark gate, and an Ollama retrieval smoke gate.
+The active [GitHub Actions workflow](.github/workflows/rag-ci.yml) runs 304 deterministic backend regressions, 216 frontend checks, a production UI build, the conversation benchmark gate, and the self-contained production retrieval smoke gate.
 
 ## Code map
 
@@ -93,6 +94,7 @@ The active [GitHub Actions workflow](.github/workflows/rag-ci.yml) runs 302 dete
 | [`backend/services/telemetry_service.py`](company_policy_rag/backend/services/telemetry_service.py) | Persistent traces, metrics, health, and retention |
 | [`frontend/`](company_policy_rag/frontend) | Chat, Document Library, and observability UI |
 | [`scripts/benchmark_conversation.py`](company_policy_rag/scripts/benchmark_conversation.py) | Auditable before/after evaluation |
+| [`scripts/production_retrieval_smoke.py`](company_policy_rag/scripts/production_retrieval_smoke.py) | Self-contained production retrieval CI gate |
 
 See the [full project walkthrough](company_policy_rag/README.md) for local development, supported formats, API routes, evaluation commands, and component details.
 

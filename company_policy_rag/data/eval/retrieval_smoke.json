@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "name": "Northstar production retrieval smoke set",
+  "description": "Self-contained retrieval cases for the public demo handbook.",
+  "document": "data/demo/sample_employee_handbook.md",
+  "top_k": 3,
+  "minimums": {
+    "hit_at_k": 1.0,
+    "mean_reciprocal_rank": 0.8
+  },
+  "cases": [
+    {
+      "id": "maternity_probation",
+      "query": "Does maternity leave apply during probation?",
+      "expected_section": "Parental and Maternity Leave"
+    },
+    {
+      "id": "international_travel",
+      "query": "What is the international hotel limit for business travel?",
+      "expected_section": "Business Travel and Expenses"
+    },
+    {
+      "id": "contractor_travel",
+      "query": "What travel costs can contractors claim?",
+      "expected_section": "Business Travel and Expenses"
+    },
+    {
+      "id": "remote_contractors",
+      "query": "Do contractors qualify for remote work?",
+      "expected_section": "Remote Work"
+    },
+    {
+      "id": "annual_leave_probation",
+      "query": "How much annual leave can an employee use during probation?",
+      "expected_section": "Annual Leave and Probation"
+    },
+    {
+      "id": "vpn_reset",
+      "query": "How do I reset VPN access?",
+      "expected_section": "VPN Access and Account Recovery"
+    },
+    {
+      "id": "vpn_verification_reason",
+      "query": "Why is identity verification required for VPN recovery?",
+      "expected_section": "VPN Access and Account Recovery"
+    },
+    {
+      "id": "lost_device_reporting",
+      "query": "When must a lost device be reported?",
+      "expected_section": "Information Security and Data Handling"
+    }
+  ]
+}
