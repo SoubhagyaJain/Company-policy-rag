@@ -85,6 +85,9 @@ class ScoredChunk(BaseModel):
     sparse_score: float | None = Field(default=None, description="Raw BM25 score if sparse retrieved")
     dense_score: float | None = Field(default=None, description="Raw dense vector similarity score")
     rank: int | None = Field(default=None, description="Position rank in final retrieved list")
+    graph_score: float | None = Field(default=None, description="Raw graph expansion score before clamping")
+    graph_hops: int | None = Field(default=None, description="Hops from the seed chunk that reached this one")
+    graph_path: str | None = Field(default=None, description="Edge types traversed, e.g. 'references>contains'")
 
 
 class Citation(BaseModel):
@@ -158,6 +161,7 @@ class RetrievalStrategy(BaseModel):
     min_score_ratio: float = 0.40
     enable_multi_query: bool = False
     enable_parent_expansion: bool = True
+    enable_graph_expansion: bool = False
     temperature: float = 0.1
 
 
