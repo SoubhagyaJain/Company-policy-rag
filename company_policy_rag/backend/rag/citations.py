@@ -9,7 +9,8 @@ from backend.utils.section_tracker import is_noise_line
 # The prompt asks for [Source N]; small local models also write (Source N) or
 # [Source 1, 2]. Accept either bracket so the answer's tags map to cards.
 _SOURCE_TAG_PATTERN = re.compile(
-    r"[\[(](?:Visual\s+)?Sources?\s+(\d+(?:\s*(?:,|and|&)\s*(?:(?:Visual\s+)?Sources?\s+)?\d+)*)\s*[\])]",
+    # Optional ": label" after the numbers, e.g. [Source 3: Handbook, Page 1].
+    r"[\[(](?:Visual\s+)?Sources?\s+(\d+(?:\s*(?:,|and|&)\s*(?:(?:Visual\s+)?Sources?\s+)?\d+)*)\s*(?:[:\u2013\u2014-][^\])\n]{0,160})?[\])]",
     re.IGNORECASE,
 )
 

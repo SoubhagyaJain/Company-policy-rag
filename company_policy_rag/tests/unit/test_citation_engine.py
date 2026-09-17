@@ -63,3 +63,11 @@ def test_without_a_reranker_relevance_is_relative_to_the_best_chunk() -> None:
     chunks = [_scored(1, score=0.0328), _scored(2, score=0.0164)]
     citations = CitationEngine().select_citations("A [Source 1]. B [Source 2].", chunks)
     assert [c.relevance_score for c in citations] == [0.99, 0.5]
+
+
+def test_source_tags_with_a_trailing_label_are_recognised() -> None:
+    chunks = [_scored(i) for i in range(1, 4)]
+    answer = "Access is reviewed quarterly.\n\n**[Source 3: Sample Employee Handbook, Section 3. Remote Work, Page 1]**"
+
+    assert CitationEngine.extract_source_tags(answer) == {3}
+    assert [c.chunk_id for c in CitationEngine().select_citations(answer, chunks, max_citations=2)] == ["c3"]
