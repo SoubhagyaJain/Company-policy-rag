@@ -30,6 +30,7 @@ from backend.models.api_dto import (
 from backend.models.chunk import Chunk
 from backend.models.telemetry_models import SeverityLevel
 from backend.retrieval.bm25 import BM25SearchIndex
+from backend.retrieval.retrieval_cache import get_retrieval_cache
 from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
@@ -774,6 +775,8 @@ class DocumentService:
 
             for c in chunks:
                 self.docstore[c.id] = c
+            # Cached candidate lists predate this document.
+            get_retrieval_cache().clear()
 
             created_at = datetime.now(UTC).isoformat()
             extracted_assets = self.image_asset_manager.list_assets(document_id)
@@ -931,6 +934,7 @@ class DocumentService:
                         self.docstore.pop(chunk_id, None)
                 with self._lock:
                     self._documents.pop(document_id, None)
+                get_retrieval_cache().clear()
 
             with self._lock:
                 if document_id in self._ingestion_jobs:
@@ -1298,6 +1302,8 @@ class DocumentService:
         ]
         for cid in chunk_ids_to_del:
             self.docstore.pop(cid, None)
+        # Cached candidate lists may still reference the deleted chunks.
+        get_retrieval_cache().clear()
 
         # 4. Purge derived image assets and visual response cache.
         deleted_assets = self.image_asset_manager.delete_document_assets(document_id)

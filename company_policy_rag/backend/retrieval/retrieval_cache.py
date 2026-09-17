@@ -12,8 +12,12 @@ from backend.models.rag import ScoredChunk
 
 class RetrievalCache:
     """
-    Thread-safe in-memory LRU cache with TTL for retrieval candidate chunks and reranked results.
-    Prevents redundant vector search and cross-encoder reranking on identical or normalized queries.
+    Thread-safe in-memory LRU cache with TTL for retrieval candidate chunks.
+
+    Entries are keyed on a caller-supplied ``version`` (corpus fingerprint plus
+    the retrieval settings that shape the candidate list), so an upload, delete,
+    or settings change can never serve a stale candidate set. Document
+    mutations also call :meth:`clear`.
     """
 
     def __init__(self, max_size: int = 2000, default_ttl: int = 3600) -> None:
@@ -22,16 +26,22 @@ class RetrievalCache:
         self._cache: OrderedDict[str, tuple[float, list[ScoredChunk]]] = OrderedDict()
         self._lock = threading.Lock()
 
-    def _make_key(self, query: str, filters: Optional[dict[str, Any]], top_k: int) -> str:
+    def _make_key(
+        self, query: str, filters: Optional[dict[str, Any]], top_k: int, version: str = ""
+    ) -> str:
         clean_q = query.strip().lower()
-        filter_str = json.dumps(filters or {}, sort_keys=True)
-        raw = f"{clean_q}|{filter_str}|{top_k}"
+        filter_str = json.dumps(filters or {}, sort_keys=True, default=str)
+        raw = f"{clean_q}|{filter_str}|{top_k}|{version}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def get(
-        self, query: str, filters: Optional[dict[str, Any]] = None, top_k: int = 5
+        self,
+        query: str,
+        filters: Optional[dict[str, Any]] = None,
+        top_k: int = 5,
+        version: str = "",
     ) -> list[ScoredChunk] | None:
-        key = self._make_key(query, filters, top_k)
+        key = self._make_key(query, filters, top_k, version)
         now = time.time()
         with self._lock:
             if key not in self._cache:
@@ -41,7 +51,7 @@ class RetrievalCache:
                 del self._cache[key]
                 return None
             self._cache.move_to_end(key)
-            return results
+            return list(results)
 
     def set(
         self,
@@ -50,13 +60,14 @@ class RetrievalCache:
         filters: Optional[dict[str, Any]] = None,
         top_k: int = 5,
         ttl: Optional[int] = None,
+        version: str = "",
     ) -> None:
-        key = self._make_key(query, filters, top_k)
+        key = self._make_key(query, filters, top_k, version)
         expiry = time.time() + (ttl if ttl is not None else self._default_ttl)
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
-            self._cache[key] = (expiry, results)
+            self._cache[key] = (expiry, list(results))
             if len(self._cache) > self._max_size:
                 self._cache.popitem(last=False)
 

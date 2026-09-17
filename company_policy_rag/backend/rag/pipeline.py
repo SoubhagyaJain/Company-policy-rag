@@ -1713,6 +1713,30 @@ class RAGPipeline:
 
         return list(candidate_map.values()), dense_degraded
 
+    def _retrieval_cache_version(self, strategy: Any) -> str:
+        """Fingerprint of everything besides query/filters/depth that shapes candidates."""
+        corpus = ""
+        store = getattr(getattr(self.hybrid_retriever, "dense_retriever", None), "vector_store", None)
+        version_fn = getattr(store, "corpus_version", None)
+        if callable(version_fn):
+            try:
+                corpus = str(version_fn())
+            except Exception:
+                corpus = ""
+        bm25_entries = getattr(getattr(self.hybrid_retriever, "bm25_index", None), "entries", None)
+        return json.dumps(
+            {
+                "corpus": corpus,
+                "bm25_entries": len(bm25_entries) if isinstance(bm25_entries, list) else None,
+                "bm25_top_k": getattr(strategy, "bm25_top_k", None),
+                "rrf_k": getattr(strategy, "rrf_k", None),
+                "min_chunk_words": getattr(self.hybrid_retriever, "min_chunk_words", None),
+                "subquery_merge_mode": getattr(settings, "subquery_merge_mode", None),
+            },
+            sort_keys=True,
+            default=str,
+        )
+
     def _stage_retrieve(self, ctx: QueryContext, prefix: str) -> None:
         """Build sub-queries and run one attempt's hybrid retrieval onto ``ctx``.
 
@@ -1807,6 +1831,7 @@ class RAGPipeline:
         thinking_sm.start_stage(ThinkingStage.RETRIEVAL)
         search_filters = ctx.applied_filters if ctx.applied_filters else None
         retrieval_cache = get_retrieval_cache()
+        cache_version = self._retrieval_cache_version(current_strategy)
         candidate_chunks: list[ScoredChunk] = []
         cache_hit_retrieval = False
         dense_degraded = False
@@ -1817,7 +1842,10 @@ class RAGPipeline:
             and not (conv_res and conv_res.is_followup)
         ):
             cached_cands = retrieval_cache.get(
-                sub_queries[0], filters=search_filters, top_k=current_strategy.dense_top_k
+                sub_queries[0],
+                filters=search_filters,
+                top_k=current_strategy.dense_top_k,
+                version=cache_version,
             )
             if cached_cands:
                 candidate_chunks = cached_cands
@@ -1928,6 +1956,7 @@ class RAGPipeline:
                     filters=search_filters,
                     top_k=current_strategy.dense_top_k,
                     ttl=getattr(settings, "retrieval_cache_ttl_seconds", 3600),
+                    version=cache_version,
                 )
 
         ctx.raw_new_chunk_count = len(candidate_chunks)
