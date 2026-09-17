@@ -1,0 +1,8 @@
+{
+  "queries": 21,
+  "context_hit@6": 1.0,
+  "context_hit@2": 1.0,
+  "context_mrr": 0.881,
+  "context_coverage@6": 1.0,
+  "tolerance": 0.03
+}

@@ -1,0 +1,32 @@
+{
+  "corpus": "handbook",
+  "corpus_source": "data/demo/sample_employee_handbook.md chunked by backend AdaptiveChunker (7 chunks, ids nsl_00..nsl_06) -> data/eval/retrieval/handbook_corpus.json",
+  "query_source": "Hand-written against the fictional Northstar Labs handbook. Relevant chunks are the section that states the answer (grade 2). keywords are answer facts; '|' separates acceptable alternatives. should_abstain marks questions the handbook does not answer.",
+  "judgment_pool": "Exhaustive: every chunk was reviewed for every question.",
+  "queries": [
+    {"id": "hb_document_owner", "question": "Which team owns the employee handbook and how often is it reviewed?", "category": "factual", "style": "lexical", "relevant": {"nsl_00": 2}, "keywords": ["People Operations", "annual"]},
+    {"id": "hb_maternity_weeks", "question": "How many weeks of paid maternity or parental leave can eligible employees take?", "category": "factual", "style": "lexical", "relevant": {"nsl_01": 2}, "keywords": ["16 weeks|sixteen weeks"]},
+    {"id": "hb_parental_notice", "question": "How much notice should employees give before foreseeable parental leave?", "category": "factual", "style": "lexical", "relevant": {"nsl_01": 2}, "keywords": ["30 days|thirty days"]},
+    {"id": "hb_contractor_leave", "question": "Are contractors covered by the employee parental leave benefit?", "category": "policy_interpretation", "style": "lexical", "relevant": {"nsl_01": 2}, "keywords": ["not covered|are not|aren't|do not|does not|no", "service agreement"]},
+    {"id": "hb_domestic_lodging", "question": "What is the lodging limit per night for domestic business travel?", "category": "factual", "style": "lexical", "relevant": {"nsl_02": 2}, "keywords": ["180"]},
+    {"id": "hb_international_meals", "question": "What meal allowance applies per day when travelling abroad?", "category": "factual", "style": "paraphrase", "relevant": {"nsl_02": 2}, "keywords": ["100"]},
+    {"id": "hb_international_approval", "question": "Do I need anyone's sign-off before booking an overseas business trip?", "category": "policy_interpretation", "style": "paraphrase", "relevant": {"nsl_02": 2}, "keywords": ["manager", "approval|approve"]},
+    {"id": "hb_receipts_deadline", "question": "When must travelers submit itemized receipts?", "category": "factual", "style": "lexical", "relevant": {"nsl_02": 2}, "keywords": ["15|fifteen"]},
+    {"id": "hb_remote_days", "question": "How many remote-work days per week can eligible employees request?", "category": "factual", "style": "lexical", "relevant": {"nsl_03": 2}, "keywords": ["three|3"]},
+    {"id": "hb_intern_remote", "question": "Can interns work from home, and how often?", "category": "policy_interpretation", "style": "paraphrase", "relevant": {"nsl_03": 2}, "keywords": ["one|1", "30 days|thirty days"]},
+    {"id": "hb_contractor_remote", "question": "When may contractors work remotely?", "category": "policy_interpretation", "style": "lexical", "relevant": {"nsl_03": 2}, "keywords": ["sponsor", "service agreement"]},
+    {"id": "hb_annual_leave_days", "question": "How many paid annual-leave days do full-time employees receive each year?", "category": "factual", "style": "lexical", "relevant": {"nsl_04": 2}, "keywords": ["20|twenty"]},
+    {"id": "hb_leave_during_probation", "question": "Can a new starter take holiday while still on probation?", "category": "policy_interpretation", "style": "paraphrase", "relevant": {"nsl_04": 2}, "keywords": ["90 days|ninety days"]},
+    {"id": "hb_carryover", "question": "How many unused annual-leave days carry over and by when must they be used?", "category": "factual", "style": "lexical", "relevant": {"nsl_04": 2}, "keywords": ["five|5", "31 March|March 31"]},
+    {"id": "hb_vpn_reset", "question": "How do I reset my VPN access?", "category": "procedural", "style": "lexical", "relevant": {"nsl_05": 2}, "keywords": ["identity portal", "multifactor|multi-factor"]},
+    {"id": "hb_vpn_lost_factors", "question": "What should I do if I have lost every registered authentication factor?", "category": "procedural", "style": "lexical", "relevant": {"nsl_05": 2}, "keywords": ["service desk", "employee ID"]},
+    {"id": "hb_security_report", "question": "How quickly must a lost laptop be reported to Security Operations?", "category": "factual", "style": "paraphrase", "relevant": {"nsl_06": 2}, "keywords": ["one hour|1 hour"]},
+    {"id": "hb_customer_data_ai", "question": "Am I allowed to paste customer data into an unapproved AI tool?", "category": "policy_interpretation", "style": "paraphrase", "relevant": {"nsl_06": 2}, "keywords": ["must not|not allowed|cannot|may not|prohibited|no"]},
+    {"id": "hb_access_review", "question": "How often is system access reviewed?", "category": "factual", "style": "lexical", "relevant": {"nsl_06": 2}, "keywords": ["quarter"]},
+    {"id": "hb_offboarding_access", "question": "When do people leaving the company lose their system access?", "category": "factual", "style": "lexical", "relevant": {"nsl_06": 2}, "keywords": ["final working day|last working day"]},
+    {"id": "hb_multi_part", "question": "How many annual-leave days do full-time employees get, and what is the domestic meal allowance?", "category": "multi_part", "style": "lexical", "relevant": {"nsl_04": 2, "nsl_02": 2}, "aspects": {"annual leave": ["nsl_04"], "domestic meals": ["nsl_02"]}, "keywords": ["20|twenty", "75"]},
+    {"id": "hb_abstain_dental", "question": "What dental insurance plan does Northstar Labs offer?", "category": "edge_case", "style": "abstention", "relevant": {}, "keywords": [], "should_abstain": true},
+    {"id": "hb_abstain_401k", "question": "What is the 401(k) employer match percentage?", "category": "edge_case", "style": "abstention", "relevant": {}, "keywords": [], "should_abstain": true},
+    {"id": "hb_abstain_parking", "question": "Where can employees park at the headquarters office?", "category": "edge_case", "style": "abstention", "relevant": {}, "keywords": [], "should_abstain": true}
+  ]
+}

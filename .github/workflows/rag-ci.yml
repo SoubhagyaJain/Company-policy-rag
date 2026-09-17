@@ -95,9 +95,7 @@ jobs:
   eval-smoke:
     runs-on: ubuntu-latest
     needs: [unit-tests, frontend]
-    timeout-minutes: 45
-    env:
-      ENABLE_QUERY_REWRITE: "false"
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -115,32 +113,17 @@ jobs:
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
-      - name: Install Ollama
-        run: curl -fsSL https://ollama.com/install.sh | sh
-        working-directory: .
-
-      - name: Cache Ollama models
+      - name: Cache embedding model
         uses: actions/cache@v4
         with:
-          path: ~/.ollama/models
-          key: ollama-nomic-embed-text-v1
+          path: company_policy_rag/.cache/huggingface
+          key: hf-bge-small-en-v1.5
 
-      - name: Start Ollama and pull embed model
-        run: |
-          pkill ollama || true
-          sleep 2
-          ollama serve &
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:11434/api/tags > /dev/null 2>&1; then
-              break
-            fi
-            sleep 1
-          done
-          ollama pull nomic-embed-text
-        working-directory: .
+      # EmbeddingService loads models with HF_HUB_OFFLINE=1, so fetch them first.
+      - name: Download embedding model
+        run: python -c "from huggingface_hub import snapshot_download; snapshot_download('BAAI/bge-small-en-v1.5')"
 
-      - name: Build index
-        run: python scripts/index_documents.py --force
-
-      - name: CI retrieval smoke gate
-        run: python scripts/ci_eval_gate.py
+      # Production retrieval + context assembly (no LLM) on the labelled handbook
+      # fixture; fails when context hit, rank, or coverage drops below baseline.
+      - name: Backend retrieval smoke gate
+        run: python scripts/ci_retrieval_smoke.py

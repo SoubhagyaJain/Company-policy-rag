@@ -64,7 +64,13 @@ def _is_ollama_llm(llm: Any) -> bool:
     except Exception:  # pragma: no cover - optional dependency
         return False
     target = getattr(llm, "_target_llm", llm)  # pipeline._LLMProxy wraps a shared client
-    return isinstance(target, Ollama)
+    # Relies on llama-index-llms-ollama internals (client, _model_kwargs); if a
+    # future release renames them, fall back to the generic complete() path.
+    return (
+        isinstance(target, Ollama)
+        and hasattr(type(target), "client")
+        and hasattr(type(target), "_model_kwargs")
+    )
 
 
 def context_window(llm: Any) -> int | None:
