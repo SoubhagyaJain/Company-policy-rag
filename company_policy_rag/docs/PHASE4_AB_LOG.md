@@ -225,3 +225,18 @@ The pipeline runs `ConversationInterpreter` on every turn. It always makes a det
 Harness wall time rose from 2.6 s to 11.6 s on guidebook, and from 3.5 s to 11.4 s on legal, from the LLM calls.
 
 **Decision.** The flag now defaults to `false`. The earlier guidebook-only runs pointed the same way: 0.716 vs 0.739, and 0.639 vs 0.662.
+
+## 5.x Stream high-risk answers when no retry can replace them (shipped, 2026-09-17)
+
+"High-risk" questions have amounts, times, a policy topic profile, or entitlement/calculation intent. Their answers were always buffered, so the streaming UI showed nothing until generation and verification finished. Buffering exists so a failed verification can retry before the user sees an answer. `VERIFICATION_MAX_RETRIES` has defaulted to 0 since Phase 2, so the user waited for the same answer.
+
+**Change.** Buffer only when `is_high_risk` and the retry budget is above 0; otherwise stream live. Verification (including the LLM judge) still runs for the trace and for semantic-cache eligibility. Answers that carry deterministic calculations are still generated buffered and emitted once after enforcement, as before.
+
+**Measured.** Live Ollama on the 3 high-risk handbook questions:
+
+| | p50 |
+|---|---|
+| Time to first token | 1123 ms |
+| Full answer (the previous time to first output) | 5550 ms |
+
+Answer text is unchanged by construction: same prompt, and no retry path.

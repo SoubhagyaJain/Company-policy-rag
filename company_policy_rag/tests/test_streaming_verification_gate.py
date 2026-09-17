@@ -102,6 +102,7 @@ def pipeline_and_llm(tmp_path):
 
 def test_high_risk_answer_is_buffered_not_streamed_live(pipeline_and_llm) -> None:
     pipeline, llm = pipeline_and_llm
+    pipeline.retry_engine.max_retries = 1  # buffering exists to allow a retry
     deltas: list[str] = []
     pipeline.query(
         user_query="How many vacation days do I accrue and when must I give notice by 5 pm?",
@@ -114,6 +115,20 @@ def test_high_risk_answer_is_buffered_not_streamed_live(pipeline_and_llm) -> Non
     # Nothing (or at most a single already-verified block) is emitted mid-loop;
     # multi-delta live streaming must not have happened.
     assert len(deltas) <= 1
+
+
+def test_high_risk_answer_streams_live_without_a_retry_budget(pipeline_and_llm) -> None:
+    pipeline, llm = pipeline_and_llm
+    pipeline.retry_engine.max_retries = 0
+    deltas: list[str] = []
+    response = pipeline.query(
+        user_query="How many vacation days do I accrue and when must I give notice by 5 pm?",
+        stream_callback=deltas.append,
+    )
+    assert llm.stream_calls >= 1
+    assert len(deltas) > 1
+    # Still verified (trace), just not held back from the user.
+    assert response.trace.faithfulness_checked is True
 
 
 def test_low_risk_answer_streams_live(pipeline_and_llm) -> None:

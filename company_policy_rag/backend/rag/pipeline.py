@@ -1618,10 +1618,12 @@ class RAGPipeline:
         # user sees them, so a failed check can still retry. Low-risk answers on
         # the streaming path emit live and therefore cannot be replaced by a
         # later retry (never stream multiple competing answers for one request).
+        # Buffering only buys that retry: with no retry budget the user would
+        # get the same answer later, so it streams live and is still verified.
         ctx.is_high_risk = _is_high_risk_query(ctx.user_query)
         streaming = ctx.stream_callback is not None
-        ctx.stream_live = streaming and not ctx.is_high_risk
         retry_budget = self.retry_engine.max_retries if self.retry_engine else 2
+        ctx.stream_live = streaming and not (ctx.is_high_risk and retry_budget > 0)
         if (
             ctx.is_fast_path
             or ctx.stream_live
