@@ -16,8 +16,12 @@ def _compute_confidence(sc: ScoredChunk) -> float:
         return 0.75
     try:
         raw_val = float(raw)
-        # If score is already a bounded probability [0.0, 1.0]
-        if 0.0 <= raw_val <= 1.0 and sc.rerank_score is None:
+        # sentence-transformers already applies a sigmoid to bge cross-encoder
+        # scores, so a [0, 1] value is a probability; a second sigmoid squeezed
+        # every citation into ~0.5-0.73.
+        if 0.0 <= raw_val <= 1.0 and sc.rerank_score is not None:
+            return max(0.05, min(0.99, round(raw_val, 4)))
+        if 0.0 <= raw_val <= 1.0:
             return max(0.50, min(0.99, raw_val))
         # CrossEncoder raw logits (-10 to +10) -> Sigmoid
         if raw_val > 15.0:
@@ -165,8 +169,11 @@ class CitationEngine:
             if not filtered:
                 filtered = sorted(generation_chunks, key=lambda c: c.score, reverse=True)[:1]
 
+            position = {id(sc): index for index, sc in enumerate(generation_chunks, start=1)}
             for sc in filtered[:citation_limit]:
-                idx = sc.rank if sc.rank is not None else 1
+                # Number fallback citations by their [Source N] position in the
+                # prompt, not by retrieval rank, so cards line up with the context.
+                idx = position.get(id(sc), 1)
                 cit = self._build_citation_from_chunk(idx, sc, selection_mode)
                 citations.append(cit)
 
@@ -183,4 +190,6 @@ class CitationEngine:
             seen_passages.add(passage_key)
             deduped.append(citation)
 
-        return deduped if max_citations is None else deduped[:citation_limit]
+        # Every [Source N] the answer actually cites keeps its card; the limit only
+        # bounds the score-based fallback, which is already capped above.
+        return deduped
