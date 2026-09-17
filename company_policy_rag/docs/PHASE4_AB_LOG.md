@@ -79,3 +79,26 @@ It added about 20 s of LLM calls over 35 queries. `policy_reliability.expand_pol
 Nothing in retrieval reads `clause_id` or `parent_section`, and BM25 indexes `section_path, section_title, section_number, source_file, category`, so there is no retrieval A/B to run. Fixture test: `tests/unit/test_policy_reliability.py::test_bare_leading_numbers_are_not_clause_ids`.
 
 Document-level `key_entities` / `topic_tags` are still copied onto every chunk. Only the metadata filter extractor reads them, and it is off by default. Revisit only if filtering is re-enabled.
+
+## 5.2 (part 1) Remove the bag-of-words policy sub-queries (shipped, 2026-09-17)
+
+`expand_policy_queries` added up to two sub-queries to *every* non-fast-path question on every corpus. Each was a sorted bag of "important concepts", e.g. "What role do Tools play in AI agents?" → `agents play role tools`, `role tools`. None of the 96 eval questions match a policy topic profile, so all it did was add BM25 and dense lookups.
+
+Harness run on HEAD after 4.3/4.4, candidate minus baseline, 91 labelled queries:
+
+| Metric | Delta | 95% CI | W/L/T |
+|---|---|---|---|
+| Context Hit@6 | +0.000 | [0.000, 0.000] | 0/0/91 |
+| Context coverage | +0.000 | [−0.012, +0.012] | 4/4/83 |
+| Context nDCG@10 | +0.004 | [−0.006, +0.013] | 6/3/82 |
+| Ranking MRR | +0.011 | [0.000, +0.027] | 2/0/89 |
+
+**Latency.** Retrieval p50 fell from 113 to 98 ms overall:
+
+| Corpus | Before (ms) | After (ms) |
+|---|---|---|
+| guidebook | 94 | 86 |
+| legal | 124 | 120 |
+| handbook | 87 | 79 |
+
+The call was neutral, so it was removed. The policy topic profiles (`POLICY_TOPIC_PROFILES`: private work, after-hours calls, smoking in vehicles, and so on) still drive the governing-clause selector and `is_policy_question`. They target a company-rules PDF that is not in the repository, so they cannot be A/B'd here; the corpus for `data/eval/policy_reliability_dataset.json` is missing.

@@ -289,27 +289,6 @@ def _prompt_rules(selection: ClauseSelection) -> list[PolicyRule]:
     return ordered[:MAX_PROMPT_RULES]
 
 
-def expand_policy_queries(query: str) -> list[str]:
-    """Return bounded, purpose-specific retrieval queries for policy language."""
-    facts = extract_query_facts(query)
-    queries = [query.strip()]
-    if facts.important_concepts:
-        queries.extend(
-            [
-                " ".join(facts.important_concepts[:6]),
-                " ".join(facts.important_concepts[2:]),
-            ]
-        )
-    unique: list[str] = []
-    seen: set[str] = set()
-    for item in queries:
-        key = _normalise(item)
-        if key and key not in seen:
-            unique.append(item)
-            seen.add(key)
-    return unique[:4]
-
-
 def _chunk_search_text(sc: ScoredChunk) -> tuple[str, str]:
     meta = sc.chunk.metadata
     heading = " ".join(

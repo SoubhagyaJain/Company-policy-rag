@@ -60,7 +60,6 @@ from backend.rag.policy_reliability import (
     allowed_derived_facts,
     bind_source_indices,
     enforce_deterministic_calculations,
-    expand_policy_queries,
     extract_query_facts,
     format_multipart_policy_decision_context,
     format_policy_decision_context,
@@ -1833,11 +1832,7 @@ class RAGPipeline:
         for part in ctx.question_parts:
             if part not in sub_queries:
                 sub_queries.append(part)
-        if not ctx.is_fast_path:
-            for policy_query in expand_policy_queries(ctx.effective_search_query or ctx.user_query):
-                if policy_query not in sub_queries:
-                    sub_queries.append(policy_query)
-            sub_queries = sub_queries[:8]
+        sub_queries = sub_queries[:8]
         ctx.sub_queries = sub_queries
         ctx.stage_timings[f"multi_query{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 

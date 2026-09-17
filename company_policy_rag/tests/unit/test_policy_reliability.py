@@ -8,7 +8,6 @@ from backend.rag.policy_reliability import (
     GoverningClauseSelector,
     bind_source_indices,
     enforce_deterministic_calculations,
-    expand_policy_queries,
     format_policy_decision_context,
 )
 
@@ -188,8 +187,6 @@ def test_policy_decision_prompt_is_structured_for_small_local_models() -> None:
     assert "STRUCTURED RULES" in prompt
     assert "primary_rule (Source 1)" in prompt
     assert "do not invent" in prompt.lower()
-    queries = expand_policy_queries("Can I do private work for my sister?")
-    assert any("working on own account" in query for query in queries)
 
 
 def test_ingestion_records_clause_parent_and_exception_metadata() -> None:
