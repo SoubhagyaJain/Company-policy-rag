@@ -47,3 +47,13 @@ def test_probability_rerank_scores_are_not_squashed_again() -> None:
     low = engine.select_citations("x [Source 1]", [_scored(1, rerank=0.12)])[0]
     assert high.relevance_score == 0.93
     assert low.relevance_score == 0.12
+
+
+def test_parenthesised_and_grouped_source_tags_are_recognised() -> None:
+    chunks = [_scored(i) for i in range(1, 6)]
+    answer = "Interns get one day (Source 2). Staff get three [Source 1, 4]."
+
+    citations = CitationEngine().select_citations(answer, chunks, max_citations=2)
+
+    assert [c.source_index for c in citations] == [1, 2, 4]
+    assert all(c.selection_reason == "cited_in_answer" for c in citations)

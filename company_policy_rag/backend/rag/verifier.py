@@ -9,6 +9,7 @@ import re
 from typing import Any, Callable
 
 from backend.models.rag import Citation, ScoredChunk, VerificationReport
+from backend.rag.citations import _SOURCE_TAG_PATTERN, CitationEngine
 from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
 from src.config import settings
@@ -172,7 +173,7 @@ class SelfReflectionVerifier:
 
         # Clean citations, page numbers, section headers, steps, line numbers, and years before numerical checks
         clean_for_numbers = answer
-        clean_for_numbers = re.sub(r"\[(?:VISUAL\s+)?SOURCE\s*\d+(?:,\s*\d+)*\]", " ", clean_for_numbers, flags=re.IGNORECASE)
+        clean_for_numbers = _SOURCE_TAG_PATTERN.sub(" ", clean_for_numbers)
         clean_for_numbers = re.sub(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]", " ", clean_for_numbers)
         clean_for_numbers = re.sub(r"\bpages?\s+(?:numbers?\s+)?\d+(?:\s*-\s*\d+)?\b", " ", clean_for_numbers, flags=re.IGNORECASE)
         clean_for_numbers = re.sub(r"\bp\.\s*\d+\b", " ", clean_for_numbers, flags=re.IGNORECASE)
@@ -354,7 +355,7 @@ class SelfReflectionVerifier:
         if "unable to answer" in answer.lower() or "could not find this information" in answer.lower():
             return 1.0
 
-        cited_tags = re.findall(r"\[(?:VISUAL\s+)?SOURCE\s*(\d+)\]", answer, re.IGNORECASE)
+        cited_tags = [str(index) for index in CitationEngine.extract_source_tags(answer)]
         bracket_nums = re.findall(r"\[(\d+)\]", answer)
         all_tags = cited_tags + bracket_nums
         has_citations = len(citations) > 0 or len(all_tags) > 0
@@ -426,7 +427,7 @@ class SelfReflectionVerifier:
                 unsupported = []
             except Exception as exc:
                 logger.warning("Custom validator error: %s. Falling back to heuristic verification.", exc)
-                has_citations = len(citations) > 0 or bool(re.search(r"\[(?:VISUAL\s+)?Source\s*\d+\]", answer, re.IGNORECASE))
+                has_citations = len(citations) > 0 or bool(CitationEngine.extract_source_tags(answer))
                 faith, unsupported = self._evaluate_faithfulness(
                     answer, context_chunks, has_citations, allowed_derived_facts
                 )
@@ -434,7 +435,7 @@ class SelfReflectionVerifier:
                 cit = self._evaluate_citation_coverage(answer, context_chunks, citations)
                 coh = self._evaluate_coherence(answer)
         else:
-            has_citations = len(citations) > 0 or bool(re.search(r"\[(?:VISUAL\s+)?Source\s*\d+\]", answer, re.IGNORECASE))
+            has_citations = len(citations) > 0 or bool(CitationEngine.extract_source_tags(answer))
             faith, unsupported = self._evaluate_faithfulness(
                 answer, context_chunks, has_citations, allowed_derived_facts
             )

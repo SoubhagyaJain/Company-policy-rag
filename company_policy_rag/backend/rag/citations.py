@@ -6,7 +6,12 @@ import re
 from backend.models.rag import Citation, ScoredChunk
 from backend.utils.section_tracker import is_noise_line
 
-_SOURCE_TAG_PATTERN = re.compile(r"\[(?:Visual\s+)?Source\s+([^\]]+)\]", re.IGNORECASE)
+# The prompt asks for [Source N]; small local models also write (Source N) or
+# [Source 1, 2]. Accept either bracket so the answer's tags map to cards.
+_SOURCE_TAG_PATTERN = re.compile(
+    r"[\[(](?:Visual\s+)?Sources?\s+(\d+(?:\s*(?:,|and|&)\s*(?:(?:Visual\s+)?Sources?\s+)?\d+)*)\s*[\])]",
+    re.IGNORECASE,
+)
 
 
 def _compute_confidence(sc: ScoredChunk) -> float:
