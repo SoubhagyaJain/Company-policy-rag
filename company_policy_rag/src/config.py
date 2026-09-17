@@ -356,8 +356,12 @@ class Settings(BaseSettings):
     # (legacy): the selector's picks from the whole candidate pool replace the
     # ranked hand-off. "rank_anchor": the top CONTEXT_RANK_ANCHOR_K ranked
     # hand-off chunks are always kept; selector picks fill the other slots.
-    context_assembly_mode: Literal["governing", "rank_anchor"] = Field(
-        default="rank_anchor", alias="CONTEXT_ASSEMBLY_MODE"
+    # "rank": the ranked hand-off is the context; the selector only feeds the
+    # policy decision block.
+    # "rank_rescue" / "rank_policy": ranked order, with the selector's top picks
+    # taking the last slots when missing (always / only for policy questions).
+    context_assembly_mode: Literal["governing", "rank_anchor", "rank", "rank_rescue", "rank_policy"] = Field(
+        default="rank_policy", alias="CONTEXT_ASSEMBLY_MODE"
     )
     context_rank_anchor_k: int = Field(default=2, alias="CONTEXT_RANK_ANCHOR_K")
 

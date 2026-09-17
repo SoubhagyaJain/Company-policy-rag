@@ -2078,12 +2078,17 @@ class RAGPipeline:
                 "definitions": _stage_ids(policy_selection.definitions),
                 "supporting": _stage_ids(policy_selection.supporting_rules),
             }
+        assembly_mode = str(getattr(settings, "context_assembly_mode", "rank_policy"))
+        if assembly_mode == "rank_policy":
+            # Rescue governing clauses only for workplace-policy questions.
+            is_policy = is_policy_question(user_query) or any(is_policy_question(p) for p in ctx.question_parts)
+            assembly_mode = "rank_rescue" if is_policy else "rank"
         if selected_context:
             reranked_chunks = merge_governing_context(
                 reranked_chunks,
                 selected_context,
                 max_chunks=max(current_strategy.rerank_top_n, 5),
-                mode=str(getattr(settings, "context_assembly_mode", "rank_anchor")),
+                mode=assembly_mode,
                 anchor_k=int(getattr(settings, "context_rank_anchor_k", 0) or 0),
             )
         reranked_chunks = prioritize_named_sections(user_query, reranked_chunks, candidate_chunks)
@@ -2091,7 +2096,7 @@ class RAGPipeline:
             (time.perf_counter() - t0) * 1000, 2
         )
         if stages is not None:
-            stages["context_assembly_mode"] = str(getattr(settings, "context_assembly_mode", "rank_anchor"))
+            stages["context_assembly_mode"] = assembly_mode
             stages["post_governing"] = _stage_ids(reranked_chunks)
 
         # 5. Parent Context Expansion

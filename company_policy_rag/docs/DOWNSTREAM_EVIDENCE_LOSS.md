@@ -44,7 +44,7 @@ after token budget 29/37; guidebook 1 query lost at selection (the selector retu
 | Flag | Values | Change |
 |---|---|---|
 | `SCOPE_UNBOUND_REFERENCE_MODE` | `strict` (default, legacy) / `resolve` | An unbound reference binds to the only indexed document, or to the one whose filename contains the named noun ("guidebook", "handbook", "manual", "report", "paper"). Otherwise the query searches globally instead of returning nothing. An active document or filename match still wins. |
-| `CONTEXT_ASSEMBLY_MODE` | `governing` (default, legacy) / `rank_anchor` | `merge_governing_context`: the selector's primary rule stays first, the top `CONTEXT_RANK_ANCHOR_K` ranked hand-off chunks follow, the selector's other picks fill the remaining slots. |
+| `CONTEXT_ASSEMBLY_MODE` | `governing` (legacy) / `rank_anchor` (later `rank` / `rank_policy`, now the default; see `PHASE4_AB_LOG.md`) | `merge_governing_context`: the selector's primary rule stays first, the top `CONTEXT_RANK_ANCHOR_K` ranked hand-off chunks follow, the selector's other picks fill the remaining slots. |
 | `CONTEXT_RANK_ANCHOR_K` | int, default 2 | Anchor depth. Chosen before the run: the reranker's per-query wins moved the first relevant chunk to rank 1-2. |
 
 New stage records on `RAGTrace.retrieval_stages`: `governing_selection`, `governing_roles`,

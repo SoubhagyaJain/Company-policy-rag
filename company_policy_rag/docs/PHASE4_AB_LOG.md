@@ -102,3 +102,60 @@ Harness run on HEAD after 4.3/4.4, candidate minus baseline, 91 labelled queries
 | handbook | 87 | 79 |
 
 The call was neutral, so it was removed. The policy topic profiles (`_TOPIC_PROFILES`: private work, after-hours calls, smoking in vehicles, and so on) still drive the governing-clause selector and `is_policy_question`. They target a company-rules PDF that is not in the repository, so they cannot be A/B'd here; the corpus for `data/eval/policy_reliability_dataset.json` is missing.
+
+## 4.2 Context assembly: keep the ranked hand-off (shipped, 2026-09-17)
+
+`rank_anchor` (the previous default) builds the context in this order:
+1. the governing-clause selector's primary rule,
+2. the top 2 ranked chunks,
+3. more selector picks.
+
+The selector draws from the whole candidate pool and scores mostly lexically, so its picks pushed ranked chunks 3–6 out of the prompt. New modes in `merge_governing_context`:
+
+| Mode | Context |
+|---|---|
+| `rank` | The ranked hand-off, unchanged. The selector only feeds the policy decision block. |
+| `rank_rescue` | Ranked order. The selector's top 2 picks take the last slots when ranking left them out. |
+| `rank_policy` | `rank_rescue` for workplace-policy questions (`is_policy_question`), `rank` otherwise. |
+
+Harness results across 91 labelled queries (guidebook 33, legal 37, handbook 21):
+
+| Mode | Final context Hit@6 / MRR / nDCG@10 | Relevant discarded | Lost all evidence | Coverage |
+|---|---|---|---|---|
+| rank_anchor k=2 (old default) | 0.98 / 0.74 / 0.65 | 41 | 1 | 0.771 |
+| rank_anchor k=6 (primary + ranked) | 0.99 / 0.74 / 0.68 | 10 | 0 | 0.806 |
+| rank | 0.99 / 0.93 / 0.79 | 4 | 0 | 0.816 |
+| rank_rescue | 0.98 / 0.93 / 0.78 | 17 | 1 | 0.799 |
+| **rank_policy (new default)** | **0.99 / 0.93 / 0.79** | **4** | **0** | **0.816** |
+
+`rank_policy` compared with `rank_anchor` k=2 (paired):
+
+| Scope | Context MRR | Context nDCG@10 | Context coverage |
+|---|---|---|---|
+| All 91 queries | +0.192 [+0.127, +0.255], p < 0.001 | +0.140 [+0.103, +0.178], p < 0.001 | +0.045 [+0.013, +0.076], p = 0.007 |
+| Guidebook | | | +0.057 (0.667 → 0.724) |
+| Legal | | | +0.059 |
+
+On guidebook, `rank_policy` recovers most of the coverage that the 4.3 removal took away, without the leaked vocabulary.
+
+**`rank_policy` vs `rank`.** They were identical on every query. The rescue fired on 10 policy questions (8 on the handbook), but the selector's picks were already in the ranked top 6. Always-on rescue (`rank_rescue`) cost coverage: −0.017 [−0.041, +0.006]. `rank_policy` keeps the governing-clause safety net for the case the selector exists for, a governing rule ranked below an unrelated one. A unit test covers that case: `tests/test_downstream_evidence_loss.py::test_rank_rescue_keeps_the_governing_clause_ranked_below_an_unrelated_rule`.
+
+Latency for the `rank_rescue` and `rank_policy` runs (132–135 ms p50) is not comparable with the other rows. Those runs overlapped with a live answer evaluation on the same machine; the assembly change itself adds no model calls.
+
+### Answer-level check (handbook, qwen2.5:7b, n = 24)
+
+`rank` compared with `rank_anchor` k=2 (paired). `rank_policy` builds the same handbook contexts as `rank`.
+
+| Metric | Delta | 95% CI | p | W/L/T |
+|---|---|---|---|---|
+| keyword recall | 0.000 | [0, 0] | 1.00 | 0/0/21 |
+| tagged citation | 0.000 | [0, 0] | 1.00 | 0/0/21 |
+| abstention correct | 0.000 | [0, 0] | 1.00 | 0/0/24 |
+| citation precision | −0.125 | [−0.275, 0.000] | 0.25 | 0/3/17 |
+| latency | −1191 ms | [−2050, −321] | 0.01 | 17/7/0 |
+
+The three citation misses are the model citing the wrong number, not missing evidence. In each case the relevant chunk was `[Source 1]`, and qwen tagged `[Source 2]` or `[Source 3]`. `hb_access_review` even named the wrong section.
+
+The same case (`hb_contractor_remote`) missed under `rank_anchor` in the baseline run. Citation precision for the unchanged `rank_anchor` config ranged from 0.925 to 1.000 across two runs, so this is within run-to-run noise. It is the failure 4.5 (citation support check) targets.
+
+**Shipped:** `CONTEXT_ASSEMBLY_MODE=rank_policy` is the default. The CI retrieval gate baseline was rewritten: handbook context MRR is 1.000 (was 0.881), so a regression back to anchor-style assembly now fails the gate.

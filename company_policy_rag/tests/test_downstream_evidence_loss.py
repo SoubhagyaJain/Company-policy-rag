@@ -29,7 +29,7 @@ TWO_DOCS = {GUIDE_ID: GUIDE_FILE, HAND_ID: HAND_FILE}
 
 def test_measured_fixes_are_the_defaults() -> None:
     assert Settings.model_fields["scope_unbound_reference_mode"].default == "resolve"
-    assert Settings.model_fields["context_assembly_mode"].default == "rank_anchor"
+    assert Settings.model_fields["context_assembly_mode"].default == "rank_policy"
     assert Settings.model_fields["min_chunk_words"].default == 5
 
 
@@ -330,6 +330,43 @@ def test_rank_anchor_preserves_governing_clause_primary_and_exception() -> None:
     assert any(calc.kind == "threshold_comparison" for calc in selection.calculations)
 
 
+def test_rank_mode_keeps_the_ranked_hand_off() -> None:
+    ranked = [_sc(f"r{i}") for i in range(1, 8)]
+    governing = [_sc("p"), _sc("x1")]
+    assert _ids(merge_governing_context(ranked, governing, max_chunks=6, mode="rank")) == [
+        "r1", "r2", "r3", "r4", "r5", "r6",
+    ]
+
+
+def test_rank_rescue_gives_missing_governing_picks_the_last_slots() -> None:
+    ranked = [_sc(f"r{i}") for i in range(1, 8)]
+    missing = merge_governing_context(ranked, [_sc("p"), _sc("x1"), _sc("x2")], max_chunks=6, mode="rank_rescue")
+    assert _ids(missing) == ["r1", "r2", "r3", "r4", "p", "x1"]
+    present = merge_governing_context(ranked, [_sc("r2"), _sc("x1")], max_chunks=6, mode="rank_rescue")
+    assert _ids(present) == ["r1", "r2", "r3", "r4", "r5", "x1"]
+
+
+def test_rank_rescue_keeps_the_governing_clause_ranked_below_an_unrelated_rule() -> None:
+    def policy(cid: str, section: str, text: str, score: float) -> ScoredChunk:
+        return ScoredChunk(
+            chunk=Chunk(id=cid, text=text, metadata=ChunkMetadata(document_id="policy", source_file="rules.pdf", section_title=section)),
+            score=score,
+            rerank_score=score,
+        )
+
+    unrelated = policy("premises", "UNATTENDED PREMISES", "Employees must obtain express owner permission before entering unattended premises.", 8.5)
+    primary = policy("own-account", "22.0 WORKING ON OWN ACCOUNT", "Employees must not perform private electrical work on their own account without authorization.", 3.0)
+    family = policy("family-exception", "22.0 WORKING ON OWN ACCOUNT", "Immediate family includes a sister. However, work with a commercial value above $500 requires authorization.", 2.5)
+    selector = GoverningClauseSelector()
+    selection = selector.select(
+        "Can I perform a $900 electrical job for my sister?", [unrelated], candidate_pool=[unrelated, primary, family]
+    )
+    governing = selector.order_for_context(selection, max_chunks=6)
+    merged = merge_governing_context([unrelated], governing, max_chunks=6, mode="rank_rescue")
+    assert merged[0].chunk.id == "premises"  # ranked order is kept
+    assert {"own-account", "family-exception"} <= set(_ids(merged))
+
+
 # A legal-textbook pattern from the eval: the reranker's rank-1 chunk answers the
 # question in plain prose, while pool chunks full of "shall" / "however" /
 # "includes" win the governing-clause roles and fill every context slot.
@@ -379,6 +416,13 @@ def test_rank_anchor_mode_delivers_the_rank1_chunk_and_keeps_the_primary(quiet_s
     assert stages["final_context"][0] == stages["governing_roles"]["primary"][0]
     for key in ("governing_selection", "post_governing", "post_packing", "final_context"):
         assert key in stages
+
+
+def test_rank_policy_mode_delivers_the_rank1_chunk_first(quiet_settings) -> None:
+    ctx = _evidence_loss_pipeline(quiet_settings, "rank_policy").run_retrieval_stages(_LOSS_QUERY)
+    stages = ctx.retrieval_stages
+    assert stages["final_context"][0] == "answer"
+    assert stages["context_assembly_mode"] == "rank"  # not a workplace-policy question
 
 
 def test_pipeline_shares_an_initially_empty_docstore(quiet_settings) -> None:

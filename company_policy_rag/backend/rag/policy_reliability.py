@@ -262,6 +262,8 @@ _POLICY_VOCABULARY_RE = re.compile(
 # is already in the sources, so the list is capped; primary rules and exceptions
 # go first.
 MAX_PROMPT_RULES = 6
+# Context slots the governing selector may claim in "rank_rescue" assembly.
+RESCUE_SLOTS = 2
 _RULE_ROLE_ORDER = {"primary_rule": 0, "exception": 1, "definition": 2, "supporting_rule": 3}
 
 
@@ -577,8 +579,19 @@ def merge_governing_context(
     the chunks retrieval and reranking ranked highest. ``rank_anchor`` keeps
     the top ``anchor_k`` ranked chunks: the selector's primary rule stays
     first, the anchors follow, and the selector's remaining picks fill the
-    free slots.
+    free slots. ``rank`` keeps the ranked hand-off unchanged; the selector only
+    feeds the policy decision block. ``rank_rescue`` keeps the ranked order but
+    gives the selector's top ``RESCUE_SLOTS`` picks the last slots when ranking
+    left them out (a governing clause ranked below an unrelated rule).
     """
+    if mode in {"rank", "rank_rescue"} and ranked:
+        context = list(ranked[:max_chunks])
+        if mode == "rank_rescue":
+            present = {sc.chunk.id for sc in context}
+            rescued = [sc for sc in governing[:RESCUE_SLOTS] if sc.chunk.id not in present]
+            if rescued:
+                context = context[: max(0, max_chunks - len(rescued))] + rescued
+        return context
     if mode != "rank_anchor" or anchor_k <= 0 or not ranked:
         return list(governing)
     primary = list(governing[:1])
