@@ -56,8 +56,14 @@ class Settings(BaseSettings):
     legal_dir: Path = Field(default=PROJECT_ROOT / "data" / "legal")
     raw_dir: Path = Field(default=PROJECT_ROOT / "data" / "raw")
     storage_dir: Path = Field(default=PROJECT_ROOT / "storage")
-    # Document library served by the API (uploads, BM25 index, per-run sessions).
+    # Document library served by the API: uploads, Chroma and BM25 indexes.
     app_storage_dir: Path = Field(default=PROJECT_ROOT / "app" / "storage", alias="APP_STORAGE_DIR")
+    # "persistent": one library under APP_STORAGE_DIR that survives restarts.
+    # "session": every API process starts an empty library in
+    # APP_STORAGE_DIR/sessions/<id> (earlier sessions stay on disk).
+    document_library_mode: Literal["persistent", "session"] = Field(
+        default="persistent", alias="DOCUMENT_LIBRARY_MODE"
+    )
     pdf_images_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
     logs_dir: Path = Field(default=PROJECT_ROOT / "logs")
 

@@ -49,7 +49,9 @@ def get_document_service() -> DocumentService:
     if _document_service is None:
         with _lock:  
             if _document_service is None:
-                _document_service = DocumentService(fresh_start=True)
+                _document_service = DocumentService(
+                    fresh_start=settings.document_library_mode == "session"
+                )
     return _document_service
 
 

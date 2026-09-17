@@ -308,7 +308,15 @@ class ChromaVectorStore(VectorStoreInterface):
                         metadatas=metadatas,
                     )
             except Exception as exc:
-                logger.warning("Failed to add chunks to Chroma collection: %s", exc)
+                # A swallowed write left documents READY with vectors only in
+                # process memory, so dense retrieval silently lost them on the
+                # next restart. Fail loudly; ingestion cleans up partial writes.
+                with self._lock:
+                    for chunk in chunks:
+                        self._memory_chunks.pop(chunk.id, None)
+                    self._corpus_version_cache = None
+                logger.error("Failed to add chunks to Chroma collection: %s", exc)
+                raise RuntimeError(f"Vector index write failed: {exc}") from exc
 
     def _matches_filters(self, chunk: Chunk, filters: dict[str, Any] | None) -> bool:
         if not filters:

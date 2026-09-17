@@ -157,12 +157,12 @@ class TestDocumentDeletionEdgeCases:
         assert del_res.status_code == 200
         assert del_res.json()["status"] == "deleted"
 
-    def test_same_filename_collateral_deletion_bug_investigation(self):
+    def test_same_filename_collateral_deletion_bug_investigation(self, tmp_path):
         """
         Adversarial test: Upload 2 documents with the SAME filename but DIFFERENT doc_ids.
         Deleting doc_1 should purge doc_1. Check what happens to doc_2's chunks in vector & BM25 store.
         """
-        doc_service = DocumentService()
+        doc_service = DocumentService(storage_dir=str(tmp_path / "uploads"))
         res1 = doc_service.upload_document("same_name.txt", b"First copy of document content", category="cat1")
         res2 = doc_service.upload_document("same_name.txt", b"Second copy of document content", category="cat2")
 

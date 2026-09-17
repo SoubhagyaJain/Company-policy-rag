@@ -75,9 +75,10 @@ class DocumentService:
         session_root = Path(storage_dir).parent / "sessions" / uuid.uuid4().hex if fresh_start else None
         if session_root is not None:
             storage_dir = str(session_root / "uploads")
+        library_root = session_root if session_root is not None else Path(storage_dir).parent
         self.vector_store = vector_store or ChromaVectorStore(
             collection_name=settings.chroma_collection_name,
-            persist_dir=str(session_root / "chroma") if session_root is not None else settings.chroma_persist_dir,
+            persist_dir=str(library_root / "chroma"),
         )
         bm25_options = {
             "k1": settings.bm25_k1,
@@ -85,10 +86,8 @@ class DocumentService:
             "stemming": settings.bm25_stemming,
             "metadata_fields": settings.bm25_metadata_fields,
         }
-        self.bm25_index = bm25_index or (
-            BM25SearchIndex(storage_dir=str(session_root / "bm25"), **bm25_options)
-            if session_root is not None
-            else BM25SearchIndex(storage_dir=str(Path(settings.app_storage_dir) / "bm25"), **bm25_options)
+        self.bm25_index = bm25_index or BM25SearchIndex(
+            storage_dir=str(library_root / "bm25"), **bm25_options
         )
         self.embedding_service = embedding_service or EmbeddingService()
         self.docstore = docstore if docstore is not None else {}
