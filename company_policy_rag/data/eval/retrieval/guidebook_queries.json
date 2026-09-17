@@ -1,0 +1,411 @@
+{
+ "corpus": "guidebook",
+ "corpus_source": "app/storage/sessions/4e04828ac7654258950af214a9bc1bd5/bm25/corpus.json (AI Agents guidebook.pdf, 235 chunks)",
+ "query_source": "golden_dataset_guidebook.json (abstention cases excluded)",
+ "queries": [
+  {
+   "id": "agent_vs_llm_vs_rag",
+   "question": "What is the difference between an Agent, an LLM, and RAG?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Agent vs LLM vs RAG",
+    "agent",
+    "RAG"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "six_building_blocks",
+   "question": "List and explain the 6 building blocks of AI Agents.",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "building blocks",
+    "Role",
+    "Tools",
+    "Memory",
+    "Guardrails",
+    "Planning"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "role_playing_block",
+   "question": "What is the Role-playing building block in AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Role",
+    "role-playing",
+    "task description"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "tools_block",
+   "question": "What role do Tools play in AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Tools allow",
+    "custom tool",
+    "tool"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "memory_block",
+   "question": "How does Memory work as a building block of AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Memory",
+    "memory"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "guardrails_block",
+   "question": "What are Guardrails in AI agents and why are they used?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Guardrails",
+    "guardrail"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "planning_block",
+   "question": "What is the Planning building block in AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Planning",
+    "planning"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "mcp_tools",
+   "question": "What is MCP in the context of agent tools?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "MCP"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "currency_tool_example",
+   "question": "Show the currency conversion tool example and explain how it is invoked.",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "currency",
+    "conversion",
+    "tool"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "custom_tools",
+   "question": "How do you build custom tools for an agent?",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "custom tool",
+    "Tools allow"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "react_pattern",
+   "question": "Explain the ReAct design pattern for AI agents.",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "ReAct",
+    "reasoning",
+    "acting"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "reflection_pattern",
+   "question": "How does reflection help agents improve their output?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "reviews its own work",
+    "reflection",
+    "iterate"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "multi_agent_orchestration",
+   "question": "What is multi-agent orchestration in the guidebook?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "multi-agent",
+    "orchestrat",
+    "manager agent"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "manager_agent",
+   "question": "What does a manager agent do in a multi-agent setup?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "manager agent",
+    "sub-agent",
+    "coordinates"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "rag_in_agent",
+   "question": "How is RAG used inside an agent workflow?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "retrieves the relevant context",
+    "RAG",
+    "retrieval"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "guardrails_examples",
+   "question": "Give examples of useful guardrails for agents.",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Examples of useful guardrails",
+    "guardrail"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "tool_gathering_info",
+   "question": "How do tools help LLMs gather more information?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "gather more information",
+    "Tools allow LLMs"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "design_patterns_popular",
+   "question": "What are the most popular agent design patterns mentioned?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "design patterns",
+    "ReAct",
+    "popular"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "research_agent",
+   "question": "What does the research agent example do?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "Research Agent",
+    "searches",
+    "retrieves"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "agent_task_description",
+   "question": "Why do agents need a clear task description?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "task description",
+    "We give the agent"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "code_available_links",
+   "question": "Where does the guidebook point readers for full code examples?",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "code is available",
+    "Check this code"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "tech_stack_agents",
+   "question": "What tech stack is mentioned for building agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Tech stack",
+    "LangChain",
+    "LlamaIndex"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "orchestration_vs_single",
+   "question": "When is orchestration preferred over a single agent?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "orchestrat",
+    "manager",
+    "sub-agent"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "tool_vs_plain_llm",
+   "question": "Why use an agent with tools instead of a plain LLM responder?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "generic responder",
+    "Tools allow"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "memory_short_long",
+   "question": "What types of memory do agents use?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "Memory",
+    "short",
+    "long"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "abstention_quantum",
+   "question": "What does the guidebook say about quantum error correction for agents?",
+   "category": "edge_case",
+   "style": "golden",
+   "keywords": [
+    ""
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "abstention_company_vacation",
+   "question": "How many vacation days do nonprofit employees accrue per the AI Agents guidebook?",
+   "category": "edge_case",
+   "style": "golden",
+   "keywords": [
+    ""
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "enumeration_subagents",
+   "question": "What roles can sub-agents play in orchestration?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "sub-agent",
+    "manager",
+    "specialist"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "workflow_retrieval_step",
+   "question": "What is the retrieval step in the agent workflow example?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "retrieves the relevant context",
+    "user query"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "pattern_plan_execute",
+   "question": "Is plan-and-execute discussed as an agent pattern?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "planning",
+    "plan",
+    "execute"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "code_check_this_out",
+   "question": "What code walkthroughs does the guidebook highlight with Check this out?",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "Check this out",
+    "code"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "tools_real_world",
+   "question": "What real-world capability does the currency tool demonstrate?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "real-time currency",
+    "conversion"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "agent_building_blocks_count",
+   "question": "How many building blocks of AI agents does the guidebook describe?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "6",
+    "six",
+    "building blocks"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "rag_vs_agent_autonomy",
+   "question": "How does agent autonomy differ from a standalone RAG pipeline?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "autonomously",
+    "Agent vs",
+    "RAG"
+   ],
+   "relevant": {}
+  },
+  {
+   "id": "critic_planner_mention",
+   "question": "Does the guidebook mention planner or critic agents?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "planner",
+    "critic"
+   ],
+   "relevant": {}
+  }
+ ]
+}

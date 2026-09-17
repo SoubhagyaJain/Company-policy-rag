@@ -110,6 +110,8 @@ class QueryContext:
     policy_selection: Any = None
     continuity_applied: bool = False
     raw_new_chunk_count: int = 0
+    # Ranked chunk ids per retrieval stage for this attempt (RAGTrace.retrieval_stages).
+    retrieval_stages: dict[str, Any] = field(default_factory=dict)
     prev_all: list["ScoredChunk"] = field(default_factory=list)
 
     # ── Best-of-retries accumulators ───────────────────────────────────────

@@ -212,6 +212,11 @@ class RAGTrace(BaseModel):
     generation_max_tokens: int = 0
     execution_time_ms: float = 0.0
     stage_timings_ms: dict[str, float] = Field(default_factory=dict)
+    # Ranked chunk ids per retrieval stage for the attempt whose answer was kept:
+    # per-sub-query dense / bm25 / fused, merged candidates, pre_rerank,
+    # post_rerank_prefilter, post_filter, post_governing, final_context, plus
+    # reranker scores and timings. Empty when RECORD_RETRIEVAL_STAGES is off.
+    retrieval_stages: dict[str, Any] = Field(default_factory=dict)
     fallback_reason: str = "none"
     faithfulness_checked: bool = False
     faithfulness_passed: bool = True

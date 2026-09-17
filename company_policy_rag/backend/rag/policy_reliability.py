@@ -542,6 +542,30 @@ class GoverningClauseSelector:
         )[:max_chunks]
 
 
+def merge_governing_context(
+    ranked: Sequence[ScoredChunk],
+    governing: Sequence[ScoredChunk],
+    *,
+    max_chunks: int,
+    mode: str = "governing",
+    anchor_k: int = 0,
+) -> list[ScoredChunk]:
+    """Combine the ranked hand-off with the governing-clause context order.
+
+    ``governing`` (legacy) returns the selector's order unchanged. It is drawn
+    from the whole candidate pool and scored mostly lexically, so it can drop
+    the chunks retrieval and reranking ranked highest. ``rank_anchor`` keeps
+    the top ``anchor_k`` ranked chunks: the selector's primary rule stays
+    first, the anchors follow, and the selector's remaining picks fill the
+    free slots.
+    """
+    if mode != "rank_anchor" or anchor_k <= 0 or not ranked:
+        return list(governing)
+    primary = list(governing[:1])
+    anchors = list(ranked[:anchor_k])
+    return _dedupe_chunks([*primary, *anchors, *governing[1:]])[:max_chunks]
+
+
 def bind_source_indices(selection: ClauseSelection, context_chunks: Sequence[ScoredChunk]) -> None:
     index_by_id = {sc.chunk.id: index for index, sc in enumerate(context_chunks, start=1)}
     for rule in selection.structured_rules:

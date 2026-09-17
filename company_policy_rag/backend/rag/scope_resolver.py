@@ -15,6 +15,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from backend.utils.logging import logger
+from src.config import settings
 
 
 class DocumentRetrievalScope(str, Enum):
@@ -70,6 +71,44 @@ class DocumentScopeResolver:
         re.compile(r"\b(top\s+projects|main\s+projects|project\s+ideas|all\s+projects|best\s+ideas|key\s+concepts|key\s+projects|major\s+projects|list\s+(?:all\s+)?projects|project\s+list)\b", re.IGNORECASE),
         re.compile(r"\b(chapters|sections|table\s+of\s+contents|outline|overview|structure\s+of\s+(?:this|the)\s+(?:doc|document|pdf))\b", re.IGNORECASE),
     ]
+
+    # Nouns that can name one document ("the guidebook"). Generic nouns such as
+    # "document" or "pdf" describe every upload and never pick one out.
+    _NAMED_DOC_NOUN_PATTERN = re.compile(
+        r"\b(?:this|the)\s+(handbook|guidebook|manual|report|paper)\b", re.IGNORECASE
+    )
+
+    def __init__(self, unbound_reference_mode: str | None = None) -> None:
+        # None reads SCOPE_UNBOUND_REFERENCE_MODE at resolve time.
+        self.unbound_reference_mode = unbound_reference_mode
+
+    def _unbound_reference_mode(self) -> str:
+        if self.unbound_reference_mode is not None:
+            return self.unbound_reference_mode
+        return str(getattr(settings, "scope_unbound_reference_mode", "strict"))
+
+    @classmethod
+    def bind_unbound_reference(
+        cls, query: str, known_documents: dict[str, str] | None
+    ) -> tuple[str, str] | None:
+        """Pick the document an unbound reference means, or None if ambiguous.
+
+        Binds when exactly one document is indexed, or when exactly one
+        filename contains the noun the query uses ("the guidebook").
+        """
+        documents = {doc_id: name for doc_id, name in (known_documents or {}).items() if doc_id}
+        if len(documents) == 1:
+            doc_id, name = next(iter(documents.items()))
+            return doc_id, name
+        nouns = {m.group(1).lower() for m in cls._NAMED_DOC_NOUN_PATTERN.finditer(query or "")}
+        if not nouns:
+            return None
+        matches = [
+            (doc_id, name)
+            for doc_id, name in documents.items()
+            if any(noun in (name or "").lower() for noun in nouns)
+        ]
+        return matches[0] if len(matches) == 1 else None
 
     @classmethod
     def detect_document_reference(cls, query: str) -> bool:
@@ -297,6 +336,34 @@ class DocumentScopeResolver:
                     reasoning=f"Document reference resolved to active document name: {resolved_doc_name}.",
                 )
             elif has_doc_ref:
+                if self._unbound_reference_mode() == "resolve":
+                    bound = self.bind_unbound_reference(clean_q, known_documents)
+                    if bound is not None:
+                        bound_id, bound_name = bound
+                        return DocumentScopeDecision(
+                            scope=DocumentRetrievalScope.CURRENT_DOCUMENT,
+                            active_document_id=bound_id,
+                            active_document_name=bound_name,
+                            allowed_document_ids=[bound_id],
+                            page_number=page_num,
+                            section_number=sec_num,
+                            is_structural_query=is_structural,
+                            structural_subqueries=structural_subqueries,
+                            reasoning=f"Unbound document reference resolved to indexed document: {bound_name}.",
+                        )
+                    # Several documents and nothing names one: a scope with no
+                    # identity would reject every candidate, so search globally.
+                    return DocumentScopeDecision(
+                        scope=DocumentRetrievalScope.GLOBAL,
+                        active_document_id=None,
+                        active_document_name=None,
+                        allowed_document_ids=[],
+                        page_number=page_num,
+                        section_number=sec_num,
+                        is_structural_query=is_structural,
+                        structural_subqueries=structural_subqueries,
+                        reasoning="Query referenced a document, but none is active and no single indexed document matches; searching all documents.",
+                    )
                 # User asked about "the doc" but no active_document_id was bound
                 logger.warning("Query refers to 'the doc' / 'this document', but no active document ID is set in session or request.")
                 return DocumentScopeDecision(

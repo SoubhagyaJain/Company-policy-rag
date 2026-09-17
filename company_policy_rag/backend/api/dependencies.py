@@ -99,12 +99,16 @@ def get_rag_pipeline() -> RAGPipeline:
                     top_n=settings.reranker_top_n,
                     device=settings.reranker_device,
                     min_ratio=settings.rerank_min_score_ratio,
+                    pool_size=settings.reranker_pool_size,
+                    score_filter_enabled=settings.enable_rerank_score_filter,
+                    min_keep=settings.rerank_min_keep,
                 )
 
                 hybrid_retriever = HybridRetriever(
                     dense_retriever=dense_retriever,
                     bm25_index=bm25_index,
                     reranker=reranker,
+                    min_chunk_words=settings.min_chunk_words,
                 )
 
                 # LLM config likewise sourced from Settings (same env aliases).

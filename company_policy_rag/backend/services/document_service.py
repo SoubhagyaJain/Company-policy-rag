@@ -76,9 +76,15 @@ class DocumentService:
             collection_name=settings.chroma_collection_name,
             persist_dir=str(session_root / "chroma") if session_root is not None else settings.chroma_persist_dir,
         )
+        bm25_options = {
+            "k1": settings.bm25_k1,
+            "b": settings.bm25_b,
+            "stemming": settings.bm25_stemming,
+            "metadata_fields": settings.bm25_metadata_fields,
+        }
         self.bm25_index = bm25_index or (
-            BM25SearchIndex(storage_dir=str(session_root / "bm25"))
-            if session_root is not None else BM25SearchIndex()
+            BM25SearchIndex(storage_dir=str(session_root / "bm25"), **bm25_options)
+            if session_root is not None else BM25SearchIndex(**bm25_options)
         )
         self.embedding_service = embedding_service or EmbeddingService()
         self.docstore = docstore if docstore is not None else {}

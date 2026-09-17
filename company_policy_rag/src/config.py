@@ -305,6 +305,58 @@ class Settings(BaseSettings):
     rerank_min_score_ratio: float = Field(default=0.40, alias="RERANK_MIN_SCORE_RATIO")
     rerank_min_keep: int = Field(default=3, alias="RERANK_MIN_KEEP")
 
+    # ── Retrieval experiment flags ─────────────────────────────────────────
+    # Every default reproduces the pre-experiment pipeline, so production is
+    # unchanged until one of these is set. scripts/eval_retrieval_backend.py
+    # drives them to compare first-stage and reranker variants.
+    # Cross-encoder candidate pool: 0 = legacy max(top_n * 4, 20), -1 = score
+    # every candidate, N = score the top N fused candidates.
+    reranker_pool_size: int = Field(default=0, alias="RERANKER_POOL_SIZE")
+    # Replaces the per-category relative score ratio when set (0 < r <= 1).
+    rerank_score_ratio_override: float | None = Field(
+        default=None, alias="RERANK_SCORE_RATIO_OVERRIDE"
+    )
+    # Dense and BM25 depth per sub-query. 0 = keep the response-mode depth.
+    retrieval_depth_override: int = Field(default=0, alias="RETRIEVAL_DEPTH_OVERRIDE")
+    # "response_mode": the answer-depth budget sets retrieval depth (legacy).
+    # "max": use the larger of the router's category depth and the mode depth.
+    retrieval_depth_mode: Literal["response_mode", "max"] = Field(
+        default="response_mode", alias="RETRIEVAL_DEPTH_MODE"
+    )
+    # How per-sub-query hit lists are combined: "max_score" keeps each chunk's
+    # highest raw score (legacy), "rrf" fuses the ranked lists.
+    subquery_merge_mode: Literal["max_score", "rrf"] = Field(
+        default="max_score", alias="SUBQUERY_MERGE_MODE"
+    )
+    # Skip chunks with this many words or fewer at query time. 0 = off.
+    min_chunk_words: int = Field(default=0, alias="MIN_CHUNK_WORDS")
+    bm25_k1: float = Field(default=1.5, alias="BM25_K1")
+    bm25_b: float = Field(default=0.75, alias="BM25_B")
+    bm25_stemming: bool = Field(default=False, alias="BM25_STEMMING")
+    # Metadata fields appended to chunk text in the BM25 index.
+    bm25_metadata_fields: str = Field(
+        default="section_path,section_title,section_number,source_file,category",
+        alias="BM25_METADATA_FIELDS",
+    )
+    # Record ranked chunk ids per retrieval stage on RAGTrace.retrieval_stages.
+    record_retrieval_stages: bool = Field(default=True, alias="RECORD_RETRIEVAL_STAGES")
+    # A query that says "the guidebook" / "this document" with no active
+    # document. "strict" (legacy): CURRENT_DOCUMENT scope with no identity,
+    # which rejects every candidate. "resolve": bind to the only indexed
+    # document or the one whose filename contains the named noun; otherwise
+    # search globally.
+    scope_unbound_reference_mode: Literal["strict", "resolve"] = Field(
+        default="strict", alias="SCOPE_UNBOUND_REFERENCE_MODE"
+    )
+    # How governing-clause selection builds the context list. "governing"
+    # (legacy): the selector's picks from the whole candidate pool replace the
+    # ranked hand-off. "rank_anchor": the top CONTEXT_RANK_ANCHOR_K ranked
+    # hand-off chunks are always kept; selector picks fill the other slots.
+    context_assembly_mode: Literal["governing", "rank_anchor"] = Field(
+        default="governing", alias="CONTEXT_ASSEMBLY_MODE"
+    )
+    context_rank_anchor_k: int = Field(default=2, alias="CONTEXT_RANK_ANCHOR_K")
+
     # ── Conditional Reranking & Retrieval Caching (Qwen 2.5 7B) ──────────
     enable_conditional_reranking: bool = Field(default=True, alias="ENABLE_CONDITIONAL_RERANKING")
     conditional_reranker_threshold: float = Field(default=0.85, alias="CONDITIONAL_RERANKER_THRESHOLD")

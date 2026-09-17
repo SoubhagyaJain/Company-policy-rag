@@ -58,6 +58,7 @@ from backend.rag.policy_reliability import (
     extract_query_facts,
     format_multipart_policy_decision_context,
     format_policy_decision_context,
+    merge_governing_context,
     validate_policy_answer,
 )
 from backend.rag.query_rewrite import QueryRewriter
@@ -73,7 +74,7 @@ from backend.rag.scope_resolver import (
 )
 from backend.rag.semantic_cache import SemanticCacheManager
 from backend.rag.verifier import SelfReflectionVerifier
-from backend.retrieval.hybrid import HybridRetriever
+from backend.retrieval.hybrid import HybridRetriever, reciprocal_rank_fusion
 from backend.retrieval.reranker import CrossEncoderReranker
 from backend.retrieval.retrieval_cache import get_retrieval_cache
 from backend.utils.logging import logger
@@ -301,6 +302,40 @@ def _detect_fidelity_mode(query: str) -> str:
     elif any(k in q_lower for k in ("how can i make", "how do i build", "how to make", "how to implement", "how is", "implementation", "create", "build")):
         return "implement"
     return "grounded"
+
+
+# Cap on chunk ids recorded per list in RAGTrace.retrieval_stages.
+_STAGE_ID_LIMIT = 100
+
+
+def _stage_ids(chunks: list[ScoredChunk]) -> list[str]:
+    return [sc.chunk.id for sc in chunks[:_STAGE_ID_LIMIT]]
+
+
+def _recording_stages() -> bool:
+    return bool(getattr(settings, "record_retrieval_stages", True))
+
+
+def _apply_retrieval_experiment_flags(router_strategy: Any, strategy: Any) -> None:
+    """Apply retrieval experiment settings to the per-request strategy in place.
+
+    With every setting at its default this leaves ``strategy`` unchanged: the
+    router's rrf_k is 60 for every retrieving category, matching HYBRID_RRF_K.
+    """
+    depth_mode = str(getattr(settings, "retrieval_depth_mode", "response_mode"))
+    if depth_mode == "max" and router_strategy is not None:
+        strategy.dense_top_k = max(strategy.dense_top_k, router_strategy.dense_top_k)
+        strategy.bm25_top_k = max(strategy.bm25_top_k, router_strategy.bm25_top_k)
+    depth_override = int(getattr(settings, "retrieval_depth_override", 0) or 0)
+    if depth_override > 0:
+        strategy.dense_top_k = depth_override
+        strategy.bm25_top_k = depth_override
+    rrf_k = int(getattr(settings, "hybrid_rrf_k", 60) or 0)
+    if rrf_k > 0 and strategy.rrf_k > 0:
+        strategy.rrf_k = rrf_k
+    ratio_override = getattr(settings, "rerank_score_ratio_override", None)
+    if ratio_override is not None:
+        strategy.min_score_ratio = float(ratio_override)
 
 
 def _is_high_risk_query(query: str) -> bool:
@@ -1350,12 +1385,31 @@ class RAGPipeline:
 
             return self._llm_instance_cache[selected_model], selected_model
 
+    def _call_reranker(
+        self,
+        query: str,
+        candidates: list[ScoredChunk],
+        top_n: int,
+        min_ratio: float,
+        trace_sink: list[dict[str, Any]] | None,
+    ) -> list[ScoredChunk]:
+        """Rerank one query, collecting the reranker's stage trace when asked."""
+        if trace_sink is not None and getattr(self.reranker, "supports_stage_trace", False) is True:
+            trace: dict[str, Any] = {}
+            result = self.reranker.rerank(
+                query, candidates, top_n=top_n, min_ratio=min_ratio, trace=trace
+            )
+            trace_sink.append(trace)
+            return result
+        return self.reranker.rerank(query, candidates, top_n=top_n, min_ratio=min_ratio)
+
     def _rerank_for_parts(
         self,
         parts: list[str],
         candidates: list[ScoredChunk],
         top_n: int,
         min_ratio: float,
+        trace_sink: list[dict[str, Any]] | None = None,
     ) -> list[ScoredChunk]:
         """
         Rerank once per question part and interleave the winners.
@@ -1370,7 +1424,7 @@ class RAGPipeline:
         if not candidates:
             return []
         if len(parts) < 2:
-            return self.reranker.rerank(parts[0], candidates, top_n=top_n, min_ratio=min_ratio)
+            return self._call_reranker(parts[0], candidates, top_n, min_ratio, trace_sink)
 
         # Each part must be able to win seats, but no part may crowd out the rest.
         per_part_quota = max(2, top_n // len(parts))
@@ -1378,7 +1432,7 @@ class RAGPipeline:
         for part in parts:
             try:
                 ranked_per_part.append(
-                    self.reranker.rerank(part, candidates, top_n=per_part_quota, min_ratio=min_ratio)
+                    self._call_reranker(part, candidates, per_part_quota, min_ratio, trace_sink)
                 )
             except Exception as exc:
                 logger.warning("Per-part rerank failed for %r: %s", part, exc)
@@ -1404,8 +1458,18 @@ class RAGPipeline:
         bm25_top_k: int,
         filters: dict[str, Any] | None,
         rrf_k: int = 60,
+        trace: dict[str, Any] | None = None,
     ) -> list[ScoredChunk]:
         """Robust hybrid retrieval supporting mock and production hybrid retrievers."""
+        if trace is not None and getattr(self.hybrid_retriever, "supports_stage_trace", False) is True:
+            return self.hybrid_retriever.retrieve(
+                query,
+                dense_top_k=dense_top_k,
+                bm25_top_k=bm25_top_k,
+                filters=filters,
+                rrf_k=rrf_k,
+                trace=trace,
+            )
         try:
             return self.hybrid_retriever.retrieve(
                 query,
@@ -1659,6 +1723,7 @@ class RAGPipeline:
             ctx.max_retries = retry_budget
 
         ctx.current_strategy = ctx.response_mode_config.apply_to(ctx.strategy)
+        _apply_retrieval_experiment_flags(ctx.strategy, ctx.current_strategy)
         if ctx.is_fast_path:
             ctx.current_strategy.enable_multi_query = False
 
@@ -1669,6 +1734,7 @@ class RAGPipeline:
         current_strategy: Any,
         *,
         bm25_fallback_on_error: bool = True,
+        stage_trace: list[dict[str, Any]] | None = None,
     ) -> tuple[list[ScoredChunk], bool]:
         """Retrieve every sub-query concurrently and merge into one candidate pool.
 
@@ -1677,8 +1743,13 @@ class RAGPipeline:
         input order), and keeping the max score per chunk id is order-independent,
         so the merged result matches the previous sequential behavior. Returns the
         deduped candidates and whether dense retrieval degraded to BM25.
+
+        SUBQUERY_MERGE_MODE=rrf fuses the per-sub-query ranked lists instead of
+        comparing their raw scores. When ``stage_trace`` is given, one entry per
+        sub-query (dense / BM25 / fused ids) is appended to it in input order.
         """
-        def _hits_for(sq: str) -> tuple[list[ScoredChunk], bool]:
+        def _hits_for(sq: str) -> tuple[list[ScoredChunk], bool, dict[str, Any] | None]:
+            sq_trace: dict[str, Any] | None = {} if stage_trace is not None else None
             try:
                 return (
                     self._retrieve_hybrid_hits(
@@ -1687,22 +1758,24 @@ class RAGPipeline:
                         bm25_top_k=current_strategy.bm25_top_k,
                         filters=filters,
                         rrf_k=current_strategy.rrf_k,
+                        trace=sq_trace,
                     ),
                     False,
+                    sq_trace,
                 )
             except Exception as ret_exc:
                 if not bm25_fallback_on_error:
-                    return [], False
+                    return [], False, sq_trace
                 logger.warning("Dense retrieval error (%s); falling back to BM25 index.", ret_exc)
                 try:
-                    return (
-                        self.hybrid_retriever.bm25_index.search(
-                            sq, top_k=current_strategy.bm25_top_k, filters=filters
-                        ),
-                        True,
+                    hits = self.hybrid_retriever.bm25_index.search(
+                        sq, top_k=current_strategy.bm25_top_k, filters=filters
                     )
+                    if sq_trace is not None:
+                        sq_trace.update({"query": sq, "dense_error": str(ret_exc), "fused": _stage_ids(hits)})
+                    return hits, True, sq_trace
                 except Exception:
-                    return [], True
+                    return [], True, sq_trace
 
         if not sub_queries:
             return [], False
@@ -1724,12 +1797,24 @@ class RAGPipeline:
 
         dense_degraded = False
         candidate_map: dict[str, ScoredChunk] = {}
-        for hits, degraded in results:
+        merge_mode = str(getattr(settings, "subquery_merge_mode", "max_score"))
+        for _hits, degraded, sq_trace in results:
             dense_degraded = dense_degraded or degraded
-            for sc in hits:
-                cid = sc.chunk.id
-                if cid not in candidate_map or (sc.score or 0.0) > (candidate_map[cid].score or 0.0):
-                    candidate_map[cid] = sc
+            if stage_trace is not None and sq_trace is not None:
+                stage_trace.append(sq_trace)
+        if merge_mode == "rrf":
+            fused = reciprocal_rank_fusion(
+                [hits for hits, _, _ in results if hits],
+                rrf_k=int(getattr(current_strategy, "rrf_k", 60) or 60),
+            )
+            candidate_map = {sc.chunk.id: sc for sc in fused}
+        else:
+            for hits, _, _ in results:
+                for sc in hits:
+                    cid = sc.chunk.id
+                    if cid not in candidate_map or (sc.score or 0.0) > (candidate_map[cid].score or 0.0):
+                        candidate_map[cid] = sc
+
         return list(candidate_map.values()), dense_degraded
 
     def _stage_retrieve(self, ctx: QueryContext, prefix: str) -> None:
@@ -1748,6 +1833,18 @@ class RAGPipeline:
         scope_decision = ctx.scope_decision
         rewrite_res = ctx.rewrite_res
         conv_res = ctx.conv_res
+        stages: dict[str, Any] | None = {} if _recording_stages() else None
+        ctx.retrieval_stages = stages if stages is not None else {}
+        if stages is not None:
+            stages["attempt"] = prefix or "_att0"
+            stages["strategy"] = {
+                "dense_top_k": current_strategy.dense_top_k,
+                "bm25_top_k": current_strategy.bm25_top_k,
+                "rrf_k": current_strategy.rrf_k,
+                "rerank_top_n": current_strategy.rerank_top_n,
+                "min_score_ratio": current_strategy.min_score_ratio,
+                "subquery_merge_mode": str(getattr(settings, "subquery_merge_mode", "max_score")),
+            }
 
         if ctx.retrieval_decision == RetrievalDecision.REUSE_PREVIOUS.value:
             t0 = time.perf_counter()
@@ -1771,6 +1868,9 @@ class RAGPipeline:
             ctx.candidate_chunks = trusted_chunks
             ctx.continuity_applied = bool(trusted_chunks)
             ctx.raw_new_chunk_count = 0
+            if stages is not None:
+                stages["evidence_reused"] = True
+                stages["candidates"] = _stage_ids(trusted_chunks)
             ctx.stage_timings[f"evidence_reuse{prefix}"] = round(
                 (time.perf_counter() - t0) * 1000, 2
             )
@@ -1829,7 +1929,10 @@ class RAGPipeline:
 
         if not candidate_chunks:
             candidate_chunks, dense_degraded = self._gather_hybrid_candidates(
-                sub_queries, search_filters, current_strategy
+                sub_queries,
+                search_filters,
+                current_strategy,
+                stage_trace=stages.setdefault("subqueries", []) if stages is not None else None,
             )
 
             if dense_degraded:
@@ -1936,6 +2039,14 @@ class RAGPipeline:
         ctx.raw_new_chunk_count = len(candidate_chunks)
         ctx.candidate_chunks = candidate_chunks
         ctx.stage_timings[f"hybrid_retrieval{prefix}"] = 0.1 if cache_hit_retrieval else round((time.perf_counter() - t0) * 1000, 2)
+        if stages is not None:
+            stages["sub_queries"] = list(sub_queries)
+            stages["retrieval_cache_hit"] = cache_hit_retrieval
+            # Merged pool after scope enforcement and score sort: what the
+            # rerank stage receives before named-section prioritisation.
+            stages["candidates"] = _stage_ids(candidate_chunks)
+            stages["candidate_count"] = len(candidate_chunks)
+            stages["retrieval_ms"] = round((time.perf_counter() - t0) * 1000, 2)
         thinking_sm.complete_stage(
             ThinkingStage.RETRIEVAL,
             details={"candidate_count": len(candidate_chunks)},
@@ -1959,6 +2070,14 @@ class RAGPipeline:
         candidate_chunks = prioritize_named_sections(user_query, candidate_chunks, candidate_chunks)
         response_mode_config = ctx.response_mode_config
         conv_res = ctx.conv_res
+        stages: dict[str, Any] | None = None
+        if _recording_stages():
+            if ctx.retrieval_stages is None:
+                ctx.retrieval_stages = {}
+            stages = ctx.retrieval_stages
+            stages["pre_rerank"] = _stage_ids(candidate_chunks)
+        rerank_traces: list[dict[str, Any]] | None = [] if stages is not None else None
+        reranker_enabled = bool(getattr(settings, "enable_reranker", True))
 
         # 4. Cross-Encoder Reranking
         t0 = time.perf_counter()
@@ -1967,6 +2086,9 @@ class RAGPipeline:
             # These chunks were already retrieved and verified for the selected
             # turn. Preserve their order and avoid a second model-based rank.
             reranked_chunks = candidate_chunks[:current_strategy.rerank_top_n]
+        elif not reranker_enabled:
+            # ENABLE_RERANKER=false: keep the fused retrieval order.
+            reranked_chunks = candidate_chunks[:current_strategy.rerank_top_n]
         else:
             try:
                 reranked_chunks = self._rerank_for_parts(
@@ -1974,6 +2096,7 @@ class RAGPipeline:
                     candidate_chunks,
                     top_n=current_strategy.rerank_top_n,
                     min_ratio=current_strategy.min_score_ratio,
+                    trace_sink=rerank_traces,
                 )
             except Exception as rerank_exc:
                 logger.warning("Reranker error (%s); falling back to retrieval ranking.", rerank_exc)
@@ -1985,6 +2108,16 @@ class RAGPipeline:
                 reranked_chunks = candidate_chunks[:current_strategy.rerank_top_n]
 
         ctx.stage_timings[f"reranking{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+        if stages is not None:
+            stages["reranker_enabled"] = reranker_enabled
+            stages["rerank_ms"] = ctx.stage_timings[f"reranking{prefix}"]
+            # One entry per reranked query (several for multi-part questions),
+            # each with the scored pool, pre-filter and post-filter rankings.
+            stages["rerank"] = rerank_traces or []
+            if rerank_traces and len(rerank_traces) == 1:
+                stages["post_rerank_prefilter"] = list(rerank_traces[0].get("prefilter", []))
+                stages["post_filter"] = list(rerank_traces[0].get("postfilter", []))
+            stages["post_rerank"] = _stage_ids(reranked_chunks)
 
         thinking_sm.complete_stage(
             ThinkingStage.RERANKING,
@@ -2004,12 +2137,29 @@ class RAGPipeline:
             policy_selection,
             max_chunks=max(current_strategy.rerank_top_n, 5),
         )
+        if stages is not None:
+            stages["governing_selection"] = _stage_ids(selected_context)
+            stages["governing_roles"] = {
+                "primary": _stage_ids(policy_selection.primary_rules),
+                "exceptions": _stage_ids(policy_selection.exceptions),
+                "definitions": _stage_ids(policy_selection.definitions),
+                "supporting": _stage_ids(policy_selection.supporting_rules),
+            }
         if selected_context:
-            reranked_chunks = selected_context
+            reranked_chunks = merge_governing_context(
+                reranked_chunks,
+                selected_context,
+                max_chunks=max(current_strategy.rerank_top_n, 5),
+                mode=str(getattr(settings, "context_assembly_mode", "governing")),
+                anchor_k=int(getattr(settings, "context_rank_anchor_k", 0) or 0),
+            )
         reranked_chunks = prioritize_named_sections(user_query, reranked_chunks, candidate_chunks)
         ctx.stage_timings[f"governing_clause_selection{prefix}"] = round(
             (time.perf_counter() - t0) * 1000, 2
         )
+        if stages is not None:
+            stages["context_assembly_mode"] = str(getattr(settings, "context_assembly_mode", "governing"))
+            stages["post_governing"] = _stage_ids(reranked_chunks)
 
         # 5. Parent Context Expansion
         t0 = time.perf_counter()
@@ -2085,6 +2235,8 @@ class RAGPipeline:
         expanded_chunks = prioritize_named_sections(
             user_query, expanded_chunks, evidence_before_packing
         )[:current_strategy.rerank_top_n]
+        if stages is not None:
+            stages["post_packing"] = _stage_ids(expanded_chunks)
         if hasattr(self.compressor, "pack_to_token_budget"):
             expanded_chunks, context_tokens = self.compressor.pack_to_token_budget(
                 expanded_chunks,
@@ -2139,6 +2291,10 @@ class RAGPipeline:
             ThinkingStage.EVIDENCE_VERIFICATION,
             details={"evidence_status": telemetry_extra.get("evidence_status", "DIRECT")},
         )
+
+        if stages is not None:
+            stages["final_context"] = _stage_ids(expanded_chunks)
+            stages["context_tokens"] = context_tokens
 
         ctx.reranked_chunks = reranked_chunks
         ctx.expanded_chunks = expanded_chunks
@@ -2836,6 +2992,47 @@ class RAGPipeline:
             token_usage={"prompt_tokens": 0, "completion_tokens": len(cached_res.answer.split())},
         )
 
+    def run_retrieval_stages(
+        self,
+        user_query: str,
+        *,
+        filters: dict[str, Any] | None = None,
+        response_mode: ResponseMode = "standard",
+    ) -> QueryContext:
+        """Run the production retrieval path for one standalone query, without generation.
+
+        Executes the same stages as ``query`` up to the formatted context: routing,
+        scope and rewrite, planning, hybrid retrieval, reranking, governing-clause
+        selection, and context packing. Semantic-cache lookup, greeting and
+        clarification short-circuits, generation, and verification are skipped so
+        every call measures retrieval. Per-stage rankings are on
+        ``ctx.retrieval_stages`` and timings on ``ctx.stage_timings``.
+        """
+        filters, chat_mode = self._split_control_filters(filters)
+        ctx = QueryContext(
+            user_query=user_query,
+            filters=filters,
+            chat_mode=chat_mode,
+            response_mode=response_mode,
+            thinking_detail_level=ThinkingDetailLevel.OFF,
+            thinking_sm=ThinkingStateMachine(
+                query_id=f"eval_{uuid.uuid4().hex[:8]}",
+                detail_level=ThinkingDetailLevel.OFF,
+            ),
+            total_start=time.perf_counter(),
+            stage_timings={},
+            response_mode_config=get_response_mode_config(response_mode),
+        )
+        self._stage_classify_and_resolve(ctx)
+        ctx.req_llm, ctx.selected_model = self._get_effective_llm(None)
+        self._stage_scope_and_rewrite(ctx)
+        self._stage_plan(ctx)
+        self._stage_retrieve(ctx, "")
+        if ctx.candidate_chunks:
+            self._stage_rerank_and_context(ctx, "")
+        ctx.stage_timings["retrieval_total"] = round((time.perf_counter() - ctx.total_start) * 1000, 2)
+        return ctx
+
     def _query_internal(
         self,
         user_query: str,
@@ -2990,6 +3187,7 @@ class RAGPipeline:
         best_context_tokens = 0
         best_candidate_chunks: list[ScoredChunk] = []
         best_reranked_chunks: list[ScoredChunk] = []
+        best_retrieval_stages: dict[str, Any] = {}
         best_report: VerificationReport | None = None
         best_policy_selection: ClauseSelection | None = None
         best_score = -1.0
@@ -3044,6 +3242,7 @@ class RAGPipeline:
                 best_context_chunks = []
                 best_candidate_chunks = []
                 best_reranked_chunks = []
+                best_retrieval_stages = ctx.retrieval_stages
                 best_report = report
                 break
 
@@ -3071,6 +3270,7 @@ class RAGPipeline:
                 best_context_tokens = context_tokens
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
+                best_retrieval_stages = ctx.retrieval_stages
                 best_report = report
                 best_policy_selection = policy_selection
 
@@ -3081,6 +3281,7 @@ class RAGPipeline:
                 best_context_tokens = context_tokens
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
+                best_retrieval_stages = ctx.retrieval_stages
                 best_report = report
                 best_policy_selection = policy_selection
                 break
@@ -3178,6 +3379,7 @@ class RAGPipeline:
             ),
             retrieved_candidate_count=len(best_candidate_chunks),
             post_rerank_count=len(best_reranked_chunks),
+            retrieval_stages=best_retrieval_stages,
             final_context_count=len(best_context_chunks),
             response_mode=response_mode,
             retrieval_top_k=current_strategy.dense_top_k,

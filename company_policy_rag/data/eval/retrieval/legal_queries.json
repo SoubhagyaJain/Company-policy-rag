@@ -1,0 +1,457 @@
+{
+ "corpus": "legal",
+ "corpus_source": "app/storage/sessions/af501bfeace944c78fd12ec354fbaeca/bm25/corpus.json (Legal_Studies_Book_v8_XI.pdf, 799 chunks)",
+ "query_source": "Written for this evaluation (2026-09-17) from passages sampled evenly across the book. style=lexical reuses the textbook's terms; style=paraphrase asks in everyday wording with low term overlap. Written by Claude, not by a domain expert.",
+ "queries": [
+  {
+   "id": "legal_state_society",
+   "question": "How does the textbook describe the emergence of the State from society?",
+   "category": "explanation",
+   "style": "lexical",
+   "keywords": [
+    "society politically organized",
+    "Emergence of the State"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_01accb7be081"
+  },
+  {
+   "id": "legal_article12",
+   "question": "Which bodies are included in the definition of 'State' under Article 12 of the Indian Constitution?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Article 12",
+    "local or other authorities"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_e11bc887a8c9"
+  },
+  {
+   "id": "legal_locke_contracts",
+   "question": "According to Locke, what were the two contracts that led to civil society and government?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "social contract",
+    "governmental contract",
+    "Locke"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_e1451b44c1fd"
+  },
+  {
+   "id": "legal_totalitarian",
+   "question": "What is the view of totalitarian thinkers like Hegel about the rights of individuals against the state?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Totalitarian",
+    "Hegel"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_020de5edfd50"
+  },
+  {
+   "id": "legal_dictatorship_paraphrase",
+   "question": "What do we call rule by one person who holds unlimited power without inheriting it, and how is that power exercised?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Dictatorship",
+    "Alfred Cobban"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_ae1d71d6e952"
+  },
+  {
+   "id": "legal_unicameral_bicameral",
+   "question": "What are the differences between a unicameral and a bicameral legislature?",
+   "category": "comparison",
+   "style": "lexical",
+   "keywords": [
+    "Unicameral",
+    "Bicameral"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_d48d24d4b73f"
+  },
+  {
+   "id": "legal_pardon_paraphrase",
+   "question": "Can the President reduce or cancel the punishment given to someone a court has convicted?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "pardon",
+    "Judicial functions"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_3ad1b7d04cf8"
+  },
+  {
+   "id": "legal_separation_liberty",
+   "question": "Why should the power to make laws and the power to carry them out not be held by the same people?",
+   "category": "explanation",
+   "style": "paraphrase",
+   "keywords": [
+    "separation of powers",
+    "Montesquieu",
+    "tyrannical"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_53608f71d4b9"
+  },
+  {
+   "id": "legal_us_congress",
+   "question": "How is the law-making body of the United States organised and how long do its members serve?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "US Congress",
+    "Senate",
+    "House of Representatives"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_b6642d3b995a"
+  },
+  {
+   "id": "legal_article50",
+   "question": "Which constitutional provision asks the State to keep the courts separate from the executive?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Article 50",
+    "Independence of Judiciary"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_60a8b13ca6c2"
+  },
+  {
+   "id": "legal_ambedkar_role",
+   "question": "Who chaired the Drafting Committee of the Indian Constitution?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Drafting Committee",
+    "Ambedkar"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_fac3bd9003f7"
+  },
+  {
+   "id": "legal_socialist_word",
+   "question": "When was the word 'Socialist' added to the Preamble and what does it mean?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Socialist",
+    "Forty-Second Amendment"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_0b3664501129"
+  },
+  {
+   "id": "legal_equal_pay",
+   "question": "Does the Constitution support men and women being paid the same for the same work?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "equal pay for equal work",
+    "Article 39"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_086284c84e8c"
+  },
+  {
+   "id": "legal_emergency_types",
+   "question": "What types of emergency can the President declare under the Constitution?",
+   "category": "enumeration",
+   "style": "lexical",
+   "keywords": [
+    "Article 352",
+    "Article 356",
+    "Financial Emergency",
+    "Emergency Provisions"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_dca9e0cc843a"
+  },
+  {
+   "id": "legal_admin_vs_constitutional",
+   "question": "How is administrative law different from constitutional law?",
+   "category": "comparison",
+   "style": "lexical",
+   "keywords": [
+    "Administrative Law",
+    "Constitutional Law"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_b3be8a3df5db"
+  },
+  {
+   "id": "legal_rule_of_law_india",
+   "question": "Is the Rule of Law mentioned in the Indian Constitution, and how is it applied?",
+   "category": "explanation",
+   "style": "lexical",
+   "keywords": [
+    "Rule of Law",
+    "Equality Before Law"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_606987f63e27"
+  },
+  {
+   "id": "legal_droit",
+   "question": "What was the French droit administratif system and the role of the Conseil du Roi?",
+   "category": "explanation",
+   "style": "lexical",
+   "keywords": [
+    "Droit",
+    "Conseil Du Roi"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_274b8d52e7fb"
+  },
+  {
+   "id": "legal_natural_law",
+   "question": "What is the central idea of the Natural Law school of jurisprudence?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Natural Law School",
+    "natural law"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_c3a913a11f73"
+  },
+  {
+   "id": "legal_sociological_paraphrase",
+   "question": "Which school of thought sees law as a way to change society, and who led it in America?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Sociological School",
+    "Roscoe Pound"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_d84054cfb9bc"
+  },
+  {
+   "id": "legal_custom_source",
+   "question": "Why was custom an important source of law in ancient India?",
+   "category": "explanation",
+   "style": "lexical",
+   "keywords": [
+    "custom",
+    "Mohammad Ibrahim"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_f58ff101cd0d"
+  },
+  {
+   "id": "legal_legislation_meaning",
+   "question": "What does the word legislation literally mean and why is it the most important modern source of law?",
+   "category": "explanation",
+   "style": "lexical",
+   "keywords": [
+    "Legislation as a Source of Law",
+    "legis"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_e2b41c24f49d"
+  },
+  {
+   "id": "legal_law_reform_need",
+   "question": "Why do laws have to keep changing as society changes?",
+   "category": "explanation",
+   "style": "paraphrase",
+   "keywords": [
+    "Law Reform",
+    "Need for Law Reform"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_c26737cee2a9"
+  },
+  {
+   "id": "legal_section66a",
+   "question": "What happened to Section 66A of the IT Act in the Shreya Singhal case?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Section 66A",
+    "Shreya Singhal"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_7cc71e93efd7"
+  },
+  {
+   "id": "legal_civil_damages_paraphrase",
+   "question": "If a customer never pays a shopkeeper's bills, what kind of case can the shopkeeper bring?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Money Recovery",
+    "civil suit"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_2b7f50a059a7"
+  },
+  {
+   "id": "legal_appellate",
+   "question": "What does a higher court do when someone challenges a lower court's decision?",
+   "category": "explanation",
+   "style": "paraphrase",
+   "keywords": [
+    "Appellate Jurisdiction"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_d26b66ef6eed"
+  },
+  {
+   "id": "legal_judgment_decree",
+   "question": "What is the difference between a judgment, a decree and an order under the Civil Procedure Code?",
+   "category": "comparison",
+   "style": "lexical",
+   "keywords": [
+    "Decree and Order",
+    "Section 2(9)"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_ddcb8320b227"
+  },
+  {
+   "id": "legal_bail_compoundable",
+   "question": "What is bail, and which offences can be settled by a compromise between the victim and the accused?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Meaning of Bail",
+    "Compoundable"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_86d621b83bbe"
+  },
+  {
+   "id": "legal_sessions_court",
+   "question": "Which court hears the most serious criminal cases in a district?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Court of Session",
+    "Sessions Judge"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_4ca61d1ecd75"
+  },
+  {
+   "id": "legal_fir_mandatory",
+   "question": "Is the police required to register an FIR, and what did the Lalita Kumari case decide?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Lalita Kumari",
+    "FIR"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_9a8d9be27661"
+  },
+  {
+   "id": "legal_summons_trial",
+   "question": "How is a summons trial different from a warrant trial?",
+   "category": "comparison",
+   "style": "lexical",
+   "keywords": [
+    "Summons Trial",
+    "Warrant Trial"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_bc8f6728dd57"
+  },
+  {
+   "id": "legal_double_jeopardy_paraphrase",
+   "question": "Can a person who was already found innocent or guilty be put on trial again for the same crime?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Autrefois Acquit",
+    "Autrefois Convict",
+    "double jeopardy"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_ca67ec3e8a5e"
+  },
+  {
+   "id": "legal_family_courts_women",
+   "question": "What role did women's organisations play in the creation of family courts?",
+   "category": "explanation",
+   "style": "lexical",
+   "keywords": [
+    "Family Courts",
+    "women's rights movement"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_822b2360f737"
+  },
+  {
+   "id": "legal_marriage_age_paraphrase",
+   "question": "How old do a bride and groom have to be under the different religious family laws?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Age of puberty",
+    "valid marriage"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_067edceac441"
+  },
+  {
+   "id": "legal_divorce_grounds",
+   "question": "On what grounds can a husband or wife file for divorce?",
+   "category": "enumeration",
+   "style": "lexical",
+   "keywords": [
+    "divorce",
+    "cruelty",
+    "desertion"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_a561794ef7e8"
+  },
+  {
+   "id": "legal_child_labour_paraphrase",
+   "question": "When is work done by a child considered harmful labour?",
+   "category": "factual",
+   "style": "paraphrase",
+   "keywords": [
+    "Child Labour",
+    "hazardous work"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_fbcc5d7a12a2"
+  },
+  {
+   "id": "legal_hindu_adoption",
+   "question": "Who can adopt a child under the Hindu Adoptions and Maintenance Act?",
+   "category": "factual",
+   "style": "lexical",
+   "keywords": [
+    "Hindu Adoptions and Maintenance Act",
+    "adoption"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_d65bdd5c0c32"
+  },
+  {
+   "id": "legal_property_types",
+   "question": "What is the difference between joint family property and self-acquired property?",
+   "category": "comparison",
+   "style": "lexical",
+   "keywords": [
+    "Joint family property",
+    "self-acquired"
+   ],
+   "relevant": {},
+   "source_chunk_id": "chunk_72cf2e3d7f4b"
+  }
+ ]
+}
