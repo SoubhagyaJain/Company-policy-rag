@@ -526,7 +526,12 @@ class DocumentService:
                 else:
                     logger.warning(f"Could not extract text content from file '{filename}'. Proceeding with 0 chunks.")
 
-            pages_count = len(raw_docs)
+            # PDF loaders append VLM extractions as extra RawDocuments; they are
+            # not pages.
+            visual_extraction_count = sum(
+                1 for doc in raw_docs if (doc.metadata.extra or {}).get("is_visual_extraction")
+            )
+            pages_count = len(raw_docs) - visual_extraction_count
             t_extract = round((time.perf_counter() - t_stage) * 1000, 2)
             self._update_job_stage(
                 document_id=document_id,
@@ -876,8 +881,8 @@ class DocumentService:
                     current_stage="READY",
                     pages_count=pages_count,
                     chunks_count=len(chunks),
-                    visual_assets_count=len(raw_docs),
-                    vision_success_count=len(raw_docs),
+                    visual_assets_count=len(extracted_assets),
+                    vision_success_count=visual_extraction_count,
                     vision_failed_count=0,
                     total_duration_ms=t_total,
                     error=None,
