@@ -100,6 +100,7 @@ def test_summarize_and_compare(tmp_path) -> None:
     diff = compare(base, cand)
     assert diff["keyword_recall"]["delta"] == 1.0
     assert diff["context_hit"]["wins"] == 1
+    assert diff["latency_ms"]["wins"] == 1  # candidate is faster
 
     path = write_spot_check(cand, tmp_path / "spot.csv")
     assert "human_correct" in path.read_text(encoding="utf-8")
@@ -115,3 +116,20 @@ def test_handbook_labels_load_and_reference_real_chunks() -> None:
     for case in cases:
         assert case.relevant_ids <= corpus_ids
         assert case.should_abstain or case.relevant_ids
+
+
+def test_negative_policy_facts_are_not_abstentions() -> None:
+    assert not is_abstention("No, contractors are not covered by the employee parental leave benefit [Source 1].")
+    assert not is_abstention("Customer data must not be copied to unapproved AI services.")
+    assert is_abstention("Dental coverage is not mentioned in the handbook.")
+    assert is_abstention("The provided documents do not specify a 401(k) match.")
+    assert is_abstention("Based on the provided evidence, the employee handbook does not explicitly mention the owner.")
+
+
+def test_trailing_hedge_after_an_answer_is_not_an_abstention() -> None:
+    answer = (
+        "Contractors may work remotely only when their sponsor and service agreement permit it [Source 1].\n\n"
+        "- Sponsor approval is required.\n\n"
+        "The handbook does not provide any additional exceptions for contractors."
+    )
+    assert not is_abstention(answer)

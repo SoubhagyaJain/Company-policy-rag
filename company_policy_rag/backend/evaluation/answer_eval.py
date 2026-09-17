@@ -37,12 +37,16 @@ from backend.evaluation.retrieval_eval import (
     win_loss_tie,
 )
 
+# Abstention = a statement about the evidence, not a negative policy fact:
+# "contractors are not covered by the benefit" is an answer, while "the handbook
+# does not mention a dental plan" is an abstention.
+_EVIDENCE_SUBJECT = r"(?:document|documents|handbook|guidebook|context|evidence|sources?|provided (?:text|information|documents?)|retrieved (?:text|excerpts?|sources?))"
 _ABSTENTION_RE = re.compile(
-    r"could not find|couldn't find|cannot find|can't find|unable to (?:answer|find)|"
-    r"(?:does|do) not (?:contain|mention|specify|include|provide|say)|"
-    r"(?:is|are) not (?:mentioned|specified|covered|included|provided|stated)|"
-    r"no (?:information|details|mention)|not (?:available|found) in the|"
-    r"the (?:provided |retrieved )?(?:documents?|evidence|context|handbook) (?:does|do) not",
+    r"could not find|couldn't find|cannot find|can't find|unable to (?:answer|find|locate)|"
+    r"no (?:information|details|mention) (?:about|on|of|regarding)|"
+    rf"{_EVIDENCE_SUBJECT} (?:does|do) not (?:explicitly |specifically |directly |clearly )?(?:contain|mention|specify|include|provide|say|state|cover|address)|"
+    rf"(?:not|isn't|is not|are not) (?:mentioned|specified|covered|included|provided|stated|addressed) in the {_EVIDENCE_SUBJECT}|"
+    rf"not (?:available|found) in the {_EVIDENCE_SUBJECT}",
     re.IGNORECASE,
 )
 
@@ -80,8 +84,18 @@ def load_cases(corpus: str, path: str | Path) -> list[AnswerCase]:
     ]
 
 
+_LEAD_SENTENCES = 2
+
+
 def is_abstention(answer: str) -> bool:
-    return bool(_ABSTENTION_RE.search(answer or ""))
+    """True when the answer *opens* by saying the evidence lacks the answer.
+
+    Only the lead is checked: a real answer often ends with a hedge such as
+    "the handbook does not provide any further exceptions", which is not an
+    abstention.
+    """
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+|\n+", (answer or "").strip()) if s.strip()]
+    return bool(_ABSTENTION_RE.search(" ".join(sentences[:_LEAD_SENTENCES])))
 
 
 def keyword_recall(answer: str, keywords: Sequence[str]) -> float:
@@ -194,7 +208,8 @@ def compare(baseline: Sequence[dict[str, Any]], candidate: Sequence[dict[str, An
         c = [_metric(cand[k], name) for k in keys]
         stats = paired_bootstrap_ci(b, c)
         stats["p"] = sign_flip_p_value(b, c)
-        stats.update(win_loss_tie(b, c))
+        # A latency "win" is the candidate being faster.
+        stats.update(win_loss_tie(c, b) if name == "latency_ms" else win_loss_tie(b, c))
         out[name] = stats
     return out
 
