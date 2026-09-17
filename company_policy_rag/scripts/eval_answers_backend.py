@@ -176,13 +176,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_summarize(args: argparse.Namespace) -> int:
-    from backend.evaluation.answer_eval import is_abstention
+    from backend.evaluation.answer_eval import echoes_source_header, is_abstention
 
     rows = _read_jsonl(Path(args.results) / "results.jsonl")
     for row in rows:
         # Re-derive text-only judgments so detector fixes apply to stored runs.
         row["abstained"] = is_abstention(row.get("answer", ""))
         row["abstention_correct"] = float(row["abstained"] == bool(row.get("should_abstain")))
+        row["clean_format"] = float(not echoes_source_header(row.get("answer", "")))
         for key, value in list(row.items()):
             if value is None and key in {"context_hit", "context_coverage", "tagged_citation",
                                          "citation_precision", "citation_in_context", "keyword_recall",

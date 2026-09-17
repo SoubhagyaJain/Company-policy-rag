@@ -4,7 +4,7 @@
   "query_source": "Hand-written against the fictional Northstar Labs handbook. Relevant chunks are the section that states the answer (grade 2). keywords are answer facts; '|' separates acceptable alternatives. should_abstain marks questions the handbook does not answer.",
   "judgment_pool": "Exhaustive: every chunk was reviewed for every question.",
   "queries": [
-    {"id": "hb_document_owner", "question": "Which team owns the employee handbook and how often is it reviewed?", "category": "factual", "style": "lexical", "relevant": {"nsl_00": 2}, "keywords": ["People Operations", "annual"]},
+    {"id": "hb_document_owner", "question": "Which team owns the employee handbook and how often is it reviewed?", "category": "factual", "style": "lexical", "relevant": {"nsl_00": 2}, "keywords": ["People Operations", "annual|annually|every year|yearly"]},
     {"id": "hb_maternity_weeks", "question": "How many weeks of paid maternity or parental leave can eligible employees take?", "category": "factual", "style": "lexical", "relevant": {"nsl_01": 2}, "keywords": ["16 weeks|sixteen weeks"]},
     {"id": "hb_parental_notice", "question": "How much notice should employees give before foreseeable parental leave?", "category": "factual", "style": "lexical", "relevant": {"nsl_01": 2}, "keywords": ["30 days|thirty days"]},
     {"id": "hb_contractor_leave", "question": "Are contractors covered by the employee parental leave benefit?", "category": "policy_interpretation", "style": "lexical", "relevant": {"nsl_01": 2}, "keywords": ["not covered|are not|aren't|do not|does not|no", "service agreement"]},

@@ -159,3 +159,36 @@ The three citation misses are the model citing the wrong number, not missing evi
 The same case (`hb_contractor_remote`) missed under `rank_anchor` in the baseline run. Citation precision for the unchanged `rank_anchor` config ranged from 0.925 to 1.000 across two runs, so this is within run-to-run noise. It is the failure 4.5 (citation support check) targets.
 
 **Shipped:** `CONTEXT_ASSEMBLY_MODE=rank_policy` is the default. The CI retrieval gate baseline was rewritten: handbook context MRR is 1.000 (was 0.881), so a regression back to anchor-style assembly now fails the gate.
+
+## 4.5 Citations: stop header echo with an inline-citation rule (shipped, 2026-09-17)
+
+**Finding.** qwen2.5:7b copied the prompt's source header into the answer in 31 of 96 stored answers, e.g. `[Source 2] File: sample_employee_handbook.md | Section: 1. Parental and Maternity Leave | Page: 1 | Evidence Type: TEXT`. For many answers that line was the only citation, and several of the wrong citations in `ANSWER_EVAL_BASELINE.md` were such lines.
+
+**Evaluated and not shipped:**
+- **Lexical citation repair.** A sentence → cited-chunk support score that re-attributes a tag to the chunk that supports it. Run offline over 141 stored answers, it made 0 repairs at safe thresholds. On the real misattributions the model paraphrases: the tagged and correct chunks differ by ≤ 0.3 support (e.g. 0.2 vs 0.5), so any threshold low enough to repair them would also move correct tags. The module was deleted.
+- **Stripping echoed header lines.** Also run offline. Citation precision rose (0.875 → 0.964 on the `rank` run), but tagged answers fell from 20 to 14, because the header line was the only tag.
+
+**Live A/B.** Handbook, qwen2.5:7b, n = 24, current defaults:
+
+| Variant | tagged citation | citation precision | clean format (no header echo) | keyword recall | latency p50 |
+|---|---|---|---|---|---|
+| control | 0.952 | 0.900 | 0.500 | 1.000 | 6180 ms |
+| inline rule | 1.000 | 0.905 | **1.000** | 1.000 | 4722 ms |
+| inline rule + `<source id=…>` blocks | 1.000 | 0.952 | 1.000 | 0.976* | 4547 ms |
+
+\* One miss was a label bug: the keyword `annual` did not match "reviewed annually". The label now accepts `annual|annually|every year|yearly`.
+
+**Inline rule vs control:**
+
+| Metric | Delta | 95% CI | p | W/L/T |
+|---|---|---|---|---|
+| clean format | +0.500 | [0.292, 0.708] | 0.001 | 12/0/12 |
+| latency | −1473 ms | [−2411, −736] | < 0.001 | 22/2/0 |
+| citation precision | 0.000 | | | 1/1/18 |
+
+The XML variant was not distinguishable from the inline rule at n = 24. The smaller change shipped: the header format is kept, and the prompt rule changes from "Cite supporting blocks with their exact [Source N] tags" to:
+
+- Put the tag of the supporting source (`[Source N]` or `[Visual Source N]`, N = that source's number) right after each sentence it supports.
+- Never copy source headers or metadata (file names, sections, pages, evidence types) into the answer.
+
+`clean_format` is now an answer-eval metric. The remaining citation errors are the model choosing the wrong number for a correct sentence; `hb_contractor_remote` cites `[Source 2]` in every variant.

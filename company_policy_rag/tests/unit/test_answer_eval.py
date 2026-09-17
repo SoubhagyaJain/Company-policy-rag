@@ -133,3 +133,17 @@ def test_trailing_hedge_after_an_answer_is_not_an_abstention() -> None:
         "The handbook does not provide any additional exceptions for contractors."
     )
     assert not is_abstention(answer)
+
+
+def test_source_header_echo_detection() -> None:
+    from backend.evaluation.answer_eval import echoes_source_header
+
+    assert echoes_source_header("20 days.\n\n[Source 1] File: handbook.md | Section: 4. Leave | Page: 1 | Evidence Type: TEXT")
+    assert not echoes_source_header("Employees receive 20 days [Source 1].")
+
+
+def test_source_header_echo_detection() -> None:
+    from backend.evaluation.answer_eval import echoes_source_header
+
+    assert echoes_source_header("20 days.\n\n[Source 1] File: handbook.md | Section: 4. Leave | Page: 1 | Evidence Type: TEXT")
+    assert not echoes_source_header("Employees receive 20 days [Source 1].")

@@ -15,6 +15,7 @@ Metrics are deliberately simple and deterministic so runs are comparable:
 - ``keyword_recall``: share of answer facts (``keywords``; ``a|b`` = either)
   present in the answer.
 - ``abstention_correct``: abstained exactly when ``should_abstain``.
+- ``clean_format``: the answer does not copy a prompt source header line.
 - ``faithfulness`` (optional): an LLM judge over the prompt context.
 """
 
@@ -85,6 +86,12 @@ def load_cases(corpus: str, path: str | Path) -> list[AnswerCase]:
 
 
 _LEAD_SENTENCES = 2
+_HEADER_ECHO_RE = re.compile(r"Evidence Type:|\bFile:\s*\S+\s*\||</?(?:visual_)?source\b", re.IGNORECASE)
+
+
+def echoes_source_header(answer: str) -> bool:
+    """The answer copied a prompt source header / metadata line."""
+    return bool(_HEADER_ECHO_RE.search(answer or ""))
 
 
 def is_abstention(answer: str) -> bool:
@@ -150,6 +157,7 @@ def score_response(case: AnswerCase, response: Any, *, latency_ms: float) -> dic
         else math.nan,
         "citation_in_context": _ratio(sum(1 for cid in cited_ids if cid in context_set), len(cited_ids)),
         "keyword_recall": keyword_recall(response.answer, case.keywords),
+        "clean_format": float(not echoes_source_header(response.answer)),
         "latency_ms": round(latency_ms, 2),
         "prompt_tokens": usage.get("prompt_tokens"),
         "completion_tokens": usage.get("completion_tokens"),
@@ -169,6 +177,7 @@ QUALITY_METRICS: tuple[str, ...] = (
     "citation_precision",
     "citation_in_context",
     "abstention_correct",
+    "clean_format",
     "faithfulness",
 )
 
