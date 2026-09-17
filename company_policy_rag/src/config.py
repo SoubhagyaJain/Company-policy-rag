@@ -123,17 +123,11 @@ class Settings(BaseSettings):
         default="heuristic", alias="METADATA_EXTRACTION_MODE"
     )
     metadata_extractor_model: str = Field(default="qwen2.5:7b", alias="METADATA_EXTRACTOR_MODEL")
-    metadata_filter_fallback_relaxation: bool = Field(
-        default=True, alias="METADATA_FILTER_FALLBACK_RELAXATION"
-    )
     enable_filter_fallback_relaxation: bool = Field(
         default=True, alias="ENABLE_FILTER_FALLBACK_RELAXATION"
     )
     metadata_filter_min_confidence: float = Field(
         default=0.60, alias="METADATA_FILTER_MIN_CONFIDENCE"
-    )
-    metadata_confidence_threshold: float = Field(
-        default=0.60, alias="METADATA_CONFIDENCE_THRESHOLD"
     )
     metadata_max_entities_per_chunk: int = Field(
         default=20, alias="METADATA_MAX_ENTITIES_PER_CHUNK"
@@ -147,9 +141,6 @@ class Settings(BaseSettings):
     query_router_confidence_threshold: float = Field(
         default=0.70, alias="QUERY_ROUTER_CONFIDENCE_THRESHOLD"
     )
-    enable_conversational_bypass: bool = Field(
-        default=True, alias="ENABLE_CONVERSATIONAL_BYPASS"
-    )
 
     # ── Self-Reflection & Answer Verification Thresholds ────────────────────
     verification_faithfulness_threshold: float = Field(
@@ -160,9 +151,6 @@ class Settings(BaseSettings):
     )
     verification_citation_threshold: float = Field(
         default=0.60, alias="VERIFICATION_CITATION_THRESHOLD"
-    )
-    verification_coherence_threshold: float = Field(
-        default=0.70, alias="VERIFICATION_COHERENCE_THRESHOLD"
     )
     verification_composite_threshold: float = Field(
         default=0.70, alias="VERIFICATION_COMPOSITE_THRESHOLD"
@@ -208,7 +196,6 @@ class Settings(BaseSettings):
     vision_num_predict: int = Field(default=160, alias="VISION_NUM_PREDICT")
     vision_max_ingestion_retries: int = Field(default=0, alias="VISION_MAX_INGESTION_RETRIES")
     vision_max_lazy_retries: int = Field(default=0, alias="VISION_MAX_LAZY_RETRIES")
-    vision_timeout_seconds: float = Field(default=35.0, alias="VISION_TIMEOUT_SECONDS")
     enable_lazy_vision_fallback: bool = Field(default=True, alias="ENABLE_LAZY_VISION_FALLBACK")
     vision_request_timeout: float = Field(default=30.0, alias="VISION_REQUEST_TIMEOUT")
     vision_query_budget_seconds: float = Field(default=40.0, alias="VISION_QUERY_BUDGET_SECONDS")
@@ -300,7 +287,7 @@ class Settings(BaseSettings):
         default="BAAI/bge-reranker-base", alias="RERANKER_MODEL"
     )
     reranker_top_n: int = Field(default=5, alias="RERANKER_TOP_N")
-    reranker_batch_size: int = Field(default=32, alias="RERANKER_BATCH_SIZE")
+    reranker_batch_size: int = Field(default=16, alias="RERANKER_BATCH_SIZE")
     reranker_device: str = Field(default="cpu", alias="RERANKER_DEVICE")
     # Drop chunks scoring below this fraction of the top reranker score
     enable_rerank_score_filter: bool = Field(default=True, alias="ENABLE_RERANK_SCORE_FILTER")
@@ -359,9 +346,7 @@ class Settings(BaseSettings):
     )
     context_rank_anchor_k: int = Field(default=2, alias="CONTEXT_RANK_ANCHOR_K")
 
-    # ── Conditional Reranking & Retrieval Caching (Qwen 2.5 7B) ──────────
-    enable_conditional_reranking: bool = Field(default=True, alias="ENABLE_CONDITIONAL_RERANKING")
-    conditional_reranker_threshold: float = Field(default=0.85, alias="CONDITIONAL_RERANKER_THRESHOLD")
+    # ── Retrieval caching & concurrency ──────────────────────────────────
     retrieval_cache_enabled: bool = Field(default=True, alias="RETRIEVAL_CACHE_ENABLED")
     retrieval_cache_ttl_seconds: int = Field(default=3600, alias="RETRIEVAL_CACHE_TTL_SECONDS")
     # Max concurrent sub-query retrievals. Sub-queries are independent, so they
@@ -380,12 +365,6 @@ class Settings(BaseSettings):
     # (generalizes to any corpus); the keyword-table heuristic remains the
     # fallback. Only runs where multi-query is already enabled (not fast-path).
     enable_llm_multi_query: bool = Field(default=True, alias="ENABLE_LLM_MULTI_QUERY")
-
-    # ── Dynamic Output Limits (Qwen 2.5 7B) ────────────────────────────────
-    max_new_tokens_direct: int = Field(default=128, alias="MAX_NEW_TOKENS_DIRECT")
-    max_new_tokens_factual: int = Field(default=256, alias="MAX_NEW_TOKENS_FACTUAL")
-    max_new_tokens_technical: int = Field(default=384, alias="MAX_NEW_TOKENS_TECHNICAL")
-    max_new_tokens_complex: int = Field(default=512, alias="MAX_NEW_TOKENS_COMPLEX")
 
     # ── Generation / faithfulness grounding ──────────────────────────────────
     # balanced (default): helpful synthesis + partial answers; strict: max faithfulness
@@ -451,9 +430,6 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO", alias="LOG_LEVEL"
     )
-
-    # ── Chat UI ────────────────────────────────────────────────────────────
-    chainlit_port: int = Field(default=8000, alias="CHAINLIT_PORT")
 
     # ── Citation display (chat UI) ─────────────────────────────────────────
     # Citations are critical for trust in policy/legal RAG — keep configurable

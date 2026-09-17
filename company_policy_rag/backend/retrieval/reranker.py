@@ -87,6 +87,7 @@ class CrossEncoderReranker:
         pool_size: int | None = None,
         score_filter_enabled: bool = True,
         min_keep: int = 1,
+        batch_size: int = 16,
     ) -> None:
         self.model_name = model_name
         self.top_n = top_n
@@ -101,6 +102,7 @@ class CrossEncoderReranker:
         # None or 0 = legacy max(top_n * 4, 20); negative = every candidate.
         self.pool_size = pool_size
         self.score_filter_enabled = score_filter_enabled
+        self.batch_size = max(1, int(batch_size))
         self.postprocessor = RelativeScoreThresholdPostprocessor(min_ratio=min_ratio, min_keep=min_keep)
         self._model = None
         self._model_loaded = False
@@ -193,7 +195,7 @@ class CrossEncoderReranker:
                 with torch.inference_mode():
                     logits = self._model.predict(
                         pairs,
-                        batch_size=min(len(pairs), 16),
+                        batch_size=min(len(pairs), self.batch_size),
                         show_progress_bar=False,
                     )
                 model_ms = (time.perf_counter() - t0) * 1000

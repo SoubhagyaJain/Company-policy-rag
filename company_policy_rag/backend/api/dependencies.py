@@ -102,6 +102,7 @@ def get_rag_pipeline() -> RAGPipeline:
                     pool_size=settings.reranker_pool_size,
                     score_filter_enabled=settings.enable_rerank_score_filter,
                     min_keep=settings.rerank_min_keep,
+                    batch_size=settings.reranker_batch_size,
                 )
 
                 hybrid_retriever = HybridRetriever(
