@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     legal_dir: Path = Field(default=PROJECT_ROOT / "data" / "legal")
     raw_dir: Path = Field(default=PROJECT_ROOT / "data" / "raw")
     storage_dir: Path = Field(default=PROJECT_ROOT / "storage")
+    # Document library served by the API (uploads, BM25 index, per-run sessions).
+    app_storage_dir: Path = Field(default=PROJECT_ROOT / "app" / "storage", alias="APP_STORAGE_DIR")
     pdf_images_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
     logs_dir: Path = Field(default=PROJECT_ROOT / "logs")
 

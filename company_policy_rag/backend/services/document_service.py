@@ -64,9 +64,11 @@ class DocumentService:
         docstore: dict[str, Chunk] | None = None,
         image_asset_manager: ImageAssetManager | None = None,
         vision_cache_manager: VisionCacheManager | None = None,
-        storage_dir: str = "app/storage/uploads",
+        storage_dir: str | None = None,
         fresh_start: bool = False,
     ) -> None:
+        if storage_dir is None:
+            storage_dir = str(Path(settings.app_storage_dir) / "uploads")
         # Each interactive app run gets an isolated library. Keep earlier files
         # intact while excluding their indexes and hashes from this run.
         session_root = Path(storage_dir).parent / "sessions" / uuid.uuid4().hex if fresh_start else None
@@ -84,7 +86,8 @@ class DocumentService:
         }
         self.bm25_index = bm25_index or (
             BM25SearchIndex(storage_dir=str(session_root / "bm25"), **bm25_options)
-            if session_root is not None else BM25SearchIndex(**bm25_options)
+            if session_root is not None
+            else BM25SearchIndex(storage_dir=str(Path(settings.app_storage_dir) / "bm25"), **bm25_options)
         )
         self.embedding_service = embedding_service or EmbeddingService()
         self.docstore = docstore if docstore is not None else {}

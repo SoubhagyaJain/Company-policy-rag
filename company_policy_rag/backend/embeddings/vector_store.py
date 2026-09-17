@@ -190,9 +190,13 @@ class ChromaVectorStore(VectorStoreInterface):
     def __init__(
         self,
         collection_name: str = "company_policy",
-        persist_dir: str = "storage/chroma",
+        persist_dir: str | Path | None = None,
     ) -> None:
         self.collection_name = collection_name
+        if persist_dir is None:
+            from src.config import settings
+
+            persist_dir = settings.chroma_persist_dir
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self._collection: Any = None

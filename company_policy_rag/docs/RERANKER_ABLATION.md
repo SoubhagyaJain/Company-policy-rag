@@ -13,7 +13,7 @@ ranking improvement worth its latency?
 
 | Item | Value |
 |---|---|
-| Corpora | AI Agents guidebook (235 chunks), Legal Studies XI textbook (799 chunks); session indexes under `app/storage/sessions/`, production bge-small vectors loaded into Chroma |
+| Corpora | AI Agents guidebook (235 chunks), Legal Studies XI textbook (799 chunks); corpus snapshots under `storage/eval_corpora/`, production bge-small vectors loaded into Chroma |
 | Queries | 70 with relevant chunks: 33 guidebook (from `golden_dataset_guidebook.json`), 37 legal (written for this eval from sampled passages; 23 lexical, 14 paraphrase) |
 | Labels (primary) | Graded chunk-level judgments (2 direct, 1 partial) over pooled candidates: union of top-10 dense, BM25, merged candidates, base- and large-reranked lists at depth 30, and stemmed BM25; 1,702 chunks judged. LLM-assisted (Claude), blind to system and rank, not human-verified. |
 | Labels (secondary) | Keyword needles matching <= 10% of the corpus (lexical-biased) |
@@ -112,7 +112,7 @@ about +2.1 s (base) / +7.0 s (large) per query for that gain.
 ## Reproduce
 
 ```bash
-python scripts/eval_retrieval_backend.py run --corpus guidebook=app/storage/sessions/4e04828ac7654258950af214a9bc1bd5/bm25/corpus.json --corpus legal=app/storage/sessions/af501bfeace944c78fd12ec354fbaeca/bm25/corpus.json --queries guidebook=data/eval/retrieval/guidebook_labels.json --queries legal=data/eval/retrieval/legal_labels.json --suite headline --score-device cuda --out logs/retrieval_eval/current
+python scripts/eval_retrieval_backend.py run --corpus guidebook=storage/eval_corpora/guidebook/bm25/corpus.json --corpus legal=storage/eval_corpora/legal/bm25/corpus.json --queries guidebook=data/eval/retrieval/guidebook_labels.json --queries legal=data/eval/retrieval/legal_labels.json --suite headline --score-device cuda --out logs/retrieval_eval/current
 python scripts/eval_retrieval_backend.py run ... --suite tuned --suite tuned_sweep --tuned-config logs/retrieval_eval/tuned/tuned_first_stage.json --out logs/retrieval_eval/tuned
 python scripts/eval_retrieval_backend.py latency --results logs/retrieval_eval/pooling --corpus ... --queries ... --device cpu
 python scripts/eval_retrieval_backend.py summarize --results logs/retrieval_eval/final --labels guidebook=data/eval/retrieval/guidebook_labels.json --labels legal=data/eval/retrieval/legal_labels.json

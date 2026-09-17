@@ -17,6 +17,40 @@ for path in (WORKSPACE_ROOT, PROJECT_ROOT):
         sys.path.insert(0, path_str)
 
 
+_STORAGE_SETTINGS = {
+    "storage_dir": "storage",
+    "app_storage_dir": "app_storage",
+    "chroma_persist_dir": "storage/chroma",
+    "docstore_dir": "storage/docstore",
+    "bm25_storage_dir": "storage/bm25",
+    "images_storage_dir": "storage/images",
+    "pdf_images_dir": "storage/images",
+    "vision_cache_dir": "storage/vision_cache",
+}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolated_storage_roots(tmp_path_factory: pytest.TempPathFactory):
+    """Keep every test run out of the real storage/ and app/storage/ trees.
+
+    Services that are built with default arguments (the FastAPI dependency
+    singletons, DocumentService(), TelemetryDB(), ...) resolve their paths from
+    settings, so pointing settings at a temp root stops tests from leaving
+    session libraries, image assets, and telemetry rows in the working copy.
+    """
+    from src.config import settings
+
+    root = tmp_path_factory.mktemp("storage_root")
+    for field, relative in _STORAGE_SETTINGS.items():
+        target = root / relative
+        target.mkdir(parents=True, exist_ok=True)
+        # Deliberately never restored: ingestion runs on daemon threads that can
+        # finish after session teardown, and they must still write to the temp
+        # root rather than the real storage tree.
+        setattr(settings, field, target)
+    return root
+
+
 class _DeterministicTestEmbeddings:
     """Small local embeddings that keep API tests out of production model/storage state."""
 

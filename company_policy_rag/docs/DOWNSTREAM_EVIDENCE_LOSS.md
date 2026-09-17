@@ -147,6 +147,6 @@ Reranker after the fix, context stage:
 ## Reproduce
 
 ```bash
-python scripts/eval_retrieval_backend.py run --corpus guidebook=app/storage/sessions/4e04828ac7654258950af214a9bc1bd5/bm25/corpus.json --corpus legal=app/storage/sessions/af501bfeace944c78fd12ec354fbaeca/bm25/corpus.json --queries guidebook=data/eval/retrieval/guidebook_labels.json --queries legal=data/eval/retrieval/legal_labels.json --suite downstream --score-device cuda --out logs/retrieval_eval/downstream
+python scripts/eval_retrieval_backend.py run --corpus guidebook=storage/eval_corpora/guidebook/bm25/corpus.json --corpus legal=storage/eval_corpora/legal/bm25/corpus.json --queries guidebook=data/eval/retrieval/guidebook_labels.json --queries legal=data/eval/retrieval/legal_labels.json --suite downstream --score-device cuda --out logs/retrieval_eval/downstream
 python scripts/eval_retrieval_backend.py summarize --results logs/retrieval_eval/downstream --labels guidebook=data/eval/retrieval/guidebook_labels.json --labels legal=data/eval/retrieval/legal_labels.json --compare C_fixed_large:C_legacy_large,C_fixed_large:A_fixed_norerank,B_fixed_base:A_fixed_norerank,C_fixed_large:B_fixed_base --per-query-context A_legacy_norerank,A_fixed_norerank,C_legacy_large,C_fixed_large
 ```

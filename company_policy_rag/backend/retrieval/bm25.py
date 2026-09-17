@@ -62,13 +62,17 @@ class BM25SearchIndex:
 
     def __init__(
         self,
-        storage_dir: str = "app/storage/bm25",
+        storage_dir: str | None = None,
         k1: float = 1.5,
         b: float = 0.75,
         stemming: bool = False,
         metadata_fields: str | tuple[str, ...] | list[str] | None = None,
         skip_zero_scores: bool = True,
     ) -> None:
+        if storage_dir is None:
+            from src.config import settings
+
+            storage_dir = str(Path(settings.app_storage_dir) / "bm25")
         self.storage_dir = Path(storage_dir)
         self.k1 = k1
         self.b = b
