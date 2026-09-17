@@ -64,6 +64,7 @@ from backend.rag.policy_reliability import (
     extract_query_facts,
     format_multipart_policy_decision_context,
     format_policy_decision_context,
+    is_policy_question,
     merge_governing_context,
     validate_policy_answer,
 )
@@ -2191,21 +2192,35 @@ class RAGPipeline:
         except TypeError:
             formatted_context = self.compressor.format_context_for_prompt(expanded_chunks)
 
-        # For a multi-part question, give the generator each part's OWN governing
-        # rule in a separate labeled block so rules, conditions, and thresholds
-        # from unrelated parts are not merged into one blended answer. The single
-        # global `policy_selection` above is kept for validation, deterministic
-        # enforcement, and trace.
-        if len(ctx.question_parts) >= 2:
-            part_selections: list[tuple[str, ClauseSelection]] = []
-            for part in ctx.question_parts:
-                part_sel = self.governing_clause_selector.select(part, expanded_chunks)
-                bind_source_indices(part_sel, expanded_chunks)
-                part_selections.append((part, part_sel))
-            policy_block = format_multipart_policy_decision_context(part_selections)
-        else:
-            policy_block = format_policy_decision_context(policy_selection)
-        formatted_context = f"{policy_block}\n\n{formatted_context}"
+        # The decision block (rules, deterministic calculations, abstention
+        # guidance) is only prepended for workplace-policy questions or when a
+        # calculation / missing input exists; for code, guidebook, or textbook
+        # questions it duplicated source text and told a small model to abstain.
+        # The global `policy_selection` is still used for validation and trace.
+        include_policy_block = bool(
+            policy_selection.calculations
+            or policy_selection.missing_inputs
+            or is_policy_question(user_query)
+            or any(is_policy_question(part) for part in ctx.question_parts)
+        )
+        policy_block_tokens = 0
+        if include_policy_block:
+            # For a multi-part question, give the generator each part's OWN
+            # governing rule in a separate labeled block so rules, conditions,
+            # and thresholds from unrelated parts are not merged.
+            if len(ctx.question_parts) >= 2:
+                part_selections: list[tuple[str, ClauseSelection]] = []
+                for part in ctx.question_parts:
+                    part_sel = self.governing_clause_selector.select(part, expanded_chunks)
+                    bind_source_indices(part_sel, expanded_chunks)
+                    part_selections.append((part, part_sel))
+                policy_block = format_multipart_policy_decision_context(part_selections)
+            else:
+                policy_block = format_policy_decision_context(policy_selection)
+            formatted_context = f"{policy_block}\n\n{formatted_context}"
+            policy_block_tokens = estimate_tokens(policy_block)
+        # Report what the prompt actually carries, block included.
+        context_tokens += policy_block_tokens
         ctx.stage_timings[f"context_expansion{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
         # Evidence Verification Stage
@@ -2218,6 +2233,7 @@ class RAGPipeline:
         if stages is not None:
             stages["final_context"] = _stage_ids(expanded_chunks)
             stages["context_tokens"] = context_tokens
+            stages["policy_block_tokens"] = policy_block_tokens
 
         ctx.reranked_chunks = reranked_chunks
         ctx.expanded_chunks = expanded_chunks

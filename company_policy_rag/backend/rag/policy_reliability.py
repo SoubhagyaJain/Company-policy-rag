@@ -248,6 +248,47 @@ def extract_query_facts(query: str) -> QueryFacts:
     )
 
 
+# Words that mark a workplace-rule question. A bare "can"/"must" is not enough:
+# "How can I build a custom tool?" is an implementation question, not a policy one.
+_POLICY_VOCABULARY_RE = re.compile(
+    r"\b(?:polic(?:y|ies)|employees?|staff|workers?|allowed|permitted|prohibited|"
+    r"required|entitled|eligible|leave|overtime|pay|salary|wages?|reimburs\w*|"
+    r"approval|supervisor|manager|handbook|company|shifts?|work(?:ing)? hours|"
+    r"call[- ]?outs?|disciplin\w*|termination|notice)\b",
+    re.IGNORECASE,
+)
+
+# Structured rules shown to the generator. Every rule sentence repeats text that
+# is already in the sources, so the list is capped; primary rules and exceptions
+# go first.
+MAX_PROMPT_RULES = 6
+_RULE_ROLE_ORDER = {"primary_rule": 0, "exception": 1, "definition": 2, "supporting_rule": 3}
+
+
+def is_policy_question(query: str) -> bool:
+    """True when the policy decision block is worth its prompt tokens.
+
+    A matched topic profile, an explicit amount or time, or a permission /
+    obligation / entitlement question that uses workplace-rule vocabulary.
+    """
+    facts = extract_query_facts(query or "")
+    if facts.topic or facts.amounts or facts.times:
+        return True
+    return facts.intent in {
+        "permission_check",
+        "obligation_check",
+        "calculation_or_entitlement",
+    } and bool(_POLICY_VOCABULARY_RE.search(query or ""))
+
+
+def _prompt_rules(selection: ClauseSelection) -> list[PolicyRule]:
+    ordered = sorted(
+        selection.structured_rules,
+        key=lambda rule: _RULE_ROLE_ORDER.get(rule.role, len(_RULE_ROLE_ORDER)),
+    )
+    return ordered[:MAX_PROMPT_RULES]
+
+
 def expand_policy_queries(query: str) -> list[str]:
     """Return bounded, purpose-specific retrieval queries for policy language."""
     facts = extract_query_facts(query)
@@ -578,12 +619,11 @@ def format_policy_decision_context(selection: ClauseSelection) -> str:
     """Create low-cognitive-load instructions for a small local generator model."""
     lines = [
         "POLICY DECISION SUPPORT (deterministic; do not cite this block as a source)",
-        f"QUERY FACTS: {asdict(selection.query_facts)}",
         f"GOVERNING-CLAUSE CONFIDENCE: {selection.confidence:.3f}",
     ]
     if selection.structured_rules:
         lines.append("STRUCTURED RULES — keep every rule separate:")
-        for rule in selection.structured_rules:
+        for rule in _prompt_rules(selection):
             source = f"Source {rule.source_index}" if rule.source_index else "retrieved source"
             lines.append(f"- {rule.role} ({source}): {rule.text}")
     if selection.calculations:
@@ -611,7 +651,7 @@ def _format_part_rules(selection: ClauseSelection, indent: str = "  ") -> list[s
     lines: list[str] = [f"{indent}GOVERNING-CLAUSE CONFIDENCE: {selection.confidence:.3f}"]
     if selection.structured_rules:
         lines.append(f"{indent}STRUCTURED RULES — keep every rule separate:")
-        for rule in selection.structured_rules:
+        for rule in _prompt_rules(selection):
             source = f"Source {rule.source_index}" if rule.source_index else "retrieved source"
             lines.append(f"{indent}- {rule.role} ({source}): {rule.text}")
     if selection.calculations:
@@ -644,7 +684,6 @@ def format_multipart_policy_decision_context(
     for index, (part, selection) in enumerate(part_selections, start=1):
         lines.append("")
         lines.append(f"PART {index}: {part.strip()}")
-        lines.append(f"  QUERY FACTS: {asdict(selection.query_facts)}")
         lines.extend(_format_part_rules(selection))
     lines.extend(
         [
