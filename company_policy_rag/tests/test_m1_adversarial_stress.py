@@ -35,9 +35,8 @@ from backend.models.rag import (
     RAGTrace,
     ScoredChunk,
 )
-from backend.rag.consistency_guard import ConversationConsistencyGuard
 from backend.rag.conversation_resolver import FollowUpResolver, ConversationResolver
-from backend.rag.pipeline import GROUNDED_SYSTEM_PROMPT, RAGPipeline
+from backend.rag.pipeline import RAGPipeline
 from backend.services.chat_service import ChatService
 
 
@@ -192,11 +191,10 @@ def test_m1_adv_01_rapid_multi_turn_topic_switches():
 
 def test_m1_adv_02_empty_null_state_and_missing_metadata():
     """
-    Stress-test FollowUpResolver, ConsistencyGuard, and StateManager with empty,
+    Stress-test FollowUpResolver and StateManager with empty,
     None, or malformed data to ensure zero unhandled exceptions.
     """
     resolver = FollowUpResolver()
-    guard = ConversationConsistencyGuard()
     state_mgr = ConversationStateManager()
 
     # 1. Resolver on empty query, None state, whitespace-only queries
@@ -231,31 +229,7 @@ def test_m1_adv_02_empty_null_state_and_missing_metadata():
     # Should handle gracefully without raising AttributeError or IndexError
     assert res_sparse.is_followup is False
 
-    # 3. ConsistencyGuard on None / empty inputs
-    eff_st, merged, cits, cont = guard.enforce_downgrade_protection(
-        previous_status=None,
-        previous_chunks=None,
-        previous_citations=None,
-        current_status="MISSING",
-        current_chunks=[],
-        is_followup=False,
-    )
-    assert eff_st == EvidenceStatus.MISSING
-    assert merged == []
-    assert cits == []
-    assert cont is False
-
-    # 4. Directive generation on empty / missing topic
-    dir_empty = guard.format_monotonic_prompt_directive(
-        is_followup=True,
-        retained_prior_evidence=True,
-        additional_evidence_found=False,
-        previous_topic=None,
-    )
-    assert "CONVERSATION CONTINUITY DIRECTIVE" in dir_empty
-    assert "the active subject" in dir_empty
-
-    # 5. StateManager non-existent session
+    # 3. StateManager non-existent session
     fresh_state = state_mgr.get_state("non_existent_id")
     assert fresh_state.conversation_id == "non_existent_id"
     assert fresh_state.turns == []
@@ -333,100 +307,6 @@ def test_m1_adv_03_highly_ambiguous_cues_and_edge_cues():
 # =============================================================================
 # 4. CONTRADICTORY EVIDENCE INJECTION & MONOTONIC DOWNGRADE GUARD
 # =============================================================================
-
-def test_m1_adv_04_contradictory_evidence_monotonic_downgrade_guard():
-    """
-    Stress-test ConversationConsistencyGuard across all possible enum transitions
-    to guarantee that valid prior evidence is NEVER downgraded to MISSING on follow-up.
-    """
-    guard = ConversationConsistencyGuard()
-
-    c1 = _create_mock_scored_chunk("c1", "Section 10.1: Full Remote Work Policy Details", page_number=10)
-    c2 = _create_mock_scored_chunk("c2", "Section 10.2: Remote Equipment Allowance ($500)", page_number=11)
-    cit1 = Citation(source_index=1, chunk_id="c1", document_id="doc_test", source_file="policy.pdf", snippet="Remote Work")
-    cit2 = Citation(source_index=2, chunk_id="c2", document_id="doc_test", source_file="policy.pdf", snippet="Equipment")
-
-    prior_chunks = [c1, c2]
-    prior_cits = [cit1, cit2]
-
-    # Test Matrix:
-    # 1. DIRECT + MISSING -> DIRECT (Protected)
-    st1, chunks1, cits1, cont1 = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.DIRECT,
-        previous_chunks=prior_chunks,
-        previous_citations=prior_cits,
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=True,
-    )
-    assert st1 == EvidenceStatus.DIRECT
-    assert len(chunks1) == 2
-    assert cont1 is True
-
-    # 2. DIRECT + PARTIAL -> DIRECT (Retains full prior direct evidence)
-    c3 = _create_mock_scored_chunk("c3", "Partial mention of remote work", page_number=15)
-    st2, chunks2, cits2, cont2 = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.DIRECT,
-        previous_chunks=prior_chunks,
-        previous_citations=prior_cits,
-        current_status=EvidenceStatus.PARTIAL,
-        current_chunks=[c3],
-        is_followup=True,
-    )
-    assert st2 == EvidenceStatus.DIRECT
-    assert len(chunks2) == 3  # Merged c3 + c1, c2
-    assert cont2 is True
-
-    # 3. PARTIAL + MISSING -> PARTIAL (Protected)
-    st3, chunks3, cits3, cont3 = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.PARTIAL,
-        previous_chunks=[c3],
-        previous_citations=[],
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=True,
-    )
-    assert st3 == EvidenceStatus.PARTIAL
-    assert len(chunks3) == 1
-    assert cont3 is True
-
-    # 4. PARTIAL + DIRECT -> DIRECT (Upgraded cleanly!)
-    st4, chunks4, cits4, cont4 = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.PARTIAL,
-        previous_chunks=[c3],
-        previous_citations=[],
-        current_status=EvidenceStatus.DIRECT,
-        current_chunks=[c1],
-        is_followup=True,
-    )
-    assert st4 == EvidenceStatus.DIRECT
-    assert len(chunks4) == 2
-
-    # 5. RELATED + MISSING -> RELATED (Protected)
-    st5, chunks5, cits5, cont5 = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.RELATED,
-        previous_chunks=[c3],
-        previous_citations=[],
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=True,
-    )
-    assert st5 == EvidenceStatus.RELATED
-    assert len(chunks5) == 1
-
-    # 6. Topic Shift (is_followup=False): MUST NOT force prior evidence into unrelated query!
-    st6, chunks6, cits6, cont6 = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.DIRECT,
-        previous_chunks=prior_chunks,
-        previous_citations=prior_cits,
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=False,
-    )
-    assert st6 == EvidenceStatus.MISSING
-    assert chunks6 == []
-    assert cont6 is False
-
 
 # =============================================================================
 # 5. WINDOW EXPANSION WITH MISSING OR OUT-OF-BOUNDS PAGE NUMBERS

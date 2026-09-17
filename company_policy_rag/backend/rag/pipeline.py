@@ -32,7 +32,6 @@ from backend.models.conversation import (
     AnswerMode,
     ConversationRAGState,
 )
-from backend.rag.consistency_guard import ConversationConsistencyGuard
 from backend.rag.conversation_resolver import (
     ConversationResolutionResult,
     ConversationResolver,
@@ -157,43 +156,7 @@ class _LLMProxy:
         return getattr(self._target_llm, name)
 
 
-GROUNDED_SYSTEM_PROMPT = """You are a document-faithful multimodal AI assistant.
-Your absolute source of truth is the RETRIEVED CONTEXT below, which contains verified document text and visual extractions.
-
-Core Grounding Rules:
-RULE A — Conversation Continuity: When answering a follow-up, preserve the established subject and prior context unless the user explicitly switches topics.
-RULE B — Evidence Continuity: Previously verified evidence remains available for the conversation unless superseded or invalidated.
-RULE C — Expansion: If the user requests more detail, expand the prior grounded answer with additional context, surrounding sections, and implementation details instead of restarting from scratch.
-RULE D — No False Absence: Never claim information is unavailable or that the document does not contain it when valid evidence from the current or previous verified context supports the answer.
-RULE E — Evidence Distinction: Clearly distinguish what is directly stated in the document, what is partial implementation evidence, and what is reasonable explanation or workflow interpretation.
-RULE F — Detailed Code Explanations: When code snippets or implementations appear in context, preserve exact retrieved code, explain relevant sections step-by-step, do not fabricate missing functions or imports, and clearly identify incomplete snippets.
-RULE F2 — Code Formatting (MANDATORY): Reproduce EVERY code snippet inside a fenced markdown code block that opens with three backticks and the correct language tag (```python, ```typescript, ```javascript, ```bash, ```json, ```yaml, ```sql, ```html, ...) and closes with three backticks on its own line. Copy the code CHARACTER-FOR-CHARACTER from the retrieved context — preserve exact indentation, line breaks, blank lines, quotes, and symbols. Never reflow multi-line code into a paragraph, never merge lines, and never place multi-line code in inline single-backtick spans. If the language is unknown, still fence it with plain triple backticks. Put explanatory prose OUTSIDE the code fence, never inside it.
-RULE 1: Use retrieved evidence as the primary source of truth.
-RULE 2: Do not invent details, assumptions, or external facts not supported by the retrieved text or visual evidence.
-RULE 3: If a relevant visual asset exists and visual understanding is included (e.g. under [VISUAL SOURCE N]), explicitly explain the workflow, architecture, diagram, or code shown in that visual evidence.
-RULE 4: Never claim that an image or diagram is absent merely because it was not included in the first text retrieval result.
-RULE 5: If a visual asset exists on a page but visual understanding extraction failed or is degraded, clearly distinguish: state that the visual exists on the page, but visual analysis is currently unavailable. Cite the source tag so the user can inspect the original image.
-RULE 6: Do not fabricate or invent the contents of a visual that failed extraction.
-RULE 7: For source-grounded answers, prefer language such as: "According to the workflow shown on Page X..." or "Based on Section Y..." using the human-visible printed page numbers provided in the context blocks.
-RULE 8: Citations: Cite sources using [Source N] or [Visual Source N] tags for every substantive claim, code block, or diagram description.
-RULE 9: When code snippets, kickoff calls, agent configurations, or implementations appear in the retrieved context (including under [Source N] or [VISUAL SOURCE N]), extract and present that code directly and faithfully, verbatim, inside a fenced ```language code block (see RULE F2). Never state that the document does not contain the code if relevant code snippets or implementations are present in the context.
-RULE 10: Include only the retrieved facts needed to answer the exact question. Do not dump adjacent context, generic background, or implementation details the user did not request.
-RULE 11: Lead with the direct answer. For non-trivial questions, organize the rest under short descriptive headings and use bullets or numbered steps only when they improve clarity.
-RULE 12: Do not repeat the question or add a generic preamble. Keep simple factual answers concise; use a compact summary followed by supporting details for broader questions.
-RULE 13: If sources disagree or the evidence is incomplete, state the uncertainty explicitly instead of blending conflicting facts.
-RULE 14: Match the requested depth. By default answer in 2-4 short sentences or at most 4 compact bullets. Do not add a recap or conclusion. Give a long walkthrough or code only when the user explicitly asks for detail, steps, or code.
-{evidence_status_directive}
-{mode_instructions}
-{refinement_directive}
-RETRIEVED CONTEXT:
-{context_text}
-
-{history_text}USER QUESTION: {query}
-ANSWER:"""
-
-# Kept separately from ``GROUNDED_SYSTEM_PROMPT`` for compatibility with
-# callers that import the older policy prompt. The live generation path uses
-# this narrower contract: upstream code has already interpreted the turn,
+# The answer-writer contract: upstream code has already interpreted the turn,
 # selected the retrieval policy, retrieved evidence, and built source blocks.
 GROUNDED_ANSWER_WRITER_PROMPT = """You are the final answer writer for a grounded document QA system.
 Conversation interpretation, reference resolution, query rewriting, retrieval selection, and evidence preparation are already complete.
@@ -265,34 +228,6 @@ IMPLEMENT_MODE_INSTRUCTIONS = """Mode: IMPLEMENTATION
 - Include code only when the user explicitly requests code and the document actually provides it.
 - Do not substitute generic or fabricated steps, tools, APIs, or code."""
 
-EXPAND_MODE_INSTRUCTIONS = """Mode: EXPAND / DETAILED
-- Deep architectural and implementation dive.
-- Avoid repeating high-level summaries from prior turns.
-- Expand into detailed components, configuration, code execution flow, parameters, and boundary conditions.
-- Grounding separation: clearly separate DIRECT code definitions, PARTIAL kickoff snippets under [Source N], RELATED concepts, and explicitly note genuinely MISSING information without fabricating code."""
-
-CODE_EXPLANATION_MODE_INSTRUCTIONS = """Mode: CODE EXPLANATION
-- Provide a thorough, step-by-step walkthrough of the retrieved code implementation.
-- Explain function signatures, parameters, return types, execution flow, inputs, outputs, and dependencies.
-- Preserve exact code syntax without fabricating missing functions."""
-
-STEP_BY_STEP_MODE_INSTRUCTIONS = """Mode: STEP BY STEP
-- Provide a structured, numbered, sequential walkthrough of the process or workflow.
-- Detail each discrete step with inputs, actions, and expected outcomes from the context."""
-
-COMPARISON_MODE_INSTRUCTIONS = """Mode: COMPARISON
-- Structure a clear side-by-side comparison between the entities/topics discussed.
-- Compare criteria such as purpose, configuration, execution pattern, advantages, and limitations."""
-
-SUMMARY_MODE_INSTRUCTIONS = """Mode: SUMMARY
-- Provide a concise, structured high-level summary using bullet points or brief synthesis.
-- Omit extraneous procedural minutiae while retaining core conclusions."""
-
-CONTINUATION_MODE_INSTRUCTIONS = """Mode: CONTINUATION
-- Provide a logical, step-by-step continuation proceeding directly from the previous turn.
-- Do not reintroduce background context already established."""
-
-
 def _detect_fidelity_mode(query: str) -> str:
     q_lower = query.lower()
     if any(k in q_lower for k in ("show exactly", "what is written", "give me the exact", "copy from document", "exact code", "show me the code", "give me the code")):
@@ -357,50 +292,6 @@ def _is_high_risk_query(query: str) -> bool:
         or facts.topic
         or facts.intent == "calculation_or_entitlement"
     )
-
-
-_EXPLICIT_DETAIL_PATTERN = re.compile(
-    r"\b(?:in detail|detailed|step[- ]by[- ]step|walk me through|deep dive|"
-    r"comprehensive|thorough|exhaustive|all details|show me the code|"
-    r"give me the code|source code|code example)\b",
-    re.IGNORECASE,
-)
-
-
-def _select_answer_token_budget(
-    category: QueryCategory,
-    answer_mode: AnswerMode | str | None,
-    query: str,
-) -> int:
-    """Choose a concise default budget and expand only on explicit request."""
-    if category == QueryCategory.FACTUAL:
-        base = int(getattr(settings, "max_new_tokens_factual", 256))
-    elif category in (QueryCategory.PROCEDURAL, QueryCategory.IMPLEMENTATION, QueryCategory.CODE):
-        base = int(getattr(settings, "max_new_tokens_technical", 512))
-    else:
-        base = int(getattr(settings, "max_new_tokens_complex", 1024))
-
-    mode = str(getattr(answer_mode, "value", answer_mode) or "DIRECT").upper()
-    expansive_modes = {"EXPAND", "DETAILED", "CODE_EXPLANATION", "STEP_BY_STEP"}
-    if mode in expansive_modes or _EXPLICIT_DETAIL_PATTERN.search(query or ""):
-        return base
-
-    concise_limit = max(64, int(getattr(settings, "max_new_tokens_direct", 256)))
-    return min(base, concise_limit)
-
-
-def _enforce_direct_answer_length(answer: str, max_words: int = 100) -> str:
-    """Keep direct answers compact when a model backend ignores token limits."""
-    word_matches = list(re.finditer(r"\S+", answer))
-    if len(word_matches) <= max_words:
-        return answer.strip()
-
-    prefix = answer[: word_matches[max_words - 1].end()]
-    min_boundary = max(40, int(len(prefix) * 0.65))
-    sentence_end = max(prefix.rfind("."), prefix.rfind("!"), prefix.rfind("?"))
-    if sentence_end >= min_boundary:
-        return prefix[: sentence_end + 1].strip()
-    return prefix.rstrip(" ,;:-") + "…"
 
 
 _DEGRADED_ANSWER_MARKERS = (
@@ -632,7 +523,6 @@ class RAGPipeline:
         evidence_gate: EvidenceSufficiencyGate | None = None,
         conversation_resolver: ConversationResolver | None = None,
         conversation_interpreter: ConversationInterpreter | None = None,
-        consistency_guard: ConversationConsistencyGuard | None = None,
         governing_clause_selector: GoverningClauseSelector | None = None,
     ) -> None:
         self.hybrid_retriever = hybrid_retriever
@@ -661,7 +551,6 @@ class RAGPipeline:
             query_router=self.query_router,
             enabled=bool(getattr(settings, "enable_conversation_interpreter", True)),
         )
-        self.consistency_guard = consistency_guard or ConversationConsistencyGuard()
         self.governing_clause_selector = governing_clause_selector or GoverningClauseSelector()
 
 
@@ -1989,8 +1878,6 @@ class RAGPipeline:
                 candidate_chunks = valid_cands
 
             candidate_chunks.sort(key=lambda x: x.score or 0.0, reverse=True)
-            candidate_pool_limit = max(len(candidate_chunks), current_strategy.rerank_top_n * 3, 15)
-            candidate_chunks = candidate_chunks[:candidate_pool_limit]
 
             # Prioritize visual code chunks or diagram chunks for specific follow-up modes
             if conv_res and conv_res.is_followup:

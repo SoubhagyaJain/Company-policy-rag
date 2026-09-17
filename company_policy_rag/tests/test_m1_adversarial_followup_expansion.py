@@ -39,7 +39,6 @@ from backend.models.rag import (
     RAGTrace,
     ScoredChunk,
 )
-from backend.rag.consistency_guard import ConversationConsistencyGuard
 from backend.rag.conversation_resolver import FollowUpResolver
 from backend.services.chat_service import ChatService
 
@@ -250,111 +249,6 @@ def test_expansion_plan_all_modes():
 # =============================================================================
 # 5. Monotonic Evidence Consistency & Downgrade Protection Matrix
 # =============================================================================
-
-def test_consistency_guard_full_state_transition_matrix():
-    guard = ConversationConsistencyGuard()
-
-    c1 = _make_scored_chunk("c1", "Hotel Search Agent code definition", page_number=72)
-    c2 = _make_scored_chunk("c2", "Hotel Search Agent tools and parameters", page_number=73)
-    c3 = _make_scored_chunk("c3", "Hotel Search Agent kickoff workflow", page_number=74)
-
-    cit1 = Citation(source_index=1, chunk_id="c1", document_id="doc_hotel", source_file="hotel.pdf", snippet="def search()")
-    cit2 = Citation(source_index=2, chunk_id="c2", document_id="doc_hotel", source_file="hotel.pdf", snippet="tools = []")
-
-    # 1. DIRECT + MISSING -> DIRECT (Preserve previous evidence)
-    eff_st, merged, cits, cont = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.DIRECT,
-        previous_chunks=[c1, c2],
-        previous_citations=[cit1, cit2],
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=True,
-    )
-    assert eff_st == EvidenceStatus.DIRECT
-    assert len(merged) == 2
-    assert {c.chunk.id for c in merged} == {"c1", "c2"}
-    assert len(cits) == 2
-    assert cont is True
-
-    # 2. DIRECT + PARTIAL -> DIRECT
-    eff_st, merged, cits, cont = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.DIRECT,
-        previous_chunks=[c1],
-        previous_citations=[cit1],
-        current_status=EvidenceStatus.PARTIAL,
-        current_chunks=[c3],
-        is_followup=True,
-    )
-    assert eff_st == EvidenceStatus.DIRECT
-    assert len(merged) == 2
-    assert {c.chunk.id for c in merged} == {"c1", "c3"}
-
-    # 3. PARTIAL + MISSING -> PARTIAL
-    eff_st, merged, cits, cont = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.PARTIAL,
-        previous_chunks=[c1],
-        previous_citations=[cit1],
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=True,
-    )
-    assert eff_st == EvidenceStatus.PARTIAL
-    assert len(merged) == 1
-
-    # 4. PARTIAL + DIRECT -> DIRECT (Upgrade!)
-    eff_st, merged, cits, cont = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.PARTIAL,
-        previous_chunks=[c1],
-        previous_citations=[cit1],
-        current_status=EvidenceStatus.DIRECT,
-        current_chunks=[c2],
-        is_followup=True,
-    )
-    assert eff_st == EvidenceStatus.DIRECT
-    assert len(merged) == 2
-
-    # 5. RELATED + MISSING -> RELATED
-    eff_st, merged, cits, cont = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.RELATED,
-        previous_chunks=[c1],
-        previous_citations=[cit1],
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=True,
-    )
-    assert eff_st == EvidenceStatus.RELATED
-    assert len(merged) == 1
-
-    # 6. Deduplication check: duplicate chunk IDs between turns
-    eff_st, merged, cits, cont = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.DIRECT,
-        previous_chunks=[c1, c2],
-        previous_citations=[cit1, cit2],
-        current_status=EvidenceStatus.DIRECT,
-        current_chunks=[c2, c3],
-        is_followup=True,
-    )
-    assert eff_st == EvidenceStatus.DIRECT
-    assert len(merged) == 3
-    assert {c.chunk.id for c in merged} == {"c1", "c2", "c3"}
-
-    # 7. Directive verification
-    directive_no_new = guard.format_monotonic_prompt_directive(
-        is_followup=True,
-        retained_prior_evidence=True,
-        additional_evidence_found=False,
-        previous_topic="Hotel Search Agent",
-    )
-    assert "DO NOT state that the information cannot be found" in directive_no_new
-
-    directive_with_new = guard.format_monotonic_prompt_directive(
-        is_followup=True,
-        retained_prior_evidence=True,
-        additional_evidence_found=True,
-        previous_topic="Hotel Search Agent",
-    )
-    assert "Integrate previously verified facts with newly retrieved evidence" in directive_with_new
-
 
 # =============================================================================
 # 6. Session Isolation & Concurrency (ConversationStateManager & ChatService)

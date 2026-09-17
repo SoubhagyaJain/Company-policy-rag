@@ -12,11 +12,9 @@ from backend.rag.citations import CitationEngine
 from backend.rag.context_compression import ContextCompressor
 from backend.rag.pipeline import (
     _answer_matches_requested_enumeration,
-    _enforce_direct_answer_length,
     _extract_requested_numbered_list,
     _is_cacheable_grounded_answer,
     _is_degraded_or_abstention_answer,
-    _select_answer_token_budget,
 )
 from backend.rag.query_rewrite import QueryRewriter
 from backend.vision.vision_service import VisionService
@@ -80,43 +78,6 @@ def test_context_and_citations_dedupe_duplicate_document_uploads() -> None:
     assert len(packed) == 1
     assert len(citations) == 1
     assert citations[0].source_file == "AI Agents guidebook (1).pdf"
-
-
-def test_direct_answer_budget_is_compact_unless_detail_is_requested(monkeypatch) -> None:
-    monkeypatch.setattr("backend.rag.pipeline.settings.max_new_tokens_direct", 192)
-    monkeypatch.setattr("backend.rag.pipeline.settings.max_new_tokens_technical", 384)
-
-    compact = _select_answer_token_budget(
-        QueryCategory.IMPLEMENTATION,
-        AnswerMode.DIRECT,
-        "How can I make a voice RAG agent?",
-    )
-    detailed = _select_answer_token_budget(
-        QueryCategory.IMPLEMENTATION,
-        AnswerMode.DETAILED,
-        "Explain in detail how to make a voice RAG agent",
-    )
-
-    assert compact == 192
-    assert detailed == 384
-
-
-def test_direct_answer_is_trimmed_at_a_sentence_boundary() -> None:
-    verbose = " ".join(
-        [
-            "SFT uses labeled prompt and completion pairs.",
-            "It updates weights against static examples.",
-            "RFT explores outputs and scores them with a reward function.",
-            "It learns online without requiring static labels.",
-            "This extra sentence is adjacent detail that was not requested.",
-        ]
-        * 4
-    )
-
-    concise = _enforce_direct_answer_length(verbose, max_words=50)
-
-    assert len(concise.split()) <= 50
-    assert concise.endswith(".")
 
 
 def test_page_identity_falls_back_to_preserved_extra_metadata() -> None:

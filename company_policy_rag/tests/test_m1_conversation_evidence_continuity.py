@@ -28,10 +28,8 @@ from backend.models.rag import (
     RAGTrace,
     ScoredChunk,
 )
-from backend.rag.consistency_guard import ConversationConsistencyGuard
 from backend.rag.conversation_resolver import FollowUpResolver, ConversationResolver
 from backend.rag.evidence_gate import EvidenceSufficiencyGate, compute_monotonic_evidence_status
-from backend.rag.pipeline import GROUNDED_SYSTEM_PROMPT
 from backend.services.chat_service import ChatService
 
 
@@ -236,57 +234,6 @@ def test_m1_04_diagram_explanation_resolution():
     assert result.is_followup is True
     assert "CrewAI Workflow Architecture" in result.resolved_query
     assert "diagram" in result.resolved_query.lower() or "architecture" in result.resolved_query.lower()
-
-
-def test_m1_05_conversation_consistency_guard_downgrade_protection():
-    """Verify ConversationConsistencyGuard prevents downgrading to MISSING when prior evidence exists."""
-    guard = ConversationConsistencyGuard()
-
-    c1 = _create_mock_scored_chunk("c1", "Hotel Search Agent code definition: def search_hotel(): pass", page_number=72)
-    cit1 = Citation(
-        source_index=1,
-        chunk_id="c1",
-        document_id="doc_test",
-        source_file="guide.pdf",
-        snippet="def search_hotel(): pass",
-    )
-
-    # Scenario: Turn 1 was DIRECT, Turn 2 search returned 0 chunks (MISSING)
-    eff_st, merged_chunks, preserved_cits, continuity = guard.enforce_downgrade_protection(
-        previous_status=EvidenceStatus.DIRECT,
-        previous_chunks=[c1],
-        previous_citations=[cit1],
-        current_status=EvidenceStatus.MISSING,
-        current_chunks=[],
-        is_followup=True,
-    )
-
-    assert eff_st == EvidenceStatus.DIRECT  # Protected!
-    assert len(merged_chunks) == 1
-    assert merged_chunks[0].chunk.id == "c1"
-    assert len(preserved_cits) == 1
-    assert continuity is True
-
-    # Directive generation
-    directive = guard.format_monotonic_prompt_directive(
-        is_followup=True,
-        retained_prior_evidence=True,
-        additional_evidence_found=False,
-        previous_topic="Hotel Search Agent",
-    )
-    assert "CONVERSATION CONTINUITY DIRECTIVE" in directive
-    assert "DO NOT state that the information cannot be found" in directive
-    assert "Hotel Search Agent" in directive
-
-
-def test_m1_06_grounded_system_prompt_rules_a_to_f():
-    """Verify GROUNDED_SYSTEM_PROMPT includes all Rules A-F."""
-    assert "RULE A — Conversation Continuity" in GROUNDED_SYSTEM_PROMPT
-    assert "RULE B — Evidence Continuity" in GROUNDED_SYSTEM_PROMPT
-    assert "RULE C — Expansion" in GROUNDED_SYSTEM_PROMPT
-    assert "RULE D — No False Absence" in GROUNDED_SYSTEM_PROMPT
-    assert "RULE E — Evidence Distinction" in GROUNDED_SYSTEM_PROMPT
-    assert "RULE F — Detailed Code Explanations" in GROUNDED_SYSTEM_PROMPT
 
 
 def test_m1_07_chat_service_evidence_context_persistence():

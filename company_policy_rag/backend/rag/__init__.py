@@ -3,7 +3,6 @@ from backend.rag.context_compression import ContextCompressor
 from backend.rag.multi_query import MultiQueryGenerator
 from backend.rag.pipeline import (
     GROUNDED_ANSWER_WRITER_PROMPT,
-    GROUNDED_SYSTEM_PROMPT,
     RAGPipeline,
 )
 from backend.rag.query_rewrite import QueryRewriter
@@ -12,7 +11,6 @@ from backend.rag.retry_engine import RetryEngine
 from backend.rag.verifier import SelfReflectionVerifier
 
 __all__ = [
-    "GROUNDED_SYSTEM_PROMPT",
     "GROUNDED_ANSWER_WRITER_PROMPT",
     "CitationEngine",
     "ContextCompressor",
