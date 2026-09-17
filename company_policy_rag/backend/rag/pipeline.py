@@ -3177,13 +3177,20 @@ class RAGPipeline:
             if attempt >= max_retries or not self.retry_engine.should_retry(attempt, report):
                 break
 
+            retry_reasons.append(report.critique or "verification_failed")
+            # The stages read strategy and refinement from ctx, so the adjusted
+            # values must be written there or the retry repeats attempt 0. The
+            # response-mode budget was applied before attempt 0; re-applying it
+            # here would undo the depth the retry engine just widened.
             current_strategy, prompt_refinement = self.retry_engine.prepare_retry(
                 attempt=attempt,
                 report=report,
                 strategy=current_strategy,
                 query=user_query,
             )
-            current_strategy = response_mode_config.apply_to(current_strategy)
+            ctx.current_strategy = current_strategy
+            ctx.prompt_refinement = prompt_refinement
+            ctx.retry_reasons = retry_reasons
             attempt += 1
 
         total_elapsed = round((time.perf_counter() - total_start) * 1000, 2)
