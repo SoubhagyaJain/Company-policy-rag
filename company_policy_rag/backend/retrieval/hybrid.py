@@ -53,13 +53,6 @@ def reciprocal_rank_fusion(
                 dense_score=dense_scores.get(cid, orig.dense_score),
                 sparse_score=sparse_scores.get(cid, orig.sparse_score),
                 rank=rank,
-                # Carried through for telemetry only. Graph expansion runs after
-                # fusion, so RRF never scores on these — but a chunk that was
-                # graph-expanded on an earlier attempt must not lose its
-                # provenance when it passes through fusion again.
-                graph_score=orig.graph_score,
-                graph_hops=orig.graph_hops,
-                graph_path=orig.graph_path,
             )
         )
 
