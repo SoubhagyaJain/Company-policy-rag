@@ -548,7 +548,9 @@ class RAGPipeline:
         self.multi_query_gen = multi_query_gen or MultiQueryGenerator()
         self.compressor = compressor or ContextCompressor()
         self.citation_engine = citation_engine or CitationEngine()
-        self.docstore = docstore or {}
+        # Share the caller's dict even when it is empty: the API starts with an
+        # empty library and DocumentService fills this same dict on upload.
+        self.docstore = docstore if docstore is not None else {}
         self.llm = llm
         self.semantic_cache = semantic_cache
         self.verifier = verifier or SelfReflectionVerifier(llm=self.llm)

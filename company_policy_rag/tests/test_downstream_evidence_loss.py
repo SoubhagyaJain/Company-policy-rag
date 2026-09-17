@@ -379,3 +379,15 @@ def test_rank_anchor_mode_delivers_the_rank1_chunk_and_keeps_the_primary(quiet_s
     assert stages["final_context"][0] == stages["governing_roles"]["primary"][0]
     for key in ("governing_selection", "post_governing", "post_packing", "final_context"):
         assert key in stages
+
+
+def test_pipeline_shares_an_initially_empty_docstore(quiet_settings) -> None:
+    # The API builds the pipeline before any upload, so the library's docstore is
+    # still empty; documents added later must be visible to scope resolution.
+    docstore: dict[str, Chunk] = {}
+    pipe = _pipeline(_Retriever(_GUIDE_CHUNKS, _SCORES), _FixedOrderReranker({"g-memory": 0.9}), docstore, "resolve")
+    assert pipe.docstore is docstore
+
+    docstore.update({c.id: c for c in _GUIDE_CHUNKS})
+    ctx = pipe.run_retrieval_stages(_QUERY)
+    assert ctx.scope_decision.active_document_id == GUIDE_ID
