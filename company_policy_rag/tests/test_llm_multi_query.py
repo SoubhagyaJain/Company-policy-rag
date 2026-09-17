@@ -65,21 +65,25 @@ def test_llm_result_cached_across_calls() -> None:
     assert llm.calls == 1  # memoized, no second LLM hit (retry-loop safe)
 
 
+_MULTI_PART = "What is the annual leave policy and how do I claim travel expenses?"
+_PARTS = {"What is the annual leave policy", "how do I claim travel expenses?"}
+
+
 # ── fallback to heuristic ───────────────────────────────────────────────────
 
 def test_no_llm_uses_heuristic() -> None:
     gen = MultiQueryGenerator()  # no llm
-    out = gen.generate_subqueries("What are the six building blocks of AI agents?")
-    # Heuristic building-blocks expansion fires.
-    assert any("building block" in q.lower() for q in out)
+    out = gen.generate_subqueries(_MULTI_PART)
+    # Deterministic fallback splits the separate questions.
+    assert _PARTS <= set(out)
 
 
 def test_garbage_llm_falls_back_to_heuristic() -> None:
     llm = _LLM("the model rambled with no array")
     gen = MultiQueryGenerator(llm=llm)
-    out = gen.generate_subqueries("What are the six building blocks of AI agents?")
+    out = gen.generate_subqueries(_MULTI_PART)
     assert llm.calls == 1
-    assert any("building block" in q.lower() for q in out)  # heuristic used
+    assert _PARTS <= set(out)  # heuristic used
 
 
 def test_llm_exception_falls_back_to_heuristic() -> None:
@@ -87,8 +91,8 @@ def test_llm_exception_falls_back_to_heuristic() -> None:
         def complete(self, *a, **k):
             raise RuntimeError("ollama down")
     gen = MultiQueryGenerator(llm=_Boom())
-    out = gen.generate_subqueries("What are the six building blocks of AI agents?")
-    assert any("building block" in q.lower() for q in out)
+    out = gen.generate_subqueries(_MULTI_PART)
+    assert _PARTS <= set(out)
 
 
 def test_disabled_flag_forces_heuristic(monkeypatch) -> None:
@@ -96,9 +100,9 @@ def test_disabled_flag_forces_heuristic(monkeypatch) -> None:
     monkeypatch.setattr(mq.settings, "enable_llm_multi_query", False, raising=False)
     llm = _LLM(json.dumps(["should not be used"]))
     gen = MultiQueryGenerator(llm=llm)
-    out = gen.generate_subqueries("What are the six building blocks of AI agents?")
+    out = gen.generate_subqueries(_MULTI_PART)
     assert llm.calls == 0  # flag off -> LLM never called
-    assert any("building block" in q.lower() for q in out)
+    assert _PARTS <= set(out)
 
 
 def test_empty_query_returns_empty() -> None:

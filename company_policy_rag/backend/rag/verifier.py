@@ -139,15 +139,6 @@ class SelfReflectionVerifier:
         answer_lower = answer.lower()
         unsupported: list[str] = []
 
-        # Check for ungrounded financial figures or equipment claims
-        if "$5,000" in answer or "$5000" in answer or "unauthorized furniture" in answer_lower:
-            if "$5,000" not in context_text and "$5000" not in context_text:
-                unsupported.append("Unsupported reimbursement amount or unverified equipment category.")
-                return 0.35, unsupported
-        elif "furniture" in answer_lower and "furniture" not in context_text:
-            unsupported.append("Unsupported equipment category: 'furniture'.")
-            return 0.35, unsupported
-
         # Named software/products are especially easy for a generator to add
         # from model memory. Treat capitalized product-like tokens that are not
         # in the evidence as unsupported (excluding sentence starts and tags).

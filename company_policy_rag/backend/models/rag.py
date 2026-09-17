@@ -125,9 +125,7 @@ class QueryRewriteResult(BaseModel):
     original_query: str
     rewritten_query: str
     sub_queries: list[str] = Field(default_factory=list)
-    expanded_terms: list[str] = Field(default_factory=list)
     is_comprehensive_list: bool = False
-    inferred_corpus: str | None = None
 
 
 class EvidenceStatus(str, Enum):

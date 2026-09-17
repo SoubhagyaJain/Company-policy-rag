@@ -92,7 +92,7 @@ class CitationEngine:
         )
         if is_visual:
             raw_vtype = extra.get("visual_type", "diagram_architecture").upper()
-            if "CODE" in raw_vtype or "```" in sc.chunk.text or "def " in sc.chunk.text or "kickoff" in sc.chunk.text:
+            if "CODE" in raw_vtype or "```" in sc.chunk.text or "def " in sc.chunk.text:
                 evidence_type = "CODE_SCREENSHOT"
             elif "TABLE" in raw_vtype:
                 evidence_type = "TABLE_DATA"
@@ -100,7 +100,7 @@ class CitationEngine:
                 evidence_type = "FIGURE"
             else:
                 evidence_type = "DIAGRAM_ARCHITECTURE"
-        elif "```" in sc.chunk.text or str(meta.content_type).lower() in ("code", "contenttype.code") or "def " in sc.chunk.text or "kickoff" in sc.chunk.text:
+        elif "```" in sc.chunk.text or str(meta.content_type).lower() in ("code", "contenttype.code") or "def " in sc.chunk.text:
             evidence_type = "CODE"
         elif "table" in str(meta.content_type).lower() or "|---" in sc.chunk.text:
             evidence_type = "TABLE_DATA"

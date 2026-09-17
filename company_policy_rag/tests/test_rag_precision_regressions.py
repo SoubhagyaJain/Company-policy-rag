@@ -51,11 +51,9 @@ def test_voice_rag_rewrite_preserves_voice_intent() -> None:
 
     result = rewriter.rewrite("how can i make voice rag agent")
 
-    rewritten = result.rewritten_query.lower()
-    assert "voice" in rewritten
-    assert "speech-to-text" in rewritten
-    assert "text-to-speech" in rewritten
-    assert "vector db context" not in rewritten
+    # No corpus-specific vocabulary is appended, so another topic's terms
+    # ("vector db context") cannot hijack the voice intent.
+    assert result.rewritten_query == "how can i make voice rag agent"
 
 
 def test_context_and_citations_dedupe_duplicate_document_uploads() -> None:

@@ -326,11 +326,9 @@ async def test_tc_2_4_query_with_unicode_emojis_markdown_and_special_symbols(
     assert "answer" in data
     assert data["trace"]["query"] == adversarial_query
 
-    # Verify query rewriter term expansion handles emojis and HTML safely
+    # Verify the query rewriter handles emojis and HTML safely
     rewriter = QueryRewriter(enable_llm_rewrite=False)
-    expanded, terms = rewriter.expand_terms(adversarial_query)
-    assert isinstance(expanded, str)
-    assert isinstance(terms, list)
+    assert rewriter.rewrite(adversarial_query).rewritten_query == adversarial_query.strip()
 
 
 def test_tc_2_5_low_confidence_routing_fallback_to_balanced_strategy(
