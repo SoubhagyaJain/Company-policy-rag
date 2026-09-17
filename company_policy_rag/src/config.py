@@ -376,8 +376,12 @@ class Settings(BaseSettings):
     # ── Query rewrite (pre-retrieval) ──────────────────────────────────────
     # Disabled by default for fast single-turn; conditional for multi-turn follow-ups
     enable_query_rewrite: bool = Field(default=False, alias="ENABLE_QUERY_REWRITE")
+    # The LLM pass of the conversation interpreter (the deterministic
+    # interpreter always runs). Off by default: on the conversation benchmark
+    # qwen2.5:7b returned unusable JSON for 11/11 follow-up turns, added ~8.5 s
+    # per turn, and changed no retrieval decision (see docs/PHASE4_AB_LOG.md).
     enable_conversation_interpreter: bool = Field(
-        default=True, alias="ENABLE_CONVERSATION_INTERPRETER"
+        default=False, alias="ENABLE_CONVERSATION_INTERPRETER"
     )
     # LLM-based multi-query decomposition. When on and an LLM is available, one
     # LLM call splits comprehensive/list questions into focused sub-queries

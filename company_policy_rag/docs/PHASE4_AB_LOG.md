@@ -192,3 +192,19 @@ The XML variant was not distinguishable from the inline rule at n = 24. The smal
 - Never copy source headers or metadata (file names, sections, pages, evidence types) into the answer.
 
 `clean_format` is now an answer-eval metric. The remaining citation errors are the model choosing the wrong number for a correct sentence; `hb_contractor_remote` cites `[Source 2]` in every variant.
+
+## 5.1 Conversation interpreter LLM pass off by default (shipped, 2026-09-17)
+
+The pipeline runs `ConversationInterpreter` on every turn. It always makes a deterministic interpretation, which covers follow-up fragments, pronouns, "going back to", source/simplify reuse and ambiguity. With `ENABLE_CONVERSATION_INTERPRETER=true` (the previous default) it then also made one qwen2.5:7b call on every turn with history (512 max tokens).
+
+**Run.** `scripts/benchmark_conversation.py`: 12 multi-turn cases, production BM25, top-3. The "improved" system's interpreter was given the local model.
+
+| Interpreter | LLM calls | Unusable output | Policy accuracy | Hit@3 | MRR | Query term coverage | Logic p50 |
+|---|---|---|---|---|---|---|---|
+| deterministic only | 0 | – | 1.000 | 1.000 | 0.955 | 1.000 | 0.2 ms |
+| + LLM pass (before) | 11 | 11 / 11 | 1.000 | 1.000 | 0.955 | 1.000 | 8561 ms |
+| + LLM pass, parser fixed | 11 | 1 / 11 | 1.000 | 1.000 | 0.955 | 1.000 | 8275 ms |
+
+**Before the fix, every output failed validation.** The prompt shows the schema as lists of allowed values, and the model answered `"intent": ["factual"]`. So the ~8.5 s call was always discarded. Parsing now unwraps one-item lists for scalar fields. Once parsed, the model largely restated the deterministic baseline, down to its rationale string, and changed no retrieval decision.
+
+**Decision.** `ENABLE_CONVERSATION_INTERPRETER` defaults to `false`. The deterministic interpreter still runs on every turn; the flag only controls the extra LLM pass. Each follow-up turn saves roughly 8 s of generation on the RTX 4050. The benchmark is at ceiling (12 cases), so this is a latency decision with no measured quality cost, not proof the LLM pass can never help.

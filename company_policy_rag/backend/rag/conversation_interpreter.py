@@ -16,6 +16,9 @@ from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
 
 
+_SCALAR_FIELDS = ("intent", "answer_mode", "retrieval_decision", "active_topic", "standalone_query")
+
+
 class RetrievalDecision(str, Enum):
     """The only retrieval actions the conversation layer may request."""
 
@@ -385,6 +388,12 @@ class ConversationInterpreter:
         data = json.loads(match.group(0))
         if not isinstance(data, dict):
             raise ValueError("Interpreter output is not an object")
+        # Small models copy the schema's list of allowed values and answer
+        # "intent": ["factual"]; unwrap one-item lists for scalar fields.
+        for key in _SCALAR_FIELDS:
+            value = data.get(key)
+            if isinstance(value, list) and len(value) == 1:
+                data[key] = value[0]
         return data
 
     def _enforce_grounding_invariants(

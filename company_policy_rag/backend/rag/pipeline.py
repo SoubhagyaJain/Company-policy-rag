@@ -565,7 +565,7 @@ class RAGPipeline:
         self.conversation_interpreter = conversation_interpreter or ConversationInterpreter(
             llm=self.llm,
             query_router=self.query_router,
-            enabled=bool(getattr(settings, "enable_conversation_interpreter", True)),
+            enabled=bool(getattr(settings, "enable_conversation_interpreter", False)),
         )
         self.governing_clause_selector = governing_clause_selector or GoverningClauseSelector()
 
