@@ -1510,7 +1510,7 @@ class RAGPipeline:
         inferred_filters: dict[str, Any] = {}
         applied_filters: dict[str, Any] = {}
         ctx.filter_relaxed = False
-        enable_filtering = getattr(settings, "enable_query_metadata_filtering", True)
+        enable_filtering = getattr(settings, "enable_query_metadata_filtering", False)
         if enable_filtering and self.filter_inferer is not None:
             t0 = time.perf_counter()
             inferred_filters = self.filter_inferer.infer_filters(
@@ -1964,7 +1964,7 @@ class RAGPipeline:
             stages = ctx.retrieval_stages
             stages["pre_rerank"] = _stage_ids(candidate_chunks)
         rerank_traces: list[dict[str, Any]] | None = [] if stages is not None else None
-        reranker_enabled = bool(getattr(settings, "enable_reranker", True))
+        reranker_enabled = bool(getattr(settings, "enable_reranker", False))
 
         # 4. Cross-Encoder Reranking
         t0 = time.perf_counter()
@@ -2037,7 +2037,7 @@ class RAGPipeline:
                 reranked_chunks,
                 selected_context,
                 max_chunks=max(current_strategy.rerank_top_n, 5),
-                mode=str(getattr(settings, "context_assembly_mode", "governing")),
+                mode=str(getattr(settings, "context_assembly_mode", "rank_anchor")),
                 anchor_k=int(getattr(settings, "context_rank_anchor_k", 0) or 0),
             )
         reranked_chunks = prioritize_named_sections(user_query, reranked_chunks, candidate_chunks)
@@ -2045,7 +2045,7 @@ class RAGPipeline:
             (time.perf_counter() - t0) * 1000, 2
         )
         if stages is not None:
-            stages["context_assembly_mode"] = str(getattr(settings, "context_assembly_mode", "governing"))
+            stages["context_assembly_mode"] = str(getattr(settings, "context_assembly_mode", "rank_anchor"))
             stages["post_governing"] = _stage_ids(reranked_chunks)
 
         # 5. Parent Context Expansion

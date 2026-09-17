@@ -27,9 +27,10 @@ ONE_DOC = {GUIDE_ID: GUIDE_FILE}
 TWO_DOCS = {GUIDE_ID: GUIDE_FILE, HAND_ID: HAND_FILE}
 
 
-def test_new_flags_default_to_legacy_behavior() -> None:
-    assert Settings.model_fields["scope_unbound_reference_mode"].default == "strict"
-    assert Settings.model_fields["context_assembly_mode"].default == "governing"
+def test_measured_fixes_are_the_defaults() -> None:
+    assert Settings.model_fields["scope_unbound_reference_mode"].default == "resolve"
+    assert Settings.model_fields["context_assembly_mode"].default == "rank_anchor"
+    assert Settings.model_fields["min_chunk_words"].default == 5
 
 
 # ── Scope resolver ──────────────────────────────────────────────────────────
@@ -123,6 +124,7 @@ def test_resolve_keeps_page_reference_on_the_bound_document() -> None:
 
 def test_resolver_reads_the_setting_when_no_mode_is_given(monkeypatch) -> None:
     query = "What does the guidebook say about memory?"
+    monkeypatch.setattr(settings, "scope_unbound_reference_mode", "strict")
     assert DocumentScopeResolver().resolve_scope(query, known_documents=ONE_DOC).active_document_id is None
     monkeypatch.setattr(settings, "scope_unbound_reference_mode", "resolve")
     assert DocumentScopeResolver().resolve_scope(query, known_documents=ONE_DOC).active_document_id == GUIDE_ID

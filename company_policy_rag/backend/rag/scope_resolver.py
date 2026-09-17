@@ -85,7 +85,7 @@ class DocumentScopeResolver:
     def _unbound_reference_mode(self) -> str:
         if self.unbound_reference_mode is not None:
             return self.unbound_reference_mode
-        return str(getattr(settings, "scope_unbound_reference_mode", "strict"))
+        return str(getattr(settings, "scope_unbound_reference_mode", "resolve"))
 
     @classmethod
     def bind_unbound_reference(

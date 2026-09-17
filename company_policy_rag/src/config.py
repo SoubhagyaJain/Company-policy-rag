@@ -100,7 +100,10 @@ class Settings(BaseSettings):
     enable_query_routing: bool = Field(default=True, alias="ENABLE_QUERY_ROUTING")
     enable_answer_verification: bool = Field(default=True, alias="ENABLE_ANSWER_VERIFICATION")
     enable_metadata_extraction: bool = Field(default=True, alias="ENABLE_METADATA_EXTRACTION")
-    enable_query_metadata_filtering: bool = Field(default=True, alias="ENABLE_QUERY_METADATA_FILTERING")
+    # Off by default: inferred topic/department filters hit fields chunks do not
+    # carry (or carry as document-level guesses), so both indexes returned nothing
+    # and retrieval ran a second time with the filters relaxed.
+    enable_query_metadata_filtering: bool = Field(default=False, alias="ENABLE_QUERY_METADATA_FILTERING")
 
     @property
     def ENABLE_QUERY_ROUTING(self) -> bool:
@@ -155,8 +158,10 @@ class Settings(BaseSettings):
     verification_composite_threshold: float = Field(
         default=0.70, alias="VERIFICATION_COMPOSITE_THRESHOLD"
     )
+    # 0 by default: a retry costs a full generation (plus an LLM judge on
+    # high-risk answers). Raise it only with an answer-level eval showing gains.
     verification_max_retries: int = Field(
-        default=2, alias="VERIFICATION_MAX_RETRIES"
+        default=0, alias="VERIFICATION_MAX_RETRIES"
     )
     # LLM-backed faithfulness auditing. The heuristic verifier only measures
     # lexical overlap; an LLM judge actually checks whether each claim is
@@ -282,7 +287,10 @@ class Settings(BaseSettings):
     # Base is the latency-safe default for CPU inference; set
     # RERANKER_MODEL=BAAI/bge-reranker-large for higher precision on dense legal
     # text at a few seconds/query. Defaults match the project's .env.
-    enable_reranker: bool = Field(default=True, alias="ENABLE_RERANKER")
+    # Off by default: on the 70-query eval the cross-encoder did not change which
+    # relevant evidence reached the LLM once context assembly kept ranked chunks,
+    # and base costs ~2.1 s per query on CPU (docs/DOWNSTREAM_EVIDENCE_LOSS.md).
+    enable_reranker: bool = Field(default=False, alias="ENABLE_RERANKER")
     reranker_model: str = Field(
         default="BAAI/bge-reranker-base", alias="RERANKER_MODEL"
     )
@@ -295,9 +303,10 @@ class Settings(BaseSettings):
     rerank_min_keep: int = Field(default=3, alias="RERANK_MIN_KEEP")
 
     # ── Retrieval experiment flags ─────────────────────────────────────────
-    # Every default reproduces the pre-experiment pipeline, so production is
-    # unchanged until one of these is set. scripts/eval_retrieval_backend.py
-    # drives them to compare first-stage and reranker variants.
+    # scripts/eval_retrieval_backend.py drives these to compare first-stage and
+    # reranker variants. MIN_CHUNK_WORDS, SCOPE_UNBOUND_REFERENCE_MODE and
+    # CONTEXT_ASSEMBLY_MODE default to the variants that measured better
+    # (docs/DOWNSTREAM_EVIDENCE_LOSS.md); the rest reproduce the original pipeline.
     # Cross-encoder candidate pool: 0 = legacy max(top_n * 4, 20), -1 = score
     # every candidate, N = score the top N fused candidates.
     reranker_pool_size: int = Field(default=0, alias="RERANKER_POOL_SIZE")
@@ -318,7 +327,7 @@ class Settings(BaseSettings):
         default="max_score", alias="SUBQUERY_MERGE_MODE"
     )
     # Skip chunks with this many words or fewer at query time. 0 = off.
-    min_chunk_words: int = Field(default=0, alias="MIN_CHUNK_WORDS")
+    min_chunk_words: int = Field(default=5, alias="MIN_CHUNK_WORDS")
     bm25_k1: float = Field(default=1.5, alias="BM25_K1")
     bm25_b: float = Field(default=0.75, alias="BM25_B")
     bm25_stemming: bool = Field(default=False, alias="BM25_STEMMING")
@@ -335,14 +344,14 @@ class Settings(BaseSettings):
     # document or the one whose filename contains the named noun; otherwise
     # search globally.
     scope_unbound_reference_mode: Literal["strict", "resolve"] = Field(
-        default="strict", alias="SCOPE_UNBOUND_REFERENCE_MODE"
+        default="resolve", alias="SCOPE_UNBOUND_REFERENCE_MODE"
     )
     # How governing-clause selection builds the context list. "governing"
     # (legacy): the selector's picks from the whole candidate pool replace the
     # ranked hand-off. "rank_anchor": the top CONTEXT_RANK_ANCHOR_K ranked
     # hand-off chunks are always kept; selector picks fill the other slots.
     context_assembly_mode: Literal["governing", "rank_anchor"] = Field(
-        default="governing", alias="CONTEXT_ASSEMBLY_MODE"
+        default="rank_anchor", alias="CONTEXT_ASSEMBLY_MODE"
     )
     context_rank_anchor_k: int = Field(default=2, alias="CONTEXT_RANK_ANCHOR_K")
 

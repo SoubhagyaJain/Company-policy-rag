@@ -30,7 +30,7 @@ class RetryEngine:
         if max_retries is not None:
             self.max_retries = max_retries
         else:
-            self.max_retries = getattr(settings, "verification_max_retries", 2)
+            self.max_retries = getattr(settings, "verification_max_retries", 0)
 
     def should_retry(self, attempt: int, report: VerificationReport) -> bool:
         """
