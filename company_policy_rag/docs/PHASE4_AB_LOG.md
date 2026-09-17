@@ -208,3 +208,20 @@ The pipeline runs `ConversationInterpreter` on every turn. It always makes a det
 **Before the fix, every output failed validation.** The prompt shows the schema as lists of allowed values, and the model answered `"intent": ["factual"]`. So the ~8.5 s call was always discarded. Parsing now unwraps one-item lists for scalar fields. Once parsed, the model largely restated the deterministic baseline, down to its rationale string, and changed no retrieval decision.
 
 **Decision.** `ENABLE_CONVERSATION_INTERPRETER` defaults to `false`. The deterministic interpreter still runs on every turn; the flag only controls the extra LLM pass. Each follow-up turn saves roughly 8 s of generation on the RTX 4050. The benchmark is at ceiling (12 cases), so this is a latency decision with no measured quality cost, not proof the LLM pass can never help.
+
+## 5.2 (part 2) LLM multi-query off by default (shipped, 2026-09-17)
+
+`ENABLE_LLM_MULTI_QUERY=true` (the previous default) made one qwen2.5:7b call to decompose each comprehensive or multi-query question. When the flag is off, the deterministic split is used: separate question parts and "including X, Y" topics.
+
+**Run.** Retrieval harness with the current defaults (`rank_policy`), 91 labelled queries; LLM multi-query on vs off.
+
+| Scope | Context Hit@6 | Context MRR | Context nDCG@10 | Context coverage | Queries with sub-queries (off → on) |
+|---|---|---|---|---|---|
+| guidebook | 0.000 | −0.020 | −0.023 | −0.024 | 1 → 6 |
+| legal | 0.000 | 0.000 | −0.004 | −0.005 | 8 → 11 |
+| handbook | 0.000 | 0.000 | 0.000 | 0.000 | 2 → 2 |
+| **all 91** | **0.000** | **−0.007** | **−0.010 [−0.022, −0.001], p = 0.049** | **−0.011 [−0.026, +0.002]** | |
+
+Harness wall time rose from 2.6 s to 11.6 s on guidebook, and from 3.5 s to 11.4 s on legal, from the LLM calls.
+
+**Decision.** The flag now defaults to `false`. The earlier guidebook-only runs pointed the same way: 0.716 vs 0.739, and 0.639 vs 0.662.

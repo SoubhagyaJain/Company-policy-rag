@@ -391,8 +391,13 @@ class TestPipelineRetryIntegration:
         assert len(response.trace.retry_reasons) == 0
         assert "15 days" in response.answer
 
-    def test_pipeline_one_retry_pass_on_attempt_1(self):
+    def test_pipeline_one_retry_pass_on_attempt_1(self, monkeypatch):
         """Scenario B: Attempt 0 fails (hallucinated $5000), Attempt 1 passes."""
+        import backend.rag.multi_query as mq
+
+        # The LLM decomposition call is the observable sign that the widened
+        # strategy (multi-query on) reached retrieval.
+        monkeypatch.setattr(mq.settings, "enable_llm_multi_query", True)
         bad_answer = "Employees receive $5,000 equipment reimbursement [Source 1]."
         good_answer = "Full-time employees accrue 15 days of PTO annually [Source 1]."
         mock_llm = ControlledMockLLM([bad_answer, good_answer])

@@ -383,11 +383,12 @@ class Settings(BaseSettings):
     enable_conversation_interpreter: bool = Field(
         default=False, alias="ENABLE_CONVERSATION_INTERPRETER"
     )
-    # LLM-based multi-query decomposition. When on and an LLM is available, one
-    # LLM call splits comprehensive/list questions into focused sub-queries
-    # (generalizes to any corpus); the keyword-table heuristic remains the
-    # fallback. Only runs where multi-query is already enabled (not fast-path).
-    enable_llm_multi_query: bool = Field(default=True, alias="ENABLE_LLM_MULTI_QUERY")
+    # LLM-based multi-query decomposition for comprehensive/list questions. When
+    # off, the deterministic split (question parts, "including X, Y" topics) is
+    # used. Off by default: across 91 labelled queries it did not improve the
+    # final context (coverage -0.011, nDCG@10 -0.010) and adds an LLM call per
+    # comprehensive question (see docs/PHASE4_AB_LOG.md).
+    enable_llm_multi_query: bool = Field(default=False, alias="ENABLE_LLM_MULTI_QUERY")
 
     # ── Generation / faithfulness grounding ──────────────────────────────────
     # balanced (default): helpful synthesis + partial answers; strict: max faithfulness

@@ -8,7 +8,22 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+import backend.rag.multi_query as mq
 from backend.rag.multi_query import MultiQueryGenerator, _parse_subqueries
+
+
+@pytest.fixture(autouse=True)
+def _llm_multi_query_on(monkeypatch):
+    # Off by default in production; these tests exercise the opt-in LLM path.
+    monkeypatch.setattr(mq.settings, "enable_llm_multi_query", True, raising=False)
+
+
+def test_llm_multi_query_is_off_by_default() -> None:
+    from src.config import Settings
+
+    assert Settings.model_fields["enable_llm_multi_query"].default is False
 
 
 class _LLM:

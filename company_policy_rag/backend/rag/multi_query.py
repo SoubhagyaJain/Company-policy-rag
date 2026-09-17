@@ -169,7 +169,7 @@ class MultiQueryGenerator:
         if not core:
             return []
 
-        if self.llm is not None and getattr(settings, "enable_llm_multi_query", True):
+        if self.llm is not None and getattr(settings, "enable_llm_multi_query", False):
             llm_subs = self._generate_subqueries_llm(core, max_queries)
             if llm_subs:
                 merged: list[str] = []
