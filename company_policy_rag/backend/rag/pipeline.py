@@ -255,6 +255,12 @@ def _stage_ids(chunks: list[ScoredChunk]) -> list[str]:
     return [sc.chunk.id for sc in chunks[:_STAGE_ID_LIMIT]]
 
 
+def _is_cancelled(ctx: Any) -> bool:
+    event = getattr(ctx, "cancel_event", None)
+    is_set = getattr(event, "is_set", None)
+    return bool(callable(is_set) and is_set())
+
+
 def _recording_stages() -> bool:
     return bool(getattr(settings, "record_retrieval_stages", True))
 
@@ -1443,8 +1449,13 @@ class RAGPipeline:
         thinking_detail_level: ThinkingDetailLevel | str = ThinkingDetailLevel.STANDARD,
         thinking_sm: ThinkingStateMachine | None = None,
         stream_callback: Callable[[str], None] | None = None,
+        cancel_event: Any = None,
     ) -> RAGResponse:
-        """Execute end-to-end document-faithful RAG pipeline with safe thinking events."""
+        """Execute end-to-end document-faithful RAG pipeline with safe thinking events.
+
+        ``cancel_event`` (anything with ``is_set()``) stops generation and skips
+        verification, retries, and the cache write once set.
+        """
         return self._query_internal(
             user_query=user_query,
             filters=filters,
@@ -1459,6 +1470,7 @@ class RAGPipeline:
             thinking_detail_level=thinking_detail_level,
             thinking_sm=thinking_sm,
             stream_callback=stream_callback,
+            cancel_event=cancel_event,
         )
 
     def _stage_scope_and_rewrite(self, ctx: QueryContext) -> None:
@@ -2320,6 +2332,9 @@ class RAGPipeline:
 
         max_tokens = response_mode_config.max_output_tokens
         ctx.llm_usage = {}
+        if _is_cancelled(ctx):
+            ctx.answer_text = ""
+            return
 
         thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
         exact_numbered_list = _extract_requested_numbered_list(user_query, expanded_chunks)
@@ -2360,6 +2375,7 @@ class RAGPipeline:
                         prompt,
                         temperature=current_strategy.temperature,
                         max_tokens=max_tokens,
+                        cancel_event=ctx.cancel_event,
                     )
                     answer_parts: list[str] = []
                     for delta in completion_stream:
@@ -2978,6 +2994,7 @@ class RAGPipeline:
         thinking_detail_level: ThinkingDetailLevel | str = ThinkingDetailLevel.STANDARD,
         thinking_sm: ThinkingStateMachine | None = None,
         stream_callback: Callable[[str], None] | None = None,
+        cancel_event: Any = None,
     ) -> RAGResponse:
         total_start = time.perf_counter()
         stage_timings: dict[str, float] = {}
@@ -3011,6 +3028,7 @@ class RAGPipeline:
             thinking_detail_level=thinking_detail_level,
             thinking_sm=thinking_sm,
             stream_callback=stream_callback,
+            cancel_event=cancel_event,
             total_start=total_start,
             stage_timings=stage_timings,
             response_mode_config=response_mode_config,
@@ -3187,6 +3205,16 @@ class RAGPipeline:
 
             self._stage_generate(ctx, prefix)
             answer_text = ctx.answer_text
+            if _is_cancelled(ctx):
+                # The client is gone: no verification, retries, or cache write.
+                best_answer = answer_text
+                best_context_chunks = expanded_chunks
+                best_candidate_chunks = candidate_chunks
+                best_reranked_chunks = reranked_chunks
+                best_retrieval_stages = ctx.retrieval_stages
+                best_llm_usage = dict(ctx.llm_usage)
+                best_policy_selection = policy_selection
+                break
 
             # Citation extraction + post-generation verification.
             self._stage_verify(ctx, prefix, attempt)
@@ -3248,7 +3276,9 @@ class RAGPipeline:
         tab_cnt = sum(1 for sc in best_context_chunks if "table" in str(sc.chunk.metadata.content_type).lower() or sc.chunk.metadata.extra.get("visual_type") == "table_data")
 
         fallback_reason = "none"
-        if req_llm is None:
+        if _is_cancelled(ctx):
+            fallback_reason = "cancelled"
+        elif req_llm is None:
             fallback_reason = "llm_offline_fallback"
         elif best_report is not None and not best_report.passed:
             fallback_reason = "retry_exhausted_fallback"
@@ -3400,6 +3430,7 @@ class RAGPipeline:
 
         if (
             cache_eligible
+            and not _is_cancelled(ctx)
             and _answer_matches_requested_enumeration(user_query, best_answer)
             and _is_cacheable_grounded_answer(
             best_answer,
@@ -3712,6 +3743,7 @@ class RAGPipeline:
                     thinking_detail_level=thinking_detail_level,
                     thinking_sm=thinking_sm,
                     stream_callback=token_queue.put,
+                    cancel_event=cancel_token,
                 )
             except BaseException as exc:
                 result_box["error"] = exc

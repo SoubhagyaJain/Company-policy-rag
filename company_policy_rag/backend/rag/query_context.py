@@ -46,6 +46,8 @@ class QueryContext:
     thinking_detail_level: Any = None
     thinking_sm: "ThinkingStateMachine | None" = None
     stream_callback: Callable[[str], None] | None = None
+    # Set when the client disconnects (threading.Event or asyncio.Event).
+    cancel_event: Any = None
 
     # ── Derived setup ──────────────────────────────────────────────────────
     total_start: float = 0.0
