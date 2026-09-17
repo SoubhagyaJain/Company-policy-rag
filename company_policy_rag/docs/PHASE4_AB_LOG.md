@@ -101,4 +101,4 @@ Harness run on HEAD after 4.3/4.4, candidate minus baseline, 91 labelled queries
 | legal | 124 | 120 |
 | handbook | 87 | 79 |
 
-The call was neutral, so it was removed. The policy topic profiles (`POLICY_TOPIC_PROFILES`: private work, after-hours calls, smoking in vehicles, and so on) still drive the governing-clause selector and `is_policy_question`. They target a company-rules PDF that is not in the repository, so they cannot be A/B'd here; the corpus for `data/eval/policy_reliability_dataset.json` is missing.
+The call was neutral, so it was removed. The policy topic profiles (`_TOPIC_PROFILES`: private work, after-hours calls, smoking in vehicles, and so on) still drive the governing-clause selector and `is_policy_question`. They target a company-rules PDF that is not in the repository, so they cannot be A/B'd here; the corpus for `data/eval/policy_reliability_dataset.json` is missing.
