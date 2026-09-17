@@ -212,3 +212,25 @@ def test_ingestion_records_clause_parent_and_exception_metadata() -> None:
     assert chunk.metadata.clause_id == "22.3"
     assert chunk.metadata.parent_section == "22"
     assert chunk.metadata.chunk_type == "exception"
+
+
+def test_bare_leading_numbers_are_not_clause_ids() -> None:
+    def clause(content: str, section_number: str | None = None) -> str | None:
+        document = RawDocument(
+            id="doc",
+            content=content,
+            metadata=DocumentMetadata(
+                source_file="handbook.pdf",
+                file_path="handbook.pdf",
+                file_hash="h",
+                document_type=DocumentType.PDF,
+                section_number=section_number,
+            ),
+        )
+        return RecursiveChunker().chunk([document])[0].metadata.clause_id
+
+    assert clause("98 | AI Agents Guidebook\nAgents use tools to act on the world.") is None
+    assert clause("3 Remote work is available to eligible employees after probation.") is None
+    assert clause("4.2 Remote work is available to eligible employees after probation.") == "4.2"
+    assert clause("Section 7 Travel expenses must be itemised within fifteen days.") == "7"
+    assert clause("1. Submit the form to your manager before booking travel.", section_number="5.1") == "5.1"

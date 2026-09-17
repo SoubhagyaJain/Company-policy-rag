@@ -60,8 +60,16 @@ class BaseChunker(ABC):
         final_sec_title = section_title or doc_meta.section_title
         final_sec_num = section_number or doc_meta.section_number
         final_sec_path = section_path or doc_meta.section_path
-        clause_match = re.search(r"(?m)^\s*(?:section\s+)?(\d+(?:\.\d+){0,4})(?:[.)\s]|$)", text, re.IGNORECASE)
-        clause_id = (clause_match.group(1) if clause_match else final_sec_num) or None
+        # A bare leading integer is usually a list item, page header or quantity
+        # ("20 days"), so text only supplies a clause id when it is dotted
+        # ("22.3") or explicitly labelled ("Section 4").
+        clause_match = re.search(
+            r"(?m)^\s*(?:section\s+(\d+(?:\.\d+){0,4})|(\d+(?:\.\d+){1,4}))(?=[.)\s]|$)",
+            text,
+            re.IGNORECASE,
+        )
+        text_clause = (clause_match.group(1) or clause_match.group(2)) if clause_match else None
+        clause_id = final_sec_num or text_clause or None
         parent_section = None
         if clause_id:
             clause_parts = str(clause_id).split(".")
