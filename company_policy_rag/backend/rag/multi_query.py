@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
 from src.config import settings
 
@@ -243,10 +244,7 @@ class MultiQueryGenerator:
 
         prompt = _LLM_DECOMPOSE_PROMPT.format(n=max_queries, query=core)
         try:
-            try:
-                raw = str(self.llm.complete(prompt, temperature=0.0, max_new_tokens=256)).strip()
-            except TypeError:
-                raw = str(self.llm.complete(prompt)).strip()
+            raw, _usage = complete_text(self.llm, prompt, temperature=0.0, max_tokens=256)
         except Exception as exc:
             logger.warning("LLM multi-query decomposition failed (%s); using heuristic.", exc)
             self._llm_cache[core] = []

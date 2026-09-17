@@ -107,6 +107,8 @@ class QueryContext:
     context_tokens: int = 0
     cross_document_count: int = 0
     telemetry_extra: dict[str, Any] = field(default_factory=dict)
+    # Ollama-reported token counts for the answer generation of this attempt.
+    llm_usage: dict[str, Any] = field(default_factory=dict)
     policy_selection: Any = None
     continuity_applied: bool = False
     raw_new_chunk_count: int = 0

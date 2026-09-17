@@ -9,6 +9,7 @@ import re
 from typing import Any, Callable
 
 from backend.models.rag import Citation, ScoredChunk, VerificationReport
+from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
 from src.config import settings
 
@@ -249,10 +250,7 @@ class SelfReflectionVerifier:
 
         prompt = _LLM_FAITHFULNESS_PROMPT.format(context=context_text, answer=answer)
         try:
-            try:
-                raw = str(llm.complete(prompt, temperature=0.0, max_new_tokens=256)).strip()
-            except TypeError:
-                raw = str(llm.complete(prompt)).strip()
+            raw, _usage = complete_text(llm, prompt, temperature=0.0, max_tokens=256)
         except Exception as exc:
             logger.warning("LLM faithfulness verification failed (%s); using heuristic.", exc)
             return None

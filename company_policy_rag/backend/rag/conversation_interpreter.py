@@ -12,6 +12,7 @@ from backend.models.rag import EvidenceStatus, QueryCategory
 from backend.rag.conversation_resolver import ConversationResolutionResult, ConversationResolver
 from backend.rag.multi_query import decompose_multi_part
 from backend.rag.query_router import QueryRouter
+from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
 
 
@@ -163,7 +164,9 @@ class ConversationInterpreter:
 
         try:
             prompt = self._build_prompt(message, state, baseline)
-            raw = str(self.llm.complete(prompt)).strip()
+            # The interpretation is a compact JSON object; cap output so a
+            # rambling model cannot stall the turn.
+            raw, _usage = complete_text(self.llm, prompt, temperature=0.0, max_tokens=512)
             parsed = self._parse_model_output(raw)
             interpreted = ConversationInterpretation.model_validate(parsed)
             return self._enforce_grounding_invariants(interpreted, state, message, baseline)

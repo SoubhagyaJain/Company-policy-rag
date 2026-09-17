@@ -45,6 +45,13 @@ from backend.rag.context_compression import ContextCompressor
 from backend.rag.evidence_gate import EvidenceSufficiencyGate
 from backend.rag.section_matching import prioritize_named_sections
 from backend.rag.filter_extractor import QueryMetadataInferer
+from backend.rag.llm_client import (
+    StreamingCompletion,
+    complete_text,
+    estimate_tokens,
+    fit_output_budget,
+    supports_streaming,
+)
 from backend.rag.multi_query import MultiQueryGenerator, decompose_multi_part
 from backend.rag.query_context import QueryContext
 from backend.rag.policy_reliability import (
@@ -2267,6 +2274,7 @@ class RAGPipeline:
         )
 
         max_tokens = response_mode_config.max_output_tokens
+        ctx.llm_usage = {}
 
         thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
         exact_numbered_list = _extract_requested_numbered_list(user_query, expanded_chunks)
@@ -2293,43 +2301,35 @@ class RAGPipeline:
                 deterministic_policy_answer = bool(
                     policy_selection.calculations or policy_selection.missing_inputs
                 )
+                # Keep prompt + output inside num_ctx: Ollama truncates the start
+                # of an over-long prompt, which is where instructions and the
+                # top-ranked sources are.
+                max_tokens = fit_output_budget(req_llm, prompt, max_tokens)
                 if (
                     ctx.stream_live
-                    and hasattr(req_llm, "stream_complete")
+                    and supports_streaming(req_llm)
                     and not deterministic_policy_answer
                 ):
-                    try:
-                        completion_stream = req_llm.stream_complete(
-                            prompt,
-                            temperature=current_strategy.temperature,
-                            max_new_tokens=max_tokens,
-                        )
-                    except TypeError:
-                        completion_stream = req_llm.stream_complete(prompt)
+                    completion_stream = StreamingCompletion(
+                        req_llm,
+                        prompt,
+                        temperature=current_strategy.temperature,
+                        max_tokens=max_tokens,
+                    )
                     answer_parts: list[str] = []
-                    for part in completion_stream:
-                        delta = getattr(part, "delta", None)
-                        if delta is None:
-                            delta = getattr(part, "text", None)
-                        if delta is None:
-                            delta = str(part)
-                        delta = str(delta)
-                        if not delta:
-                            continue
+                    for delta in completion_stream:
                         answer_parts.append(delta)
                         stream_callback(delta)
                     raw_answer = "".join(answer_parts).strip()
+                    ctx.llm_usage = completion_stream.usage.to_dict()
                 else:
-                    try:
-                        raw_answer = str(
-                            req_llm.complete(
-                                prompt,
-                                temperature=current_strategy.temperature,
-                                max_new_tokens=max_tokens,
-                            )
-                        ).strip()
-                    except TypeError:
-                        raw_answer = str(req_llm.complete(prompt)).strip()
+                    raw_answer, usage = complete_text(
+                        req_llm,
+                        prompt,
+                        temperature=current_strategy.temperature,
+                        max_tokens=max_tokens,
+                    )
+                    ctx.llm_usage = usage.to_dict()
                 answer_text = raw_answer
             except Exception as exc:
                 logger.warning("LLM synthesis error (%s). Using fallback synthesis.", exc)
@@ -2639,16 +2639,14 @@ class RAGPipeline:
         ctx.thinking_sm.start_stage(ThinkingStage.ANSWER_GENERATION)
         if ctx.req_llm is not None:
             try:
-                try:
-                    answer_text = str(
-                        ctx.req_llm.complete(
-                            prompt,
-                            temperature=0.6,
-                            max_new_tokens=ctx.response_mode_config.max_output_tokens,
-                        )
-                    ).strip()
-                except TypeError:
-                    answer_text = str(ctx.req_llm.complete(prompt)).strip()
+                answer_text, _usage = complete_text(
+                    ctx.req_llm,
+                    prompt,
+                    temperature=0.6,
+                    max_tokens=fit_output_budget(
+                        ctx.req_llm, prompt, ctx.response_mode_config.max_output_tokens
+                    ),
+                )
             except Exception as exc:
                 logger.warning("General chat generation failed: %s", exc)
                 answer_text = "General chat is selected, but the language model is currently unavailable. Please try again shortly."
@@ -3075,6 +3073,7 @@ class RAGPipeline:
         best_candidate_chunks: list[ScoredChunk] = []
         best_reranked_chunks: list[ScoredChunk] = []
         best_retrieval_stages: dict[str, Any] = {}
+        best_llm_usage: dict[str, Any] = {}
         best_report: VerificationReport | None = None
         best_policy_selection: ClauseSelection | None = None
         best_score = -1.0
@@ -3158,6 +3157,7 @@ class RAGPipeline:
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
                 best_retrieval_stages = ctx.retrieval_stages
+                best_llm_usage = dict(ctx.llm_usage)
                 best_report = report
                 best_policy_selection = policy_selection
 
@@ -3169,6 +3169,7 @@ class RAGPipeline:
                 best_candidate_chunks = candidate_chunks
                 best_reranked_chunks = reranked_chunks
                 best_retrieval_stages = ctx.retrieval_stages
+                best_llm_usage = dict(ctx.llm_usage)
                 best_report = report
                 best_policy_selection = policy_selection
                 break
@@ -3267,6 +3268,7 @@ class RAGPipeline:
             retrieved_candidate_count=len(best_candidate_chunks),
             post_rerank_count=len(best_reranked_chunks),
             retrieval_stages=best_retrieval_stages,
+            llm_usage=best_llm_usage,
             final_context_count=len(best_context_chunks),
             response_mode=response_mode,
             retrieval_top_k=current_strategy.dense_top_k,
@@ -3377,8 +3379,11 @@ class RAGPipeline:
             trace=trace,
             model=selected_model,
             token_usage={
-                "prompt_tokens": len(formatted_context.split()) if best_context_chunks else 0,
-                "completion_tokens": len(best_answer.split()),
+                "prompt_tokens": (
+                    best_llm_usage.get("prompt_tokens")
+                    or (estimate_tokens(formatted_context) if best_context_chunks else 0)
+                ),
+                "completion_tokens": best_llm_usage.get("completion_tokens") or len(best_answer.split()),
             },
         )
 
@@ -3474,46 +3479,37 @@ class RAGPipeline:
         t_generation = time.perf_counter()
         answer_parts: list[str] = []
         streamed = False
-        if req_llm is not None and hasattr(req_llm, "stream_complete"):
+        if req_llm is not None and supports_streaming(req_llm):
             try:
-                try:
-                    completion_stream = req_llm.stream_complete(
-                        prompt,
-                        temperature=0.6,
-                        max_new_tokens=response_mode_config.max_output_tokens,
-                    )
-                except TypeError:
-                    completion_stream = req_llm.stream_complete(prompt)
-                for part in completion_stream:
-                    if cancel_token and cancel_token.is_set():
-                        return
-                    delta = getattr(part, "delta", None)
-                    if delta is None:
-                        delta = getattr(part, "text", None)
-                    if delta is None:
-                        delta = str(part)
-                    delta = str(delta)
-                    if not delta:
-                        continue
+                completion_stream = StreamingCompletion(
+                    req_llm,
+                    prompt,
+                    temperature=0.6,
+                    max_tokens=fit_output_budget(
+                        req_llm, prompt, response_mode_config.max_output_tokens
+                    ),
+                    cancel_event=cancel_token,
+                )
+                for delta in completion_stream:
                     answer_parts.append(delta)
                     streamed = True
                     yield {"type": "token", "content": delta}
+                if completion_stream.cancelled:
+                    return
             except Exception as exc:
                 logger.warning("General chat streaming failed: %s", exc)
 
         if not streamed:
             if req_llm is not None:
                 try:
-                    try:
-                        fallback_answer = str(
-                            req_llm.complete(
-                                prompt,
-                                temperature=0.6,
-                                max_new_tokens=response_mode_config.max_output_tokens,
-                            )
-                        ).strip()
-                    except TypeError:
-                        fallback_answer = str(req_llm.complete(prompt)).strip()
+                    fallback_answer, _usage = complete_text(
+                        req_llm,
+                        prompt,
+                        temperature=0.6,
+                        max_tokens=fit_output_budget(
+                            req_llm, prompt, response_mode_config.max_output_tokens
+                        ),
+                    )
                 except Exception as exc:
                     logger.warning("General chat generation failed: %s", exc)
                     fallback_answer = ""

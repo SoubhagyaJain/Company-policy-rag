@@ -4,6 +4,7 @@ import re
 from typing import Any, Dict
 
 from backend.models.rag import QueryRewriteResult
+from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
 
 _POLICY_TOPIC_EXPANSIONS: list[tuple[tuple[str, ...], str]] = [
@@ -307,7 +308,7 @@ class QueryRewriter:
                     f"Follow-up Question: {original}\n"
                     "Standalone Search Query:"
                 )
-                response = str(effective_llm.complete(prompt)).strip()
+                response, _usage = complete_text(effective_llm, prompt, temperature=0.0, max_tokens=64)
                 first_line = response.splitlines()[0].strip().strip('"').strip("'")
                 if len(first_line) >= 3:
                     rewritten = first_line

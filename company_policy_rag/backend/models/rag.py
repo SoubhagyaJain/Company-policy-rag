@@ -217,6 +217,10 @@ class RAGTrace(BaseModel):
     # post_rerank_prefilter, post_filter, post_governing, final_context, plus
     # reranker scores and timings. Empty when RECORD_RETRIEVAL_STAGES is off.
     retrieval_stages: dict[str, Any] = Field(default_factory=dict)
+    # Token counts Ollama reported for the kept answer: prompt_tokens,
+    # completion_tokens, num_ctx, num_predict, prompt_overflow. Empty for
+    # non-Ollama LLMs and deterministic answers.
+    llm_usage: dict[str, Any] = Field(default_factory=dict)
     fallback_reason: str = "none"
     faithfulness_checked: bool = False
     faithfulness_passed: bool = True
