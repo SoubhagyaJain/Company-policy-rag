@@ -95,14 +95,18 @@ def warmup_rag_system() -> None:
     except Exception as exc:
         logger.warning("[1/4] Embedding model warm-up notice: %s", exc)
 
-    # 3. Reranker Model Preloading & Warm-up
+    # 3. Reranker Model Preloading & Warm-up (skipped when the reranker is off)
     t0 = time.perf_counter()
     try:
-        if hasattr(pipeline.reranker, "_init_model"):
+        from src.config import settings
+
+        if not settings.enable_reranker:
+            logger.info("[2/4] CrossEncoder reranker disabled (ENABLE_RERANKER=false); not loading it.")
+        elif hasattr(pipeline.reranker, "_init_model"):
             pipeline.reranker._init_model()
-        if getattr(pipeline.reranker, "_model", None) is not None:
+        if settings.enable_reranker and getattr(pipeline.reranker, "_model", None) is not None:
             pipeline.reranker._model.predict([["warmup query", "warmup chunk context"]])
-        logger.info("[2/4] CrossEncoder reranker loaded & warmed up in %.2fs", time.perf_counter() - t0)
+            logger.info("[2/4] CrossEncoder reranker loaded & warmed up in %.2fs", time.perf_counter() - t0)
     except Exception as exc:
         logger.warning("[2/4] CrossEncoder reranker warm-up notice: %s", exc)
 
@@ -112,7 +116,11 @@ def warmup_rag_system() -> None:
         active_model = pipeline.get_active_model()
         preload_model(active_model)
         if pipeline.llm is not None:
-            pipeline.llm.complete("warmup")
+            from backend.rag.llm_client import complete_text
+
+            # One token is enough to load the weights; an uncapped warm-up
+            # generated a full reply on every start.
+            complete_text(pipeline.llm, "warmup", max_tokens=1)
         logger.info("[3/4] Ollama LLM '%s' preloaded & warmed up in %.2fs", active_model, time.perf_counter() - t0)
     except Exception as exc:
         logger.warning("[3/4] Ollama LLM warm-up notice: %s", exc)
