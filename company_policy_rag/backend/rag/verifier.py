@@ -463,7 +463,7 @@ class SelfReflectionVerifier:
                             unsupported.append(claim)
                             seen.add(claim.casefold())
 
-        # Composite score calculation (PROJECT.md weights: 0.35 Faith + 0.30 Comp + 0.20 Cit + 0.15 Coh)
+        # Composite score weights: 0.35 faithfulness + 0.30 completeness + 0.20 citation + 0.15 coherence
         composite = round(
             0.35 * faith + 0.30 * comp + 0.20 * cit + 0.15 * coh,
             3,

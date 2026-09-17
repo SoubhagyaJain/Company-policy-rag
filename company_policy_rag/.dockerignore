@@ -23,7 +23,6 @@ logs/evaluation_results.json
 
 # Dev / notebooks
 notebooks/
-README2.md
 
 # Docker build context noise
 *.md
