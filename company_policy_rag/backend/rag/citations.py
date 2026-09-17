@@ -14,13 +14,17 @@ _SOURCE_TAG_PATTERN = re.compile(
 )
 
 
-def _compute_confidence(sc: ScoredChunk) -> float:
+def _compute_confidence(sc: ScoredChunk, top_score: float | None = None) -> float:
     """Normalize rerank logit score or candidate score into [0.05, 0.99] confidence range."""
     raw = sc.rerank_score if sc.rerank_score is not None else sc.score
     if raw is None:
         return 0.75
     try:
         raw_val = float(raw)
+        if sc.rerank_score is None and top_score and top_score > 0 and 0.0 <= raw_val <= top_score:
+            # Without a reranker the score is a fused RRF value (~0.016-0.033);
+            # show it relative to the best retrieved chunk instead of a 0.5 floor.
+            return max(0.05, min(0.99, round(raw_val / top_score, 4)))
         # sentence-transformers already applies a sigmoid to bge cross-encoder
         # scores, so a [0, 1] value is a probability; a second sigmoid squeezed
         # every citation into ~0.5-0.73.
@@ -69,6 +73,7 @@ class CitationEngine:
         idx: int,
         sc: ScoredChunk,
         selection_reason: str,
+        top_score: float | None = None,
     ) -> Citation:
         meta = sc.chunk.metadata
         extra = meta.extra or {}
@@ -131,7 +136,7 @@ class CitationEngine:
             section_title=sec_title,
             section_path=meta.section_path if sec_title else None,
             snippet=snippet,
-            relevance_score=_compute_confidence(sc),
+            relevance_score=_compute_confidence(sc, top_score),
             selection_reason=selection_reason,
             evidence_type=evidence_type,
             visual_asset_id=asset_id,
@@ -154,13 +159,14 @@ class CitationEngine:
 
         cited_indices = self.extract_source_tags(answer_text)
         citations: list[Citation] = []
+        top_retrieval_score = max((sc.score or 0.0) for sc in generation_chunks)
         selection_mode = "cited_in_answer"
 
         if cited_indices:
             for idx in sorted(cited_indices):
                 if 1 <= idx <= len(generation_chunks):
                     sc = generation_chunks[idx - 1]
-                    cit = self._build_citation_from_chunk(idx, sc, selection_mode)
+                    cit = self._build_citation_from_chunk(idx, sc, selection_mode, top_retrieval_score)
                     citations.append(cit)
 
         if not citations:
@@ -179,7 +185,7 @@ class CitationEngine:
                 # Number fallback citations by their [Source N] position in the
                 # prompt, not by retrieval rank, so cards line up with the context.
                 idx = position.get(id(sc), 1)
-                cit = self._build_citation_from_chunk(idx, sc, selection_mode)
+                cit = self._build_citation_from_chunk(idx, sc, selection_mode, top_retrieval_score)
                 citations.append(cit)
 
         # Collapse duplicate uploads that contain the same passage. Prefer the

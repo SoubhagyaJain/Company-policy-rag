@@ -57,3 +57,9 @@ def test_parenthesised_and_grouped_source_tags_are_recognised() -> None:
 
     assert [c.source_index for c in citations] == [1, 2, 4]
     assert all(c.selection_reason == "cited_in_answer" for c in citations)
+
+
+def test_without_a_reranker_relevance_is_relative_to_the_best_chunk() -> None:
+    chunks = [_scored(1, score=0.0328), _scored(2, score=0.0164)]
+    citations = CitationEngine().select_citations("A [Source 1]. B [Source 2].", chunks)
+    assert [c.relevance_score for c in citations] == [0.99, 0.5]
