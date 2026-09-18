@@ -63,9 +63,11 @@ jobs:
           backend/api/main.py
           backend/services/document_service.py
           scripts/benchmark_conversation.py
+          scripts/production_retrieval_smoke.py
           scripts/run_core_tests.py
           tests/test_conversation_interpreter.py
           tests/unit/test_conversation_benchmark.py
+          tests/unit/test_production_retrieval_smoke.py
 
   frontend:
     runs-on: ubuntu-latest
@@ -112,6 +114,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
+
+      # Self-contained: shipped loader, chunker, Chroma and BM25 with no downloads.
+      - name: Production retrieval smoke gate
+        run: >-
+          python scripts/production_retrieval_smoke.py
+          --assert-minimums
+          --output "${{ runner.temp }}/production-retrieval-smoke.json"
 
       - name: Cache embedding model
         uses: actions/cache@v4

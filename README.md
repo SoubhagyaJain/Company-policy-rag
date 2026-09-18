@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js 16](https://img.shields.io/badge/UI-Next.js%2016-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama%20%7C%20Qwen2.5-000000)](https://ollama.com/)
-[![Tests](https://img.shields.io/badge/tests-426%20backend%20%2B%20216%20frontend-brightgreen)](#-testing-strategy)
+[![Tests](https://img.shields.io/badge/tests-430%20backend%20%2B%20216%20frontend-brightgreen)](#-testing-strategy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [Quickstart](#-quickstart-one-command) · [Run from source](#-run-it-from-source-step-by-step) · [Using it](#-using-it) · [Architecture](#-architecture) · [Design decisions](#-design-decisions-and-trade-offs) · [Results](#-measured-results) · [Troubleshooting](#-troubleshooting)
@@ -94,6 +94,7 @@ Three evaluation layers, each reproducible from committed data. They answer diff
 | **Retrieval funnel** | Does the labelled evidence survive all the way into the final prompt? | [`eval_retrieval_backend.py`](company_policy_rag/scripts/eval_retrieval_backend.py) | 91 labelled questions over 3 corpora |
 | **Answers** | Are the facts right, the citations real, and does it abstain when it should? | [`eval_answers_backend.py`](company_policy_rag/scripts/eval_answers_backend.py) | 24 labelled questions, live `qwen2.5:7b` |
 | **Conversation** | Do follow-ups, topic shifts and reuse pick the right retrieval action? | [`benchmark_conversation.py`](company_policy_rag/scripts/benchmark_conversation.py) | 12 multi-turn cases |
+| **Production smoke** | Do the shipped loader, chunker and indexes still retrieve, with no downloads at all? | [`production_retrieval_smoke.py`](company_policy_rag/scripts/production_retrieval_smoke.py) | 8 cases, 100% hit@3, 0.854 MRR |
 
 ### 1. Retrieval → final prompt context
 
@@ -367,9 +368,10 @@ On Windows, [`start_dev.bat`](company_policy_rag/start_dev.bat) launches both se
 
 ```bash
 cd company_policy_rag
-python scripts/run_core_tests.py                           # 426 tests, ~30 s, no network, no GPU
+python scripts/run_core_tests.py                           # 430 tests, ~30 s, no network, no GPU
 python scripts/benchmark_conversation.py --assert-minimums # conversation gate
 python scripts/ci_retrieval_smoke.py                       # retrieval gate vs the committed baseline
+python scripts/production_retrieval_smoke.py --assert-minimums   # self-contained retrieval gate
 cd frontend && npm test                                    # 216 tests, ~0.3 s
 ```
 
@@ -873,6 +875,7 @@ Company-policy-rag/
 | [`backend/evaluation/answer_eval.py`](company_policy_rag/backend/evaluation/answer_eval.py) | What "a good answer" is defined as, in code |
 | [`docs/PHASE4_AB_LOG.md`](company_policy_rag/docs/PHASE4_AB_LOG.md) | Why each default is what it is, with the numbers |
 | [`scripts/benchmark_conversation.py`](company_policy_rag/scripts/benchmark_conversation.py) | The reproducible before/after harness |
+| [`scripts/production_retrieval_smoke.py`](company_policy_rag/scripts/production_retrieval_smoke.py) | Self-contained retrieval gate over the shipped ingestion path |
 
 ---
 
@@ -1025,20 +1028,22 @@ Full interactive schema at `/docs`. CORS is currently open (`allow_origins=["*"]
 
 ## 🧪 Testing strategy
 
-**642 automated checks**, all verified green at the time of writing.
+**646 automated checks**, all verified green at the time of writing.
 
 | Suite | Count | Runtime | Network |
 |---|---:|---|---|
-| Backend core regression | **426** | ~30 s | None |
+| Backend core regression | **430** | ~30 s | None |
 | Frontend | **216** | ~0.3 s | None |
 | Conversation benchmark gate | 12 cases | ~30 s | None (deterministic mode) |
-| Retrieval smoke gate | 21 queries | ~40 s | None (embedder from the HF cache) |
+| Retrieval smoke gate (labelled fixture) | 21 queries | ~40 s | None (embedder from the HF cache) |
+| Production retrieval smoke gate | 8 cases | ~20 s | None at all |
 
 ```bash
 cd company_policy_rag
-python scripts/run_core_tests.py                              # the CI manifest, 426 tests
+python scripts/run_core_tests.py                              # the CI manifest, 430 tests
 python scripts/benchmark_conversation.py --assert-minimums    # conversation gate
-python scripts/ci_retrieval_smoke.py                          # retrieval gate
+python scripts/ci_retrieval_smoke.py                          # retrieval gate (labelled fixture)
+python scripts/production_retrieval_smoke.py --assert-minimums  # retrieval gate (self-contained)
 python scripts/benchmark_conversation.py --with-generation --assert-minimums   # + live model
 cd frontend && npm test && npm run build
 ```
@@ -1054,10 +1059,10 @@ On Windows, set `KMP_DUPLICATE_LIB_OK=TRUE` before pytest — PyTorch and the In
 
 **CI gates** ([`rag-ci.yml`](.github/workflows/rag-ci.yml)) — the build fails if:
 
-1. Any of the 426 backend regressions fail
+1. Any of the 430 backend regressions fail
 2. Any of the 216 frontend tests fail, or the production Next.js build breaks
 3. The conversation benchmark drops **below 90% hit@3 or policy accuracy**, or regresses below the stored baseline
-4. The retrieval smoke gate falls more than 0.03 below its [committed baseline](company_policy_rag/data/eval/retrieval/handbook_smoke_baseline.json) on context Hit@6, Hit@2, MRR or coverage
+4. Either retrieval gate fails: the labelled-fixture one falls more than 0.03 below its [committed baseline](company_policy_rag/data/eval/retrieval/handbook_smoke_baseline.json) on context Hit@6, Hit@2, MRR or coverage, or the [self-contained one](company_policy_rag/scripts/production_retrieval_smoke.py) drops below 100% hit@3 / 80% MRR on its [public dataset](company_policy_rag/data/eval/retrieval_smoke.json)
 5. Ruff finds a lint violation in the tracked hot-path modules
 
 Gates 3 and 4 are the important ones: **quality is a build failure, not a dashboard**. Gate 4 runs the production retrieval and context-assembly path with no LLM, so it is deterministic, takes under a minute, and is tight enough to catch a single lost query — reverting the context-assembly default alone fails it (MRR 1.000 → 0.881).

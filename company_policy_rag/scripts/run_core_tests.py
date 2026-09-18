@@ -39,6 +39,7 @@ CORE_TEST_PATHS = (
     "tests/unit/test_ingestion_telemetry_counts.py",
     "tests/unit/test_retrieval_eval.py",
     "tests/unit/test_answer_eval.py",
+    "tests/unit/test_production_retrieval_smoke.py",
 )
 
 
