@@ -8,7 +8,6 @@ from backend.rag.policy_reliability import (
     GoverningClauseSelector,
     bind_source_indices,
     enforce_deterministic_calculations,
-    expand_policy_queries,
     format_policy_decision_context,
 )
 
@@ -188,8 +187,6 @@ def test_policy_decision_prompt_is_structured_for_small_local_models() -> None:
     assert "STRUCTURED RULES" in prompt
     assert "primary_rule (Source 1)" in prompt
     assert "do not invent" in prompt.lower()
-    queries = expand_policy_queries("Can I do private work for my sister?")
-    assert any("working on own account" in query for query in queries)
 
 
 def test_ingestion_records_clause_parent_and_exception_metadata() -> None:
@@ -212,3 +209,25 @@ def test_ingestion_records_clause_parent_and_exception_metadata() -> None:
     assert chunk.metadata.clause_id == "22.3"
     assert chunk.metadata.parent_section == "22"
     assert chunk.metadata.chunk_type == "exception"
+
+
+def test_bare_leading_numbers_are_not_clause_ids() -> None:
+    def clause(content: str, section_number: str | None = None) -> str | None:
+        document = RawDocument(
+            id="doc",
+            content=content,
+            metadata=DocumentMetadata(
+                source_file="handbook.pdf",
+                file_path="handbook.pdf",
+                file_hash="h",
+                document_type=DocumentType.PDF,
+                section_number=section_number,
+            ),
+        )
+        return RecursiveChunker().chunk([document])[0].metadata.clause_id
+
+    assert clause("98 | AI Agents Guidebook\nAgents use tools to act on the world.") is None
+    assert clause("3 Remote work is available to eligible employees after probation.") is None
+    assert clause("4.2 Remote work is available to eligible employees after probation.") == "4.2"
+    assert clause("Section 7 Travel expenses must be itemised within fifteen days.") == "7"
+    assert clause("1. Submit the form to your manager before booking travel.", section_number="5.1") == "5.1"

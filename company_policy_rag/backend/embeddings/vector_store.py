@@ -190,9 +190,13 @@ class ChromaVectorStore(VectorStoreInterface):
     def __init__(
         self,
         collection_name: str = "company_policy",
-        persist_dir: str = "storage/chroma",
+        persist_dir: str | Path | None = None,
     ) -> None:
         self.collection_name = collection_name
+        if persist_dir is None:
+            from src.config import settings
+
+            persist_dir = settings.chroma_persist_dir
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
         self._collection: Any = None
@@ -304,7 +308,15 @@ class ChromaVectorStore(VectorStoreInterface):
                         metadatas=metadatas,
                     )
             except Exception as exc:
-                logger.warning("Failed to add chunks to Chroma collection: %s", exc)
+                # A swallowed write left documents READY with vectors only in
+                # process memory, so dense retrieval silently lost them on the
+                # next restart. Fail loudly; ingestion cleans up partial writes.
+                with self._lock:
+                    for chunk in chunks:
+                        self._memory_chunks.pop(chunk.id, None)
+                    self._corpus_version_cache = None
+                logger.error("Failed to add chunks to Chroma collection: %s", exc)
+                raise RuntimeError(f"Vector index write failed: {exc}") from exc
 
     def _matches_filters(self, chunk: Chunk, filters: dict[str, Any] | None) -> bool:
         if not filters:

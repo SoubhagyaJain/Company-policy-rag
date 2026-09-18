@@ -46,6 +46,8 @@ class QueryContext:
     thinking_detail_level: Any = None
     thinking_sm: "ThinkingStateMachine | None" = None
     stream_callback: Callable[[str], None] | None = None
+    # Set when the client disconnects (threading.Event or asyncio.Event).
+    cancel_event: Any = None
 
     # ── Derived setup ──────────────────────────────────────────────────────
     total_start: float = 0.0
@@ -107,9 +109,13 @@ class QueryContext:
     context_tokens: int = 0
     cross_document_count: int = 0
     telemetry_extra: dict[str, Any] = field(default_factory=dict)
+    # Ollama-reported token counts for the answer generation of this attempt.
+    llm_usage: dict[str, Any] = field(default_factory=dict)
     policy_selection: Any = None
     continuity_applied: bool = False
     raw_new_chunk_count: int = 0
+    # Ranked chunk ids per retrieval stage for this attempt (RAGTrace.retrieval_stages).
+    retrieval_stages: dict[str, Any] = field(default_factory=dict)
     prev_all: list["ScoredChunk"] = field(default_factory=list)
 
     # ── Best-of-retries accumulators ───────────────────────────────────────

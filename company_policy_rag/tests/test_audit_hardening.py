@@ -10,7 +10,7 @@ from backend.models.page_identity import PageIdentity
 from backend.models.rag import Citation, EvidenceStatus, QueryCategory, ScoredChunk
 from backend.rag.citations import CitationEngine
 from backend.rag.evidence_gate import EvidenceSufficiencyGate, EvidenceSufficiencyResult
-from backend.rag.pipeline import GROUNDED_SYSTEM_PROMPT, _format_evidence_status_directive
+from backend.rag.pipeline import GROUNDED_ANSWER_WRITER_PROMPT, _format_evidence_status_directive
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_service import VisionService, VisualContentType
 
@@ -198,9 +198,9 @@ def test_partial_evidence_classification():
 # Test F — Contradictory answer prevention prompt rules
 # ============================================================================
 def test_contradictory_answer_prompt_rules():
-    """Verify that GROUNDED_SYSTEM_PROMPT and partial evidence directives forbid false absence claims."""
-    assert "RULE 9:" in GROUNDED_SYSTEM_PROMPT
-    assert "Never state that the document does not contain the code" in GROUNDED_SYSTEM_PROMPT
+    """Verify that the live answer prompt and partial evidence directives forbid false absence claims."""
+    assert "Do not claim the document lacks information" in GROUNDED_ANSWER_WRITER_PROMPT
+    assert "Preserve retrieved code exactly" in GROUNDED_ANSWER_WRITER_PROMPT
 
     directive = _format_evidence_status_directive(EvidenceStatus.PARTIAL)
     assert "PARTIAL IMPLEMENTATION" in directive

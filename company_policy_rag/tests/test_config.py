@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.config import settings
+from src.config import Settings, settings
 
 
 def test_chunk_size_in_recommended_range() -> None:
@@ -39,7 +39,8 @@ def test_eval_defaults() -> None:
 
 
 def test_reranker_defaults() -> None:
-    assert settings.enable_reranker is True
+    # Off by default (no measured context gain on CPU); the env can enable it.
+    assert Settings.model_fields["enable_reranker"].default is False
     # A bge cross-encoder reranker (base is the CPU default; large is opt-in).
     assert "bge-reranker" in settings.reranker_model
     assert settings.retrieval_candidate_k >= 20

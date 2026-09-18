@@ -51,7 +51,7 @@ def test_fallback_rewrite_does_not_drag_in_the_first_question_of_the_session():
         ]
     )
 
-    rewritten = rewriter._fallback_rewrite("what about it for contractors", "what about it for contractors", history)
+    rewritten = rewriter._fallback_rewrite("what about it for contractors", history)
 
     assert "parental leave" not in rewritten.lower(), (
         f"turn-1 topic leaked into a later turn: {rewritten!r}"

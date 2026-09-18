@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     legal_dir: Path = Field(default=PROJECT_ROOT / "data" / "legal")
     raw_dir: Path = Field(default=PROJECT_ROOT / "data" / "raw")
     storage_dir: Path = Field(default=PROJECT_ROOT / "storage")
+    # Document library served by the API: uploads, Chroma and BM25 indexes.
+    app_storage_dir: Path = Field(default=PROJECT_ROOT / "app" / "storage", alias="APP_STORAGE_DIR")
+    # "persistent": one library under APP_STORAGE_DIR that survives restarts.
+    # "session": every API process starts an empty library in
+    # APP_STORAGE_DIR/sessions/<id> (earlier sessions stay on disk).
+    document_library_mode: Literal["persistent", "session"] = Field(
+        default="persistent", alias="DOCUMENT_LIBRARY_MODE"
+    )
     pdf_images_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
     logs_dir: Path = Field(default=PROJECT_ROOT / "logs")
 
@@ -98,7 +106,10 @@ class Settings(BaseSettings):
     enable_query_routing: bool = Field(default=True, alias="ENABLE_QUERY_ROUTING")
     enable_answer_verification: bool = Field(default=True, alias="ENABLE_ANSWER_VERIFICATION")
     enable_metadata_extraction: bool = Field(default=True, alias="ENABLE_METADATA_EXTRACTION")
-    enable_query_metadata_filtering: bool = Field(default=True, alias="ENABLE_QUERY_METADATA_FILTERING")
+    # Off by default: inferred topic/department filters hit fields chunks do not
+    # carry (or carry as document-level guesses), so both indexes returned nothing
+    # and retrieval ran a second time with the filters relaxed.
+    enable_query_metadata_filtering: bool = Field(default=False, alias="ENABLE_QUERY_METADATA_FILTERING")
 
     @property
     def ENABLE_QUERY_ROUTING(self) -> bool:
@@ -121,17 +132,11 @@ class Settings(BaseSettings):
         default="heuristic", alias="METADATA_EXTRACTION_MODE"
     )
     metadata_extractor_model: str = Field(default="qwen2.5:7b", alias="METADATA_EXTRACTOR_MODEL")
-    metadata_filter_fallback_relaxation: bool = Field(
-        default=True, alias="METADATA_FILTER_FALLBACK_RELAXATION"
-    )
     enable_filter_fallback_relaxation: bool = Field(
         default=True, alias="ENABLE_FILTER_FALLBACK_RELAXATION"
     )
     metadata_filter_min_confidence: float = Field(
         default=0.60, alias="METADATA_FILTER_MIN_CONFIDENCE"
-    )
-    metadata_confidence_threshold: float = Field(
-        default=0.60, alias="METADATA_CONFIDENCE_THRESHOLD"
     )
     metadata_max_entities_per_chunk: int = Field(
         default=20, alias="METADATA_MAX_ENTITIES_PER_CHUNK"
@@ -145,9 +150,6 @@ class Settings(BaseSettings):
     query_router_confidence_threshold: float = Field(
         default=0.70, alias="QUERY_ROUTER_CONFIDENCE_THRESHOLD"
     )
-    enable_conversational_bypass: bool = Field(
-        default=True, alias="ENABLE_CONVERSATIONAL_BYPASS"
-    )
 
     # ── Self-Reflection & Answer Verification Thresholds ────────────────────
     verification_faithfulness_threshold: float = Field(
@@ -159,14 +161,13 @@ class Settings(BaseSettings):
     verification_citation_threshold: float = Field(
         default=0.60, alias="VERIFICATION_CITATION_THRESHOLD"
     )
-    verification_coherence_threshold: float = Field(
-        default=0.70, alias="VERIFICATION_COHERENCE_THRESHOLD"
-    )
     verification_composite_threshold: float = Field(
         default=0.70, alias="VERIFICATION_COMPOSITE_THRESHOLD"
     )
+    # 0 by default: a retry costs a full generation (plus an LLM judge on
+    # high-risk answers). Raise it only with an answer-level eval showing gains.
     verification_max_retries: int = Field(
-        default=2, alias="VERIFICATION_MAX_RETRIES"
+        default=0, alias="VERIFICATION_MAX_RETRIES"
     )
     # LLM-backed faithfulness auditing. The heuristic verifier only measures
     # lexical overlap; an LLM judge actually checks whether each claim is
@@ -206,7 +207,6 @@ class Settings(BaseSettings):
     vision_num_predict: int = Field(default=160, alias="VISION_NUM_PREDICT")
     vision_max_ingestion_retries: int = Field(default=0, alias="VISION_MAX_INGESTION_RETRIES")
     vision_max_lazy_retries: int = Field(default=0, alias="VISION_MAX_LAZY_RETRIES")
-    vision_timeout_seconds: float = Field(default=35.0, alias="VISION_TIMEOUT_SECONDS")
     enable_lazy_vision_fallback: bool = Field(default=True, alias="ENABLE_LAZY_VISION_FALLBACK")
     vision_request_timeout: float = Field(default=30.0, alias="VISION_REQUEST_TIMEOUT")
     vision_query_budget_seconds: float = Field(default=40.0, alias="VISION_QUERY_BUDGET_SECONDS")
@@ -293,21 +293,79 @@ class Settings(BaseSettings):
     # Base is the latency-safe default for CPU inference; set
     # RERANKER_MODEL=BAAI/bge-reranker-large for higher precision on dense legal
     # text at a few seconds/query. Defaults match the project's .env.
-    enable_reranker: bool = Field(default=True, alias="ENABLE_RERANKER")
+    # Off by default: on the 70-query eval the cross-encoder did not change which
+    # relevant evidence reached the LLM once context assembly kept ranked chunks,
+    # and base costs ~2.1 s per query on CPU (docs/DOWNSTREAM_EVIDENCE_LOSS.md).
+    enable_reranker: bool = Field(default=False, alias="ENABLE_RERANKER")
     reranker_model: str = Field(
         default="BAAI/bge-reranker-base", alias="RERANKER_MODEL"
     )
     reranker_top_n: int = Field(default=5, alias="RERANKER_TOP_N")
-    reranker_batch_size: int = Field(default=32, alias="RERANKER_BATCH_SIZE")
+    reranker_batch_size: int = Field(default=16, alias="RERANKER_BATCH_SIZE")
     reranker_device: str = Field(default="cpu", alias="RERANKER_DEVICE")
     # Drop chunks scoring below this fraction of the top reranker score
     enable_rerank_score_filter: bool = Field(default=True, alias="ENABLE_RERANK_SCORE_FILTER")
     rerank_min_score_ratio: float = Field(default=0.40, alias="RERANK_MIN_SCORE_RATIO")
     rerank_min_keep: int = Field(default=3, alias="RERANK_MIN_KEEP")
 
-    # ── Conditional Reranking & Retrieval Caching (Qwen 2.5 7B) ──────────
-    enable_conditional_reranking: bool = Field(default=True, alias="ENABLE_CONDITIONAL_RERANKING")
-    conditional_reranker_threshold: float = Field(default=0.85, alias="CONDITIONAL_RERANKER_THRESHOLD")
+    # ── Retrieval experiment flags ─────────────────────────────────────────
+    # scripts/eval_retrieval_backend.py drives these to compare first-stage and
+    # reranker variants. MIN_CHUNK_WORDS, SCOPE_UNBOUND_REFERENCE_MODE and
+    # CONTEXT_ASSEMBLY_MODE default to the variants that measured better
+    # (docs/DOWNSTREAM_EVIDENCE_LOSS.md); the rest reproduce the original pipeline.
+    # Cross-encoder candidate pool: 0 = legacy max(top_n * 4, 20), -1 = score
+    # every candidate, N = score the top N fused candidates.
+    reranker_pool_size: int = Field(default=0, alias="RERANKER_POOL_SIZE")
+    # Replaces the per-category relative score ratio when set (0 < r <= 1).
+    rerank_score_ratio_override: float | None = Field(
+        default=None, alias="RERANK_SCORE_RATIO_OVERRIDE"
+    )
+    # Dense and BM25 depth per sub-query. 0 = keep the response-mode depth.
+    retrieval_depth_override: int = Field(default=0, alias="RETRIEVAL_DEPTH_OVERRIDE")
+    # "response_mode": the answer-depth budget sets retrieval depth (legacy).
+    # "max": use the larger of the router's category depth and the mode depth.
+    retrieval_depth_mode: Literal["response_mode", "max"] = Field(
+        default="response_mode", alias="RETRIEVAL_DEPTH_MODE"
+    )
+    # How per-sub-query hit lists are combined: "max_score" keeps each chunk's
+    # highest raw score (legacy), "rrf" fuses the ranked lists.
+    subquery_merge_mode: Literal["max_score", "rrf"] = Field(
+        default="max_score", alias="SUBQUERY_MERGE_MODE"
+    )
+    # Skip chunks with this many words or fewer at query time. 0 = off.
+    min_chunk_words: int = Field(default=5, alias="MIN_CHUNK_WORDS")
+    bm25_k1: float = Field(default=1.5, alias="BM25_K1")
+    bm25_b: float = Field(default=0.75, alias="BM25_B")
+    bm25_stemming: bool = Field(default=False, alias="BM25_STEMMING")
+    # Metadata fields appended to chunk text in the BM25 index.
+    bm25_metadata_fields: str = Field(
+        default="section_path,section_title,section_number,source_file,category",
+        alias="BM25_METADATA_FIELDS",
+    )
+    # Record ranked chunk ids per retrieval stage on RAGTrace.retrieval_stages.
+    record_retrieval_stages: bool = Field(default=True, alias="RECORD_RETRIEVAL_STAGES")
+    # A query that says "the guidebook" / "this document" with no active
+    # document. "strict" (legacy): CURRENT_DOCUMENT scope with no identity,
+    # which rejects every candidate. "resolve": bind to the only indexed
+    # document or the one whose filename contains the named noun; otherwise
+    # search globally.
+    scope_unbound_reference_mode: Literal["strict", "resolve"] = Field(
+        default="resolve", alias="SCOPE_UNBOUND_REFERENCE_MODE"
+    )
+    # How governing-clause selection builds the context list. "governing"
+    # (legacy): the selector's picks from the whole candidate pool replace the
+    # ranked hand-off. "rank_anchor": the top CONTEXT_RANK_ANCHOR_K ranked
+    # hand-off chunks are always kept; selector picks fill the other slots.
+    # "rank": the ranked hand-off is the context; the selector only feeds the
+    # policy decision block.
+    # "rank_rescue" / "rank_policy": ranked order, with the selector's top picks
+    # taking the last slots when missing (always / only for policy questions).
+    context_assembly_mode: Literal["governing", "rank_anchor", "rank", "rank_rescue", "rank_policy"] = Field(
+        default="rank_policy", alias="CONTEXT_ASSEMBLY_MODE"
+    )
+    context_rank_anchor_k: int = Field(default=2, alias="CONTEXT_RANK_ANCHOR_K")
+
+    # ── Retrieval caching & concurrency ──────────────────────────────────
     retrieval_cache_enabled: bool = Field(default=True, alias="RETRIEVAL_CACHE_ENABLED")
     retrieval_cache_ttl_seconds: int = Field(default=3600, alias="RETRIEVAL_CACHE_TTL_SECONDS")
     # Max concurrent sub-query retrievals. Sub-queries are independent, so they
@@ -318,20 +376,19 @@ class Settings(BaseSettings):
     # ── Query rewrite (pre-retrieval) ──────────────────────────────────────
     # Disabled by default for fast single-turn; conditional for multi-turn follow-ups
     enable_query_rewrite: bool = Field(default=False, alias="ENABLE_QUERY_REWRITE")
+    # The LLM pass of the conversation interpreter (the deterministic
+    # interpreter always runs). Off by default: on the conversation benchmark
+    # qwen2.5:7b returned unusable JSON for 11/11 follow-up turns, added ~8.5 s
+    # per turn, and changed no retrieval decision (see docs/PHASE4_AB_LOG.md).
     enable_conversation_interpreter: bool = Field(
-        default=True, alias="ENABLE_CONVERSATION_INTERPRETER"
+        default=False, alias="ENABLE_CONVERSATION_INTERPRETER"
     )
-    # LLM-based multi-query decomposition. When on and an LLM is available, one
-    # LLM call splits comprehensive/list questions into focused sub-queries
-    # (generalizes to any corpus); the keyword-table heuristic remains the
-    # fallback. Only runs where multi-query is already enabled (not fast-path).
-    enable_llm_multi_query: bool = Field(default=True, alias="ENABLE_LLM_MULTI_QUERY")
-
-    # ── Dynamic Output Limits (Qwen 2.5 7B) ────────────────────────────────
-    max_new_tokens_direct: int = Field(default=128, alias="MAX_NEW_TOKENS_DIRECT")
-    max_new_tokens_factual: int = Field(default=256, alias="MAX_NEW_TOKENS_FACTUAL")
-    max_new_tokens_technical: int = Field(default=384, alias="MAX_NEW_TOKENS_TECHNICAL")
-    max_new_tokens_complex: int = Field(default=512, alias="MAX_NEW_TOKENS_COMPLEX")
+    # LLM-based multi-query decomposition for comprehensive/list questions. When
+    # off, the deterministic split (question parts, "including X, Y" topics) is
+    # used. Off by default: across 91 labelled queries it did not improve the
+    # final context (coverage -0.011, nDCG@10 -0.010) and adds an LLM call per
+    # comprehensive question (see docs/PHASE4_AB_LOG.md).
+    enable_llm_multi_query: bool = Field(default=False, alias="ENABLE_LLM_MULTI_QUERY")
 
     # ── Generation / faithfulness grounding ──────────────────────────────────
     # balanced (default): helpful synthesis + partial answers; strict: max faithfulness
@@ -397,9 +454,6 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO", alias="LOG_LEVEL"
     )
-
-    # ── Chat UI ────────────────────────────────────────────────────────────
-    chainlit_port: int = Field(default=8000, alias="CHAINLIT_PORT")
 
     # ── Citation display (chat UI) ─────────────────────────────────────────
     # Citations are critical for trust in policy/legal RAG — keep configurable

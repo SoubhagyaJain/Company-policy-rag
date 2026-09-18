@@ -42,7 +42,7 @@ class MockCompressor:
 
 
 class MockCitationEngine:
-    def select_citations(self, answer_text, generation_chunks, user_query):
+    def select_citations(self, answer_text, generation_chunks, user_query=None, max_citations=None):
         return []
 
 

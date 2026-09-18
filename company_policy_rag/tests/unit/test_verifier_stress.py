@@ -114,6 +114,11 @@ class TestHallucinationDetection:
         assert report.faithfulness < 0.65
         assert report.faithfulness <= 0.35
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="The lexical verifier cannot detect invented non-numeric entities; the hard-coded "
+        "'furniture' check that made this pass was removed with the corpus-specific heuristics.",
+    )
     def test_unsupported_furniture_category(self) -> None:
         """Adversarial hallucination: Answer claims furniture purchases when context does not mention furniture."""
         verifier = SelfReflectionVerifier(threshold=0.70)

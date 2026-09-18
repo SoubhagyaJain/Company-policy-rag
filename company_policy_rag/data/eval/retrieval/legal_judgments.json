@@ -1,0 +1,199 @@
+{
+ "legal_state_society": {
+  "14": 2,
+  "21": 2,
+  "1": 1,
+  "11": 1
+ },
+ "legal_article12": {
+  "14": 2,
+  "21": 2
+ },
+ "legal_locke_contracts": {
+  "19": 2,
+  "1": 1
+ },
+ "legal_totalitarian": {
+  "4": 2
+ },
+ "legal_dictatorship_paraphrase": {
+  "24": 2
+ },
+ "legal_unicameral_bicameral": {
+  "4": 2,
+  "13": 2,
+  "12": 1,
+  "15": 1
+ },
+ "legal_pardon_paraphrase": {
+  "3": 2
+ },
+ "legal_separation_liberty": {
+  "18": 2,
+  "1": 2,
+  "4": 1,
+  "19": 1,
+  "17": 1,
+  "8": 1,
+  "27": 1
+ },
+ "legal_us_congress": {
+  "37": 2,
+  "27": 1
+ },
+ "legal_article50": {
+  "3": 2,
+  "8": 2
+ },
+ "legal_ambedkar_role": {
+  "18": 2,
+  "3": 2,
+  "15": 1
+ },
+ "legal_socialist_word": {
+  "11": 2,
+  "2": 1
+ },
+ "legal_equal_pay": {
+  "23": 2,
+  "14": 2,
+  "18": 2,
+  "12": 1
+ },
+ "legal_emergency_types": {
+  "10": 2,
+  "7": 2
+ },
+ "legal_admin_vs_constitutional": {
+  "5": 2,
+  "8": 2,
+  "7": 1,
+  "18": 1
+ },
+ "legal_rule_of_law_india": {
+  "4": 2,
+  "16": 2,
+  "1": 1,
+  "33": 1,
+  "3": 1
+ },
+ "legal_droit": {
+  "21": 2,
+  "13": 2
+ },
+ "legal_natural_law": {
+  "2": 2,
+  "13": 2
+ },
+ "legal_sociological_paraphrase": {
+  "6": 2
+ },
+ "legal_custom_source": {
+  "16": 2,
+  "7": 1,
+  "1": 1
+ },
+ "legal_legislation_meaning": {
+  "21": 2,
+  "23": 1,
+  "4": 1
+ },
+ "legal_law_reform_need": {
+  "13": 2,
+  "4": 2,
+  "21": 1,
+  "3": 1,
+  "20": 1
+ },
+ "legal_section66a": {
+  "17": 2,
+  "10": 2,
+  "7": 1
+ },
+ "legal_civil_damages_paraphrase": {
+  "1": 2,
+  "14": 1,
+  "19": 1
+ },
+ "legal_appellate": {
+  "15": 2,
+  "16": 1,
+  "10": 1,
+  "2": 1,
+  "22": 1,
+  "20": 1
+ },
+ "legal_judgment_decree": {
+  "17": 2,
+  "6": 2,
+  "13": 1,
+  "16": 1,
+  "8": 1
+ },
+ "legal_bail_compoundable": {
+  "16": 2,
+  "5": 1,
+  "13": 1,
+  "12": 1,
+  "21": 1,
+  "6": 1
+ },
+ "legal_sessions_court": {
+  "21": 2,
+  "26": 2,
+  "23": 1
+ },
+ "legal_fir_mandatory": {
+  "5": 2,
+  "16": 2,
+  "18": 1,
+  "1": 1,
+  "13": 1,
+  "9": 1,
+  "12": 1
+ },
+ "legal_summons_trial": {
+  "10": 2,
+  "7": 2,
+  "4": 1
+ },
+ "legal_double_jeopardy_paraphrase": {
+  "19": 2,
+  "27": 1
+ },
+ "legal_family_courts_women": {
+  "9": 2,
+  "16": 1,
+  "14": 1,
+  "5": 1
+ },
+ "legal_marriage_age_paraphrase": {
+  "25": 2,
+  "6": 2,
+  "4": 1,
+  "23": 1,
+  "22": 1
+ },
+ "legal_divorce_grounds": {
+  "15": 2,
+  "18": 1,
+  "14": 1,
+  "5": 1,
+  "6": 1,
+  "8": 1
+ },
+ "legal_child_labour_paraphrase": {
+  "14": 2,
+  "10": 1
+ },
+ "legal_hindu_adoption": {
+  "14": 2,
+  "12": 1,
+  "17": 1,
+  "2": 1
+ },
+ "legal_property_types": {
+  "5": 2,
+  "12": 1
+ }
+}

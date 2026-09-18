@@ -1,0 +1,1330 @@
+{
+ "corpus": "guidebook",
+ "corpus_source": "app/storage/sessions/4e04828ac7654258950af214a9bc1bd5/bm25/corpus.json (AI Agents guidebook.pdf, 235 chunks)",
+ "query_source": "golden_dataset_guidebook.json (abstention cases excluded)",
+ "label_source": "keyword needles matching <=10% of the corpus (secondary, lexical-biased)",
+ "queries": [
+  {
+   "id": "agent_vs_llm_vs_rag",
+   "question": "What is the difference between an Agent, an LLM, and RAG?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Agent vs LLM vs RAG",
+    "agent",
+    "RAG"
+   ],
+   "relevant": {
+    "chunk_b6b59da17006": 1,
+    "chunk_1a753bb86c98": 1,
+    "chunk_68121b0004ed": 1,
+    "chunk_eae746f194fa": 1,
+    "chunk_181317b732ed": 1,
+    "chunk_809877161033": 1,
+    "chunk_6fdfe01e75ea": 1,
+    "chunk_1c20ccd5fa13": 1,
+    "chunk_42b756e95e87": 1,
+    "chunk_81ac578a3a5f": 1,
+    "chunk_58ecc9f3b10e": 1,
+    "chunk_36517bddd420": 1,
+    "chunk_c5db49048b99": 1,
+    "chunk_7ef8f0646cd4": 1
+   },
+   "aspects": {
+    "RAG": [
+     "chunk_181317b732ed",
+     "chunk_1a753bb86c98",
+     "chunk_1c20ccd5fa13",
+     "chunk_36517bddd420",
+     "chunk_42b756e95e87",
+     "chunk_58ecc9f3b10e",
+     "chunk_68121b0004ed",
+     "chunk_6fdfe01e75ea",
+     "chunk_7ef8f0646cd4",
+     "chunk_809877161033",
+     "chunk_81ac578a3a5f",
+     "chunk_b6b59da17006",
+     "chunk_c5db49048b99",
+     "chunk_eae746f194fa"
+    ]
+   }
+  },
+  {
+   "id": "six_building_blocks",
+   "question": "List and explain the 6 building blocks of AI Agents.",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "building blocks",
+    "Role",
+    "Tools",
+    "Memory",
+    "Guardrails",
+    "Planning"
+   ],
+   "relevant": {
+    "chunk_809877161033": 1,
+    "chunk_fcc31db868c8": 1,
+    "chunk_9e20d85def9a": 1,
+    "chunk_a1065cda4800": 1,
+    "chunk_06c849546d7e": 1,
+    "chunk_f544497f9f33": 1,
+    "chunk_8eabd87078bd": 1,
+    "chunk_89ba78b6219a": 1,
+    "chunk_38b86e227c67": 1,
+    "chunk_d18590edba12": 1,
+    "chunk_15f8831b69f6": 1,
+    "chunk_5aceac587f22": 1,
+    "chunk_7038de8c7eec": 1,
+    "chunk_70ab95dd0fa0": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_2f69cc6c5938": 1,
+    "chunk_1c20ccd5fa13": 1,
+    "chunk_7236d3b8e198": 1,
+    "chunk_f69f6a61e7dd": 1,
+    "chunk_3e415cc3737f": 1,
+    "chunk_68121b0004ed": 1,
+    "chunk_81d75a33268b": 1,
+    "chunk_0a5367089904": 1,
+    "chunk_3b0a410c22e8": 1,
+    "chunk_a4cb11f3d3a9": 1,
+    "chunk_29fa936f7054": 1,
+    "chunk_0b1a86530ce2": 1,
+    "chunk_67c5101fafc8": 1,
+    "chunk_cea94a2246bb": 1,
+    "chunk_11c0ddd9849c": 1,
+    "chunk_c1292dbb7ebc": 1,
+    "chunk_a7e49a7f123c": 1,
+    "chunk_d3f03ba3c155": 1
+   },
+   "aspects": {
+    "building blocks": [
+     "chunk_809877161033",
+     "chunk_9e20d85def9a",
+     "chunk_fcc31db868c8"
+    ],
+    "Role": [
+     "chunk_06c849546d7e",
+     "chunk_38b86e227c67",
+     "chunk_809877161033",
+     "chunk_89ba78b6219a",
+     "chunk_8eabd87078bd",
+     "chunk_a1065cda4800",
+     "chunk_f544497f9f33"
+    ],
+    "Tools": [
+     "chunk_0a5367089904",
+     "chunk_15f8831b69f6",
+     "chunk_1c20ccd5fa13",
+     "chunk_2f69cc6c5938",
+     "chunk_3b0a410c22e8",
+     "chunk_3e415cc3737f",
+     "chunk_5aceac587f22",
+     "chunk_68121b0004ed",
+     "chunk_7038de8c7eec",
+     "chunk_70ab95dd0fa0",
+     "chunk_7236d3b8e198",
+     "chunk_809877161033",
+     "chunk_81d75a33268b",
+     "chunk_89ba78b6219a",
+     "chunk_8eabd87078bd",
+     "chunk_a1df4148140c",
+     "chunk_a4cb11f3d3a9",
+     "chunk_d18590edba12",
+     "chunk_f544497f9f33",
+     "chunk_f69f6a61e7dd"
+    ],
+    "Guardrails": [
+     "chunk_0b1a86530ce2",
+     "chunk_29fa936f7054",
+     "chunk_809877161033"
+    ],
+    "Planning": [
+     "chunk_11c0ddd9849c",
+     "chunk_67c5101fafc8",
+     "chunk_a7e49a7f123c",
+     "chunk_c1292dbb7ebc",
+     "chunk_cea94a2246bb",
+     "chunk_d3f03ba3c155",
+     "chunk_f69f6a61e7dd"
+    ]
+   }
+  },
+  {
+   "id": "role_playing_block",
+   "question": "What is the Role-playing building block in AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Role",
+    "role-playing",
+    "task description"
+   ],
+   "relevant": {
+    "chunk_a1065cda4800": 1,
+    "chunk_06c849546d7e": 1,
+    "chunk_f544497f9f33": 1,
+    "chunk_8eabd87078bd": 1,
+    "chunk_809877161033": 1,
+    "chunk_89ba78b6219a": 1,
+    "chunk_38b86e227c67": 1,
+    "chunk_33c453aa2a59": 1,
+    "chunk_1b1ed9c41385": 1
+   },
+   "aspects": {
+    "Role": [
+     "chunk_06c849546d7e",
+     "chunk_38b86e227c67",
+     "chunk_809877161033",
+     "chunk_89ba78b6219a",
+     "chunk_8eabd87078bd",
+     "chunk_a1065cda4800",
+     "chunk_f544497f9f33"
+    ],
+    "role-playing": [
+     "chunk_38b86e227c67",
+     "chunk_809877161033",
+     "chunk_a1065cda4800"
+    ],
+    "task description": [
+     "chunk_1b1ed9c41385",
+     "chunk_33c453aa2a59"
+    ]
+   }
+  },
+  {
+   "id": "tools_block",
+   "question": "What role do Tools play in AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Tools allow",
+    "custom tool",
+    "tool"
+   ],
+   "relevant": {
+    "chunk_a1df4148140c": 1,
+    "chunk_7236d3b8e198": 1,
+    "chunk_0b38d9f9069f": 1,
+    "chunk_15f8831b69f6": 1,
+    "chunk_8400c0989901": 1,
+    "chunk_5aceac587f22": 1,
+    "chunk_c4bd6da7bb16": 1,
+    "chunk_809877161033": 1
+   },
+   "aspects": {
+    "Tools allow": [
+     "chunk_7236d3b8e198",
+     "chunk_a1df4148140c"
+    ],
+    "custom tool": [
+     "chunk_0b38d9f9069f",
+     "chunk_15f8831b69f6",
+     "chunk_5aceac587f22",
+     "chunk_809877161033",
+     "chunk_8400c0989901",
+     "chunk_a1df4148140c",
+     "chunk_c4bd6da7bb16"
+    ]
+   }
+  },
+  {
+   "id": "memory_block",
+   "question": "How does Memory work as a building block of AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Memory",
+    "memory"
+   ],
+   "relevant": {},
+   "aspects": {}
+  },
+  {
+   "id": "guardrails_block",
+   "question": "What are Guardrails in AI agents and why are they used?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Guardrails",
+    "guardrail"
+   ],
+   "relevant": {
+    "chunk_29fa936f7054": 1,
+    "chunk_809877161033": 1,
+    "chunk_0b1a86530ce2": 1
+   },
+   "aspects": {
+    "Guardrails": [
+     "chunk_0b1a86530ce2",
+     "chunk_29fa936f7054",
+     "chunk_809877161033"
+    ],
+    "guardrail": [
+     "chunk_0b1a86530ce2",
+     "chunk_29fa936f7054",
+     "chunk_809877161033"
+    ]
+   }
+  },
+  {
+   "id": "planning_block",
+   "question": "What is the Planning building block in AI agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Planning",
+    "planning"
+   ],
+   "relevant": {
+    "chunk_67c5101fafc8": 1,
+    "chunk_cea94a2246bb": 1,
+    "chunk_11c0ddd9849c": 1,
+    "chunk_f69f6a61e7dd": 1,
+    "chunk_c1292dbb7ebc": 1,
+    "chunk_a7e49a7f123c": 1,
+    "chunk_d3f03ba3c155": 1
+   },
+   "aspects": {
+    "Planning": [
+     "chunk_11c0ddd9849c",
+     "chunk_67c5101fafc8",
+     "chunk_a7e49a7f123c",
+     "chunk_c1292dbb7ebc",
+     "chunk_cea94a2246bb",
+     "chunk_d3f03ba3c155",
+     "chunk_f69f6a61e7dd"
+    ],
+    "planning": [
+     "chunk_11c0ddd9849c",
+     "chunk_67c5101fafc8",
+     "chunk_a7e49a7f123c",
+     "chunk_c1292dbb7ebc",
+     "chunk_cea94a2246bb",
+     "chunk_d3f03ba3c155",
+     "chunk_f69f6a61e7dd"
+    ]
+   }
+  },
+  {
+   "id": "mcp_tools",
+   "question": "What is MCP in the context of agent tools?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "MCP"
+   ],
+   "relevant": {
+    "chunk_a38071c649d3": 1,
+    "chunk_a27bd4069c55": 1,
+    "chunk_15f8831b69f6": 1,
+    "chunk_b15b2b135b8b": 1,
+    "chunk_b3cccf940c61": 1,
+    "chunk_2f69cc6c5938": 1,
+    "chunk_e9c57020c027": 1,
+    "chunk_809877161033": 1,
+    "chunk_0588345e319e": 1,
+    "chunk_7038de8c7eec": 1,
+    "chunk_83b6aac80e2c": 1,
+    "chunk_814847fb6f74": 1,
+    "chunk_2989a35d3f8c": 1,
+    "chunk_46a416087e65": 1,
+    "chunk_44e81c634bf6": 1
+   },
+   "aspects": {
+    "MCP": [
+     "chunk_0588345e319e",
+     "chunk_15f8831b69f6",
+     "chunk_2989a35d3f8c",
+     "chunk_2f69cc6c5938",
+     "chunk_44e81c634bf6",
+     "chunk_46a416087e65",
+     "chunk_7038de8c7eec",
+     "chunk_809877161033",
+     "chunk_814847fb6f74",
+     "chunk_83b6aac80e2c",
+     "chunk_a27bd4069c55",
+     "chunk_a38071c649d3",
+     "chunk_b15b2b135b8b",
+     "chunk_b3cccf940c61",
+     "chunk_e9c57020c027"
+    ]
+   }
+  },
+  {
+   "id": "currency_tool_example",
+   "question": "Show the currency conversion tool example and explain how it is invoked.",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "currency",
+    "conversion",
+    "tool"
+   ],
+   "relevant": {
+    "chunk_056904c5ad52": 1,
+    "chunk_15f8831b69f6": 1,
+    "chunk_b15b2b135b8b": 1,
+    "chunk_b3cccf940c61": 1,
+    "chunk_5aceac587f22": 1,
+    "chunk_cae9a788eabd": 1
+   },
+   "aspects": {
+    "currency": [
+     "chunk_056904c5ad52",
+     "chunk_15f8831b69f6",
+     "chunk_5aceac587f22",
+     "chunk_b15b2b135b8b",
+     "chunk_b3cccf940c61",
+     "chunk_cae9a788eabd"
+    ],
+    "conversion": [
+     "chunk_5aceac587f22"
+    ]
+   }
+  },
+  {
+   "id": "custom_tools",
+   "question": "How do you build custom tools for an agent?",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "custom tool",
+    "Tools allow"
+   ],
+   "relevant": {
+    "chunk_0b38d9f9069f": 1,
+    "chunk_15f8831b69f6": 1,
+    "chunk_8400c0989901": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_5aceac587f22": 1,
+    "chunk_c4bd6da7bb16": 1,
+    "chunk_809877161033": 1,
+    "chunk_7236d3b8e198": 1
+   },
+   "aspects": {
+    "custom tool": [
+     "chunk_0b38d9f9069f",
+     "chunk_15f8831b69f6",
+     "chunk_5aceac587f22",
+     "chunk_809877161033",
+     "chunk_8400c0989901",
+     "chunk_a1df4148140c",
+     "chunk_c4bd6da7bb16"
+    ],
+    "Tools allow": [
+     "chunk_7236d3b8e198",
+     "chunk_a1df4148140c"
+    ]
+   }
+  },
+  {
+   "id": "react_pattern",
+   "question": "Explain the ReAct design pattern for AI agents.",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "ReAct",
+    "reasoning",
+    "acting"
+   ],
+   "relevant": {
+    "chunk_d18590edba12": 1,
+    "chunk_7236d3b8e198": 1,
+    "chunk_f69f6a61e7dd": 1,
+    "chunk_c1292dbb7ebc": 1,
+    "chunk_823991ebdee8": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_38b86e227c67": 1,
+    "chunk_c6decda3009c": 1
+   },
+   "aspects": {
+    "ReAct": [
+     "chunk_7236d3b8e198",
+     "chunk_823991ebdee8",
+     "chunk_c1292dbb7ebc",
+     "chunk_d18590edba12",
+     "chunk_f69f6a61e7dd"
+    ],
+    "reasoning": [
+     "chunk_38b86e227c67",
+     "chunk_a1df4148140c",
+     "chunk_f69f6a61e7dd"
+    ],
+    "acting": [
+     "chunk_c6decda3009c",
+     "chunk_f69f6a61e7dd"
+    ]
+   }
+  },
+  {
+   "id": "reflection_pattern",
+   "question": "How does reflection help agents improve their output?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "reviews its own work",
+    "reflection",
+    "iterate"
+   ],
+   "relevant": {
+    "chunk_0455c4622fa8": 1
+   },
+   "aspects": {
+    "reviews its own work": [
+     "chunk_0455c4622fa8"
+    ],
+    "iterate": [
+     "chunk_0455c4622fa8"
+    ]
+   }
+  },
+  {
+   "id": "multi_agent_orchestration",
+   "question": "What is multi-agent orchestration in the guidebook?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "multi-agent",
+    "orchestrat",
+    "manager agent"
+   ],
+   "relevant": {
+    "chunk_d62becc5a75d": 1,
+    "chunk_3e415cc3737f": 1,
+    "chunk_8b85d4037c84": 1,
+    "chunk_70ab95dd0fa0": 1,
+    "chunk_cea94a2246bb": 1,
+    "chunk_a38071c649d3": 1,
+    "chunk_77ab26225e8b": 1,
+    "chunk_f556a415112b": 1,
+    "chunk_48bb9b9fd4f7": 1,
+    "chunk_b6b59da17006": 1,
+    "chunk_181317b732ed": 1,
+    "chunk_42b756e95e87": 1,
+    "chunk_1c20ccd5fa13": 1,
+    "chunk_0588345e319e": 1,
+    "chunk_bb078bc68055": 1,
+    "chunk_748fbbcd2b9d": 1,
+    "chunk_1a7150782d25": 1,
+    "chunk_ea6cafe259ba": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_89ba78b6219a": 1
+   },
+   "aspects": {
+    "orchestrat": [
+     "chunk_0588345e319e",
+     "chunk_181317b732ed",
+     "chunk_1a7150782d25",
+     "chunk_1c20ccd5fa13",
+     "chunk_3e415cc3737f",
+     "chunk_42b756e95e87",
+     "chunk_48bb9b9fd4f7",
+     "chunk_70ab95dd0fa0",
+     "chunk_748fbbcd2b9d",
+     "chunk_77ab26225e8b",
+     "chunk_8b85d4037c84",
+     "chunk_a38071c649d3",
+     "chunk_b6b59da17006",
+     "chunk_bb078bc68055",
+     "chunk_cea94a2246bb",
+     "chunk_d62becc5a75d",
+     "chunk_ea6cafe259ba",
+     "chunk_f556a415112b"
+    ],
+    "manager agent": [
+     "chunk_89ba78b6219a",
+     "chunk_a1df4148140c"
+    ]
+   }
+  },
+  {
+   "id": "manager_agent",
+   "question": "What does a manager agent do in a multi-agent setup?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "manager agent",
+    "sub-agent",
+    "coordinates"
+   ],
+   "relevant": {
+    "chunk_a1df4148140c": 1,
+    "chunk_89ba78b6219a": 1
+   },
+   "aspects": {
+    "manager agent": [
+     "chunk_89ba78b6219a",
+     "chunk_a1df4148140c"
+    ],
+    "coordinates": [
+     "chunk_89ba78b6219a"
+    ]
+   }
+  },
+  {
+   "id": "rag_in_agent",
+   "question": "How is RAG used inside an agent workflow?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "retrieves the relevant context",
+    "RAG",
+    "retrieval"
+   ],
+   "relevant": {
+    "chunk_4f6bd27f1c1c": 1,
+    "chunk_b6b59da17006": 1,
+    "chunk_1a753bb86c98": 1,
+    "chunk_68121b0004ed": 1,
+    "chunk_eae746f194fa": 1,
+    "chunk_181317b732ed": 1,
+    "chunk_809877161033": 1,
+    "chunk_6fdfe01e75ea": 1,
+    "chunk_1c20ccd5fa13": 1,
+    "chunk_42b756e95e87": 1,
+    "chunk_81ac578a3a5f": 1,
+    "chunk_58ecc9f3b10e": 1,
+    "chunk_36517bddd420": 1,
+    "chunk_c5db49048b99": 1,
+    "chunk_7ef8f0646cd4": 1,
+    "chunk_38b86e227c67": 1
+   },
+   "aspects": {
+    "retrieves the relevant context": [
+     "chunk_4f6bd27f1c1c"
+    ],
+    "RAG": [
+     "chunk_181317b732ed",
+     "chunk_1a753bb86c98",
+     "chunk_1c20ccd5fa13",
+     "chunk_36517bddd420",
+     "chunk_42b756e95e87",
+     "chunk_58ecc9f3b10e",
+     "chunk_68121b0004ed",
+     "chunk_6fdfe01e75ea",
+     "chunk_7ef8f0646cd4",
+     "chunk_809877161033",
+     "chunk_81ac578a3a5f",
+     "chunk_b6b59da17006",
+     "chunk_c5db49048b99",
+     "chunk_eae746f194fa"
+    ],
+    "retrieval": [
+     "chunk_1c20ccd5fa13",
+     "chunk_38b86e227c67",
+     "chunk_809877161033",
+     "chunk_81ac578a3a5f"
+    ]
+   }
+  },
+  {
+   "id": "guardrails_examples",
+   "question": "Give examples of useful guardrails for agents.",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Examples of useful guardrails",
+    "guardrail"
+   ],
+   "relevant": {
+    "chunk_0b1a86530ce2": 1,
+    "chunk_29fa936f7054": 1,
+    "chunk_809877161033": 1
+   },
+   "aspects": {
+    "Examples of useful guardrails": [
+     "chunk_0b1a86530ce2"
+    ],
+    "guardrail": [
+     "chunk_0b1a86530ce2",
+     "chunk_29fa936f7054",
+     "chunk_809877161033"
+    ]
+   }
+  },
+  {
+   "id": "tool_gathering_info",
+   "question": "How do tools help LLMs gather more information?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "gather more information",
+    "Tools allow LLMs"
+   ],
+   "relevant": {
+    "chunk_7236d3b8e198": 1,
+    "chunk_f69f6a61e7dd": 1
+   },
+   "aspects": {
+    "gather more information": [
+     "chunk_7236d3b8e198",
+     "chunk_f69f6a61e7dd"
+    ],
+    "Tools allow LLMs": [
+     "chunk_7236d3b8e198"
+    ]
+   }
+  },
+  {
+   "id": "design_patterns_popular",
+   "question": "What are the most popular agent design patterns mentioned?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "design patterns",
+    "ReAct",
+    "popular"
+   ],
+   "relevant": {
+    "chunk_809877161033": 1,
+    "chunk_c1292dbb7ebc": 1,
+    "chunk_67c5101fafc8": 1,
+    "chunk_b380e5f76b12": 1,
+    "chunk_d3f03ba3c155": 1,
+    "chunk_d18590edba12": 1,
+    "chunk_7236d3b8e198": 1,
+    "chunk_f69f6a61e7dd": 1,
+    "chunk_823991ebdee8": 1,
+    "chunk_beba754f0a2a": 1,
+    "chunk_4f186627b55e": 1,
+    "chunk_6ec97bd4a5d2": 1,
+    "chunk_8400c0989901": 1,
+    "chunk_c4bd6da7bb16": 1,
+    "chunk_181317b732ed": 1
+   },
+   "aspects": {
+    "design patterns": [
+     "chunk_67c5101fafc8",
+     "chunk_809877161033",
+     "chunk_b380e5f76b12",
+     "chunk_c1292dbb7ebc",
+     "chunk_d3f03ba3c155"
+    ],
+    "ReAct": [
+     "chunk_7236d3b8e198",
+     "chunk_823991ebdee8",
+     "chunk_c1292dbb7ebc",
+     "chunk_d18590edba12",
+     "chunk_f69f6a61e7dd"
+    ],
+    "popular": [
+     "chunk_181317b732ed",
+     "chunk_4f186627b55e",
+     "chunk_67c5101fafc8",
+     "chunk_6ec97bd4a5d2",
+     "chunk_8400c0989901",
+     "chunk_beba754f0a2a",
+     "chunk_c4bd6da7bb16"
+    ]
+   }
+  },
+  {
+   "id": "research_agent",
+   "question": "What does the research agent example do?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "Research Agent",
+    "searches",
+    "retrieves"
+   ],
+   "relevant": {
+    "chunk_1e6851981bf7": 1,
+    "chunk_48bb9b9fd4f7": 1,
+    "chunk_81177b88c2b5": 1,
+    "chunk_6fdfe01e75ea": 1,
+    "chunk_0588345e319e": 1,
+    "chunk_bb078bc68055": 1,
+    "chunk_33c453aa2a59": 1,
+    "chunk_a38071c649d3": 1,
+    "chunk_576f098bfb15": 1,
+    "chunk_cf9634014522": 1,
+    "chunk_bc87123b2831": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_2f69cc6c5938": 1,
+    "chunk_40066957b24f": 1,
+    "chunk_4fbdd99bb2df": 1,
+    "chunk_afc48cfd4b70": 1,
+    "chunk_f128716f127e": 1,
+    "chunk_dc3b9192a180": 1,
+    "chunk_814847fb6f74": 1,
+    "chunk_06838d2c7e4a": 1,
+    "chunk_4f6bd27f1c1c": 1,
+    "chunk_2e3d1106a997": 1,
+    "chunk_46a416087e65": 1,
+    "chunk_a04bed86c342": 1
+   },
+   "aspects": {
+    "Research Agent": [
+     "chunk_0588345e319e",
+     "chunk_06838d2c7e4a",
+     "chunk_1e6851981bf7",
+     "chunk_2e3d1106a997",
+     "chunk_2f69cc6c5938",
+     "chunk_33c453aa2a59",
+     "chunk_40066957b24f",
+     "chunk_46a416087e65",
+     "chunk_48bb9b9fd4f7",
+     "chunk_4f6bd27f1c1c",
+     "chunk_4fbdd99bb2df",
+     "chunk_576f098bfb15",
+     "chunk_6fdfe01e75ea",
+     "chunk_81177b88c2b5",
+     "chunk_814847fb6f74",
+     "chunk_a1df4148140c",
+     "chunk_a38071c649d3",
+     "chunk_afc48cfd4b70",
+     "chunk_bb078bc68055",
+     "chunk_bc87123b2831",
+     "chunk_cf9634014522",
+     "chunk_dc3b9192a180",
+     "chunk_f128716f127e"
+    ],
+    "searches": [
+     "chunk_576f098bfb15",
+     "chunk_bb078bc68055"
+    ],
+    "retrieves": [
+     "chunk_4f6bd27f1c1c",
+     "chunk_576f098bfb15",
+     "chunk_a04bed86c342"
+    ]
+   }
+  },
+  {
+   "id": "agent_task_description",
+   "question": "Why do agents need a clear task description?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "task description",
+    "We give the agent"
+   ],
+   "relevant": {
+    "chunk_33c453aa2a59": 1,
+    "chunk_1b1ed9c41385": 1,
+    "chunk_38b86e227c67": 1
+   },
+   "aspects": {
+    "task description": [
+     "chunk_1b1ed9c41385",
+     "chunk_33c453aa2a59"
+    ],
+    "We give the agent": [
+     "chunk_1b1ed9c41385",
+     "chunk_38b86e227c67"
+    ]
+   }
+  },
+  {
+   "id": "code_available_links",
+   "question": "Where does the guidebook point readers for full code examples?",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "code is available",
+    "Check this code"
+   ],
+   "relevant": {
+    "chunk_836b9cbabafe": 1,
+    "chunk_b1ba0720f05d": 1,
+    "chunk_6d3c4c993ac9": 1,
+    "chunk_2d61c0422f73": 1,
+    "chunk_eda17f163f9d": 1,
+    "chunk_b0583b7f5484": 1,
+    "chunk_044e56183fe3": 1,
+    "chunk_ad6d938747f0": 1,
+    "chunk_36517bddd420": 1,
+    "chunk_c5db49048b99": 1,
+    "chunk_46a416087e65": 1,
+    "chunk_44e81c634bf6": 1,
+    "chunk_d62becc5a75d": 1,
+    "chunk_a567d8dd91ed": 1,
+    "chunk_11c0ddd9849c": 1,
+    "chunk_f128716f127e": 1,
+    "chunk_53643ba0e9a4": 1,
+    "chunk_56a615aee1cd": 1,
+    "chunk_55bd08bbdd91": 1,
+    "chunk_00f462a7be04": 1
+   },
+   "aspects": {
+    "code is available": [
+     "chunk_044e56183fe3",
+     "chunk_2d61c0422f73",
+     "chunk_36517bddd420",
+     "chunk_44e81c634bf6",
+     "chunk_46a416087e65",
+     "chunk_6d3c4c993ac9",
+     "chunk_836b9cbabafe",
+     "chunk_ad6d938747f0",
+     "chunk_b0583b7f5484",
+     "chunk_b1ba0720f05d",
+     "chunk_c5db49048b99",
+     "chunk_eda17f163f9d"
+    ],
+    "Check this code": [
+     "chunk_00f462a7be04",
+     "chunk_11c0ddd9849c",
+     "chunk_53643ba0e9a4",
+     "chunk_55bd08bbdd91",
+     "chunk_56a615aee1cd",
+     "chunk_a567d8dd91ed",
+     "chunk_b0583b7f5484",
+     "chunk_c5db49048b99",
+     "chunk_d62becc5a75d",
+     "chunk_f128716f127e"
+    ]
+   }
+  },
+  {
+   "id": "tech_stack_agents",
+   "question": "What tech stack is mentioned for building agents?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "Tech stack",
+    "LangChain",
+    "LlamaIndex"
+   ],
+   "relevant": {
+    "chunk_8b85d4037c84": 1,
+    "chunk_4ad2186cc0af": 1,
+    "chunk_cea94a2246bb": 1,
+    "chunk_a38071c649d3": 1,
+    "chunk_77ab26225e8b": 1,
+    "chunk_f556a415112b": 1,
+    "chunk_181317b732ed": 1,
+    "chunk_42b756e95e87": 1,
+    "chunk_0588345e319e": 1,
+    "chunk_bb078bc68055": 1,
+    "chunk_748fbbcd2b9d": 1,
+    "chunk_1a7150782d25": 1,
+    "chunk_7d933c456a95": 1,
+    "chunk_1a753bb86c98": 1,
+    "chunk_81ac578a3a5f": 1
+   },
+   "aspects": {
+    "Tech stack": [
+     "chunk_0588345e319e",
+     "chunk_181317b732ed",
+     "chunk_1a7150782d25",
+     "chunk_42b756e95e87",
+     "chunk_4ad2186cc0af",
+     "chunk_748fbbcd2b9d",
+     "chunk_77ab26225e8b",
+     "chunk_8b85d4037c84",
+     "chunk_a38071c649d3",
+     "chunk_bb078bc68055",
+     "chunk_cea94a2246bb",
+     "chunk_f556a415112b"
+    ],
+    "LlamaIndex": [
+     "chunk_181317b732ed",
+     "chunk_1a753bb86c98",
+     "chunk_7d933c456a95",
+     "chunk_81ac578a3a5f"
+    ]
+   }
+  },
+  {
+   "id": "orchestration_vs_single",
+   "question": "When is orchestration preferred over a single agent?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "orchestrat",
+    "manager",
+    "sub-agent"
+   ],
+   "relevant": {
+    "chunk_d62becc5a75d": 1,
+    "chunk_3e415cc3737f": 1,
+    "chunk_8b85d4037c84": 1,
+    "chunk_70ab95dd0fa0": 1,
+    "chunk_cea94a2246bb": 1,
+    "chunk_a38071c649d3": 1,
+    "chunk_77ab26225e8b": 1,
+    "chunk_f556a415112b": 1,
+    "chunk_48bb9b9fd4f7": 1,
+    "chunk_b6b59da17006": 1,
+    "chunk_181317b732ed": 1,
+    "chunk_42b756e95e87": 1,
+    "chunk_1c20ccd5fa13": 1,
+    "chunk_0588345e319e": 1,
+    "chunk_bb078bc68055": 1,
+    "chunk_748fbbcd2b9d": 1,
+    "chunk_1a7150782d25": 1,
+    "chunk_ea6cafe259ba": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_89ba78b6219a": 1
+   },
+   "aspects": {
+    "orchestrat": [
+     "chunk_0588345e319e",
+     "chunk_181317b732ed",
+     "chunk_1a7150782d25",
+     "chunk_1c20ccd5fa13",
+     "chunk_3e415cc3737f",
+     "chunk_42b756e95e87",
+     "chunk_48bb9b9fd4f7",
+     "chunk_70ab95dd0fa0",
+     "chunk_748fbbcd2b9d",
+     "chunk_77ab26225e8b",
+     "chunk_8b85d4037c84",
+     "chunk_a38071c649d3",
+     "chunk_b6b59da17006",
+     "chunk_bb078bc68055",
+     "chunk_cea94a2246bb",
+     "chunk_d62becc5a75d",
+     "chunk_ea6cafe259ba",
+     "chunk_f556a415112b"
+    ],
+    "manager": [
+     "chunk_89ba78b6219a",
+     "chunk_a1df4148140c"
+    ]
+   }
+  },
+  {
+   "id": "tool_vs_plain_llm",
+   "question": "Why use an agent with tools instead of a plain LLM responder?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "generic responder",
+    "Tools allow"
+   ],
+   "relevant": {
+    "chunk_cf2ccc5f7b82": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_7236d3b8e198": 1
+   },
+   "aspects": {
+    "generic responder": [
+     "chunk_cf2ccc5f7b82"
+    ],
+    "Tools allow": [
+     "chunk_7236d3b8e198",
+     "chunk_a1df4148140c"
+    ]
+   }
+  },
+  {
+   "id": "memory_short_long",
+   "question": "What types of memory do agents use?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "Memory",
+    "short",
+    "long"
+   ],
+   "relevant": {
+    "chunk_2bae40a0c902": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_576f098bfb15": 1
+   },
+   "aspects": {
+    "short": [
+     "chunk_2bae40a0c902"
+    ],
+    "long": [
+     "chunk_2bae40a0c902",
+     "chunk_576f098bfb15",
+     "chunk_a1df4148140c"
+    ]
+   }
+  },
+  {
+   "id": "abstention_quantum",
+   "question": "What does the guidebook say about quantum error correction for agents?",
+   "category": "edge_case",
+   "style": "golden",
+   "keywords": [
+    ""
+   ],
+   "relevant": {},
+   "aspects": {}
+  },
+  {
+   "id": "abstention_company_vacation",
+   "question": "How many vacation days do nonprofit employees accrue per the AI Agents guidebook?",
+   "category": "edge_case",
+   "style": "golden",
+   "keywords": [
+    ""
+   ],
+   "relevant": {},
+   "aspects": {}
+  },
+  {
+   "id": "enumeration_subagents",
+   "question": "What roles can sub-agents play in orchestration?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "sub-agent",
+    "manager",
+    "specialist"
+   ],
+   "relevant": {
+    "chunk_a1df4148140c": 1,
+    "chunk_89ba78b6219a": 1
+   },
+   "aspects": {
+    "manager": [
+     "chunk_89ba78b6219a",
+     "chunk_a1df4148140c"
+    ]
+   }
+  },
+  {
+   "id": "workflow_retrieval_step",
+   "question": "What is the retrieval step in the agent workflow example?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "retrieves the relevant context",
+    "user query"
+   ],
+   "relevant": {
+    "chunk_4f6bd27f1c1c": 1,
+    "chunk_8b85d4037c84": 1,
+    "chunk_33c453aa2a59": 1,
+    "chunk_a38071c649d3": 1,
+    "chunk_0f38874ab69b": 1,
+    "chunk_1e487dac9112": 1,
+    "chunk_b6b59da17006": 1,
+    "chunk_afc48cfd4b70": 1,
+    "chunk_42b756e95e87": 1,
+    "chunk_0588345e319e": 1,
+    "chunk_bb078bc68055": 1,
+    "chunk_bc96dd4531df": 1
+   },
+   "aspects": {
+    "retrieves the relevant context": [
+     "chunk_4f6bd27f1c1c"
+    ],
+    "user query": [
+     "chunk_0588345e319e",
+     "chunk_0f38874ab69b",
+     "chunk_1e487dac9112",
+     "chunk_33c453aa2a59",
+     "chunk_42b756e95e87",
+     "chunk_4f6bd27f1c1c",
+     "chunk_8b85d4037c84",
+     "chunk_a38071c649d3",
+     "chunk_afc48cfd4b70",
+     "chunk_b6b59da17006",
+     "chunk_bb078bc68055",
+     "chunk_bc96dd4531df"
+    ]
+   }
+  },
+  {
+   "id": "pattern_plan_execute",
+   "question": "Is plan-and-execute discussed as an agent pattern?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "planning",
+    "plan",
+    "execute"
+   ],
+   "relevant": {
+    "chunk_67c5101fafc8": 1,
+    "chunk_cea94a2246bb": 1,
+    "chunk_11c0ddd9849c": 1,
+    "chunk_f69f6a61e7dd": 1,
+    "chunk_c1292dbb7ebc": 1,
+    "chunk_a7e49a7f123c": 1,
+    "chunk_d3f03ba3c155": 1,
+    "chunk_1e6851981bf7": 1,
+    "chunk_9e20d85def9a": 1,
+    "chunk_68121b0004ed": 1,
+    "chunk_5fb3df9f3417": 1,
+    "chunk_56a615aee1cd": 1,
+    "chunk_056904c5ad52": 1,
+    "chunk_4d4f012b0d65": 1,
+    "chunk_a1df4148140c": 1,
+    "chunk_b6b59da17006": 1,
+    "chunk_cae9a788eabd": 1,
+    "chunk_7038de8c7eec": 1,
+    "chunk_c6decda3009c": 1
+   },
+   "aspects": {
+    "planning": [
+     "chunk_11c0ddd9849c",
+     "chunk_67c5101fafc8",
+     "chunk_a7e49a7f123c",
+     "chunk_c1292dbb7ebc",
+     "chunk_cea94a2246bb",
+     "chunk_d3f03ba3c155",
+     "chunk_f69f6a61e7dd"
+    ],
+    "plan": [
+     "chunk_11c0ddd9849c",
+     "chunk_1e6851981bf7",
+     "chunk_56a615aee1cd",
+     "chunk_5fb3df9f3417",
+     "chunk_67c5101fafc8",
+     "chunk_68121b0004ed",
+     "chunk_9e20d85def9a",
+     "chunk_a7e49a7f123c",
+     "chunk_c1292dbb7ebc",
+     "chunk_cea94a2246bb",
+     "chunk_d3f03ba3c155",
+     "chunk_f69f6a61e7dd"
+    ],
+    "execute": [
+     "chunk_056904c5ad52",
+     "chunk_1e6851981bf7",
+     "chunk_4d4f012b0d65",
+     "chunk_7038de8c7eec",
+     "chunk_a1df4148140c",
+     "chunk_b6b59da17006",
+     "chunk_c6decda3009c",
+     "chunk_cae9a788eabd",
+     "chunk_f69f6a61e7dd"
+    ]
+   }
+  },
+  {
+   "id": "code_check_this_out",
+   "question": "What code walkthroughs does the guidebook highlight with Check this out?",
+   "category": "code",
+   "style": "golden",
+   "keywords": [
+    "Check this out",
+    "code"
+   ],
+   "relevant": {},
+   "aspects": {}
+  },
+  {
+   "id": "tools_real_world",
+   "question": "What real-world capability does the currency tool demonstrate?",
+   "category": "factual",
+   "style": "golden",
+   "keywords": [
+    "real-time currency",
+    "conversion"
+   ],
+   "relevant": {
+    "chunk_056904c5ad52": 1,
+    "chunk_b3cccf940c61": 1,
+    "chunk_5aceac587f22": 1
+   },
+   "aspects": {
+    "real-time currency": [
+     "chunk_056904c5ad52",
+     "chunk_5aceac587f22",
+     "chunk_b3cccf940c61"
+    ],
+    "conversion": [
+     "chunk_5aceac587f22"
+    ]
+   }
+  },
+  {
+   "id": "agent_building_blocks_count",
+   "question": "How many building blocks of AI agents does the guidebook describe?",
+   "category": "enumeration",
+   "style": "golden",
+   "keywords": [
+    "6",
+    "six",
+    "building blocks"
+   ],
+   "relevant": {
+    "chunk_9e20d85def9a": 1,
+    "chunk_809877161033": 1,
+    "chunk_fcc31db868c8": 1
+   },
+   "aspects": {
+    "six": [
+     "chunk_9e20d85def9a"
+    ],
+    "building blocks": [
+     "chunk_809877161033",
+     "chunk_9e20d85def9a",
+     "chunk_fcc31db868c8"
+    ]
+   }
+  },
+  {
+   "id": "rag_vs_agent_autonomy",
+   "question": "How does agent autonomy differ from a standalone RAG pipeline?",
+   "category": "pattern",
+   "style": "golden",
+   "keywords": [
+    "autonomously",
+    "Agent vs",
+    "RAG"
+   ],
+   "relevant": {
+    "chunk_9e20d85def9a": 1,
+    "chunk_576f098bfb15": 1,
+    "chunk_b6b59da17006": 1,
+    "chunk_1a753bb86c98": 1,
+    "chunk_68121b0004ed": 1,
+    "chunk_eae746f194fa": 1,
+    "chunk_181317b732ed": 1,
+    "chunk_809877161033": 1,
+    "chunk_6fdfe01e75ea": 1,
+    "chunk_1c20ccd5fa13": 1,
+    "chunk_42b756e95e87": 1,
+    "chunk_81ac578a3a5f": 1,
+    "chunk_58ecc9f3b10e": 1,
+    "chunk_36517bddd420": 1,
+    "chunk_c5db49048b99": 1,
+    "chunk_7ef8f0646cd4": 1
+   },
+   "aspects": {
+    "autonomously": [
+     "chunk_576f098bfb15",
+     "chunk_9e20d85def9a"
+    ],
+    "RAG": [
+     "chunk_181317b732ed",
+     "chunk_1a753bb86c98",
+     "chunk_1c20ccd5fa13",
+     "chunk_36517bddd420",
+     "chunk_42b756e95e87",
+     "chunk_58ecc9f3b10e",
+     "chunk_68121b0004ed",
+     "chunk_6fdfe01e75ea",
+     "chunk_7ef8f0646cd4",
+     "chunk_809877161033",
+     "chunk_81ac578a3a5f",
+     "chunk_b6b59da17006",
+     "chunk_c5db49048b99",
+     "chunk_eae746f194fa"
+    ]
+   }
+  },
+  {
+   "id": "critic_planner_mention",
+   "question": "Does the guidebook mention planner or critic agents?",
+   "category": "workflow",
+   "style": "golden",
+   "keywords": [
+    "planner",
+    "critic"
+   ],
+   "relevant": {
+    "chunk_11c0ddd9849c": 1,
+    "chunk_0b1a86530ce2": 1
+   },
+   "aspects": {
+    "planner": [
+     "chunk_11c0ddd9849c"
+    ],
+    "critic": [
+     "chunk_0b1a86530ce2"
+    ]
+   }
+  }
+ ]
+}

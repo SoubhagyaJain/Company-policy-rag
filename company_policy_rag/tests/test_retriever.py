@@ -22,12 +22,13 @@ def setup_function() -> None:
     reset_reranker_cache()
 
 
-def test_initial_top_k_with_reranker_enabled() -> None:
-    assert settings.enable_reranker is True
+def test_initial_top_k_with_reranker_enabled(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "enable_reranker", True)
     assert get_initial_top_k() == settings.retrieval_candidate_k
 
 
-def test_final_top_k_with_reranker_enabled() -> None:
+def test_final_top_k_with_reranker_enabled(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "enable_reranker", True)
     assert get_final_top_k() == settings.reranker_top_n
 
 

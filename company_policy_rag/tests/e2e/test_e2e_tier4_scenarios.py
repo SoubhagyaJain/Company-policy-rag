@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, AsyncGenerator, Generator, List, Dict
 import pytest
 import pytest_asyncio
@@ -600,14 +602,14 @@ def enterprise_rag_environment() -> tuple[RAGPipeline, ChatService, TelemetrySer
 
     # Embeddings & Vector Store
     embedding_service = EmbeddingService(model_name="BAAI/bge-small-en-v1.5", cache_enabled=False)
-    vector_store = ChromaVectorStore(collection_name="enterprise_tier4_test", persist_dir="storage/test_chroma_t4")
+    vector_store = ChromaVectorStore(collection_name="enterprise_tier4_test", persist_dir=str(Path(tempfile.mkdtemp()) / "chroma"))
     # Pre-embed chunks deterministically
     for c in chunks:
         c.embedding = embedding_service.embed_text(c.text)
     vector_store.add_chunks(chunks)
 
     # BM25 Lexical Index
-    bm25_index = BM25SearchIndex(storage_dir="storage/test_bm25_t4")
+    bm25_index = BM25SearchIndex(storage_dir=str(Path(tempfile.mkdtemp()) / "bm25"))
     bm25_index.build_index(chunks)
 
     # Retrievers & Reranker

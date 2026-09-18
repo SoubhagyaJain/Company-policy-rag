@@ -105,6 +105,12 @@ class TestCitationParsingRegex:
         tags = CitationEngine.extract_source_tags(text)
         assert tags == {1, 2, 3, 4}
 
+    def test_parenthesised_tags_match(self) -> None:
+        # qwen2.5 writes "(Source 1)" often enough that ignoring it dropped the
+        # answer's real citations in favour of score-based fallback cards.
+        text = "Using (Source 1) instead of brackets."
+        assert CitationEngine.extract_source_tags(text) == {1}
+
     def test_case_insensitivity(self) -> None:
         text = "Refer to [source 1], [SOURCE 2], and [SoUrCe 3]."
         tags = CitationEngine.extract_source_tags(text)
@@ -128,7 +134,6 @@ class TestCitationParsingRegex:
     def test_non_matching_syntax_returns_empty(self) -> None:
         texts = [
             "No source tags here.",
-            "Using (Source 1) instead of brackets.",
             "Using [Ref 1] tag.",
             "[Source]",
             "[Source abc]",

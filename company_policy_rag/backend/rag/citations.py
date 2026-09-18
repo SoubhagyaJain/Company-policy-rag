@@ -6,18 +6,32 @@ import re
 from backend.models.rag import Citation, ScoredChunk
 from backend.utils.section_tracker import is_noise_line
 
-_SOURCE_TAG_PATTERN = re.compile(r"\[(?:Visual\s+)?Source\s+([^\]]+)\]", re.IGNORECASE)
+# The prompt asks for [Source N]; small local models also write (Source N) or
+# [Source 1, 2]. Accept either bracket so the answer's tags map to cards.
+_SOURCE_TAG_PATTERN = re.compile(
+    # Optional ": label" after the numbers, e.g. [Source 3: Handbook, Page 1].
+    r"[\[(](?:Visual\s+)?Sources?\s+(\d+(?:\s*(?:,|and|&)\s*(?:(?:Visual\s+)?Sources?\s+)?\d+)*)\s*(?:[:\u2013\u2014-][^\])\n]{0,160})?[\])]",
+    re.IGNORECASE,
+)
 
 
-def _compute_confidence(sc: ScoredChunk) -> float:
+def _compute_confidence(sc: ScoredChunk, top_score: float | None = None) -> float:
     """Normalize rerank logit score or candidate score into [0.05, 0.99] confidence range."""
     raw = sc.rerank_score if sc.rerank_score is not None else sc.score
     if raw is None:
         return 0.75
     try:
         raw_val = float(raw)
-        # If score is already a bounded probability [0.0, 1.0]
-        if 0.0 <= raw_val <= 1.0 and sc.rerank_score is None:
+        if sc.rerank_score is None and top_score and top_score > 0 and 0.0 <= raw_val <= top_score:
+            # Without a reranker the score is a fused RRF value (~0.016-0.033);
+            # show it relative to the best retrieved chunk instead of a 0.5 floor.
+            return max(0.05, min(0.99, round(raw_val / top_score, 4)))
+        # sentence-transformers already applies a sigmoid to bge cross-encoder
+        # scores, so a [0, 1] value is a probability; a second sigmoid squeezed
+        # every citation into ~0.5-0.73.
+        if 0.0 <= raw_val <= 1.0 and sc.rerank_score is not None:
+            return max(0.05, min(0.99, round(raw_val, 4)))
+        if 0.0 <= raw_val <= 1.0:
             return max(0.50, min(0.99, raw_val))
         # CrossEncoder raw logits (-10 to +10) -> Sigmoid
         if raw_val > 15.0:
@@ -60,6 +74,7 @@ class CitationEngine:
         idx: int,
         sc: ScoredChunk,
         selection_reason: str,
+        top_score: float | None = None,
     ) -> Citation:
         meta = sc.chunk.metadata
         extra = meta.extra or {}
@@ -77,7 +92,7 @@ class CitationEngine:
         )
         if is_visual:
             raw_vtype = extra.get("visual_type", "diagram_architecture").upper()
-            if "CODE" in raw_vtype or "```" in sc.chunk.text or "def " in sc.chunk.text or "kickoff" in sc.chunk.text:
+            if "CODE" in raw_vtype or "```" in sc.chunk.text or "def " in sc.chunk.text:
                 evidence_type = "CODE_SCREENSHOT"
             elif "TABLE" in raw_vtype:
                 evidence_type = "TABLE_DATA"
@@ -85,7 +100,7 @@ class CitationEngine:
                 evidence_type = "FIGURE"
             else:
                 evidence_type = "DIAGRAM_ARCHITECTURE"
-        elif "```" in sc.chunk.text or str(meta.content_type).lower() in ("code", "contenttype.code") or "def " in sc.chunk.text or "kickoff" in sc.chunk.text:
+        elif "```" in sc.chunk.text or str(meta.content_type).lower() in ("code", "contenttype.code") or "def " in sc.chunk.text:
             evidence_type = "CODE"
         elif "table" in str(meta.content_type).lower() or "|---" in sc.chunk.text:
             evidence_type = "TABLE_DATA"
@@ -122,7 +137,7 @@ class CitationEngine:
             section_title=sec_title,
             section_path=meta.section_path if sec_title else None,
             snippet=snippet,
-            relevance_score=_compute_confidence(sc),
+            relevance_score=_compute_confidence(sc, top_score),
             selection_reason=selection_reason,
             evidence_type=evidence_type,
             visual_asset_id=asset_id,
@@ -145,13 +160,14 @@ class CitationEngine:
 
         cited_indices = self.extract_source_tags(answer_text)
         citations: list[Citation] = []
+        top_retrieval_score = max((sc.score or 0.0) for sc in generation_chunks)
         selection_mode = "cited_in_answer"
 
         if cited_indices:
             for idx in sorted(cited_indices):
                 if 1 <= idx <= len(generation_chunks):
                     sc = generation_chunks[idx - 1]
-                    cit = self._build_citation_from_chunk(idx, sc, selection_mode)
+                    cit = self._build_citation_from_chunk(idx, sc, selection_mode, top_retrieval_score)
                     citations.append(cit)
 
         if not citations:
@@ -165,9 +181,12 @@ class CitationEngine:
             if not filtered:
                 filtered = sorted(generation_chunks, key=lambda c: c.score, reverse=True)[:1]
 
+            position = {id(sc): index for index, sc in enumerate(generation_chunks, start=1)}
             for sc in filtered[:citation_limit]:
-                idx = sc.rank if sc.rank is not None else 1
-                cit = self._build_citation_from_chunk(idx, sc, selection_mode)
+                # Number fallback citations by their [Source N] position in the
+                # prompt, not by retrieval rank, so cards line up with the context.
+                idx = position.get(id(sc), 1)
+                cit = self._build_citation_from_chunk(idx, sc, selection_mode, top_retrieval_score)
                 citations.append(cit)
 
         # Collapse duplicate uploads that contain the same passage. Prefer the
@@ -183,4 +202,6 @@ class CitationEngine:
             seen_passages.add(passage_key)
             deduped.append(citation)
 
-        return deduped if max_citations is None else deduped[:citation_limit]
+        # Every [Source N] the answer actually cites keeps its card; the limit only
+        # bounds the score-based fallback, which is already capped above.
+        return deduped

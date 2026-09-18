@@ -314,14 +314,9 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
                   prev.map((msg) => {
                     if (msg.id !== assistantMsgId) return msg;
                     const existing = msg.citations || [];
-                    if (
-                      existing.some(
-                        (c) =>
-                          c.id === citation.id ||
-                          (c.source === citation.source && c.page === citation.page)
-                      )
-                    )
-                      return msg;
+                    // Citations arrive in both the citation and done events; dedupe by
+                    // chunk id only, so distinct passages from one page keep their cards.
+                    if (existing.some((c) => c.id === citation.id)) return msg;
                     return { ...msg, citations: [...existing, citation] };
                   })
                 );

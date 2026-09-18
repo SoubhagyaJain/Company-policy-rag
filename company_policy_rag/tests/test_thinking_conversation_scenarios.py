@@ -63,7 +63,6 @@ from backend.rag.evidence_gate import (
     compute_monotonic_evidence_status,
 )
 from backend.rag.pipeline import (
-    GROUNDED_SYSTEM_PROMPT,
     RAGPipeline,
     _detect_fidelity_mode,
     _format_evidence_status_directive,

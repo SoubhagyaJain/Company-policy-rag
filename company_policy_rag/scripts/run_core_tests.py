@@ -27,6 +27,18 @@ CORE_TEST_PATHS = (
     "tests/test_production_observability_full.py",
     "tests/unit/test_api_admin.py",
     "tests/unit/test_conversation_benchmark.py",
+    # Retrieval, context assembly, generation and citation correctness.
+    "tests/test_downstream_evidence_loss.py",
+    "tests/test_retrieval_experiment_flags.py",
+    "tests/test_policy_block_gating.py",
+    "tests/test_generation_cancellation.py",
+    "tests/unit/test_llm_client.py",
+    "tests/unit/test_retrieval_cache_invalidation.py",
+    "tests/unit/test_citation_engine.py",
+    "tests/unit/test_retry_engine_adversarial.py",
+    "tests/unit/test_ingestion_telemetry_counts.py",
+    "tests/unit/test_retrieval_eval.py",
+    "tests/unit/test_answer_eval.py",
     "tests/unit/test_production_retrieval_smoke.py",
 )
 

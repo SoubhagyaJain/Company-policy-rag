@@ -12,7 +12,11 @@ from backend.models.rag import EvidenceStatus, QueryCategory
 from backend.rag.conversation_resolver import ConversationResolutionResult, ConversationResolver
 from backend.rag.multi_query import decompose_multi_part
 from backend.rag.query_router import QueryRouter
+from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
+
+
+_SCALAR_FIELDS = ("intent", "answer_mode", "retrieval_decision", "active_topic", "standalone_query")
 
 
 class RetrievalDecision(str, Enum):
@@ -163,7 +167,9 @@ class ConversationInterpreter:
 
         try:
             prompt = self._build_prompt(message, state, baseline)
-            raw = str(self.llm.complete(prompt)).strip()
+            # The interpretation is a compact JSON object; cap output so a
+            # rambling model cannot stall the turn.
+            raw, _usage = complete_text(self.llm, prompt, temperature=0.0, max_tokens=512)
             parsed = self._parse_model_output(raw)
             interpreted = ConversationInterpretation.model_validate(parsed)
             return self._enforce_grounding_invariants(interpreted, state, message, baseline)
@@ -382,6 +388,12 @@ class ConversationInterpreter:
         data = json.loads(match.group(0))
         if not isinstance(data, dict):
             raise ValueError("Interpreter output is not an object")
+        # Small models copy the schema's list of allowed values and answer
+        # "intent": ["factual"]; unwrap one-item lists for scalar fields.
+        for key in _SCALAR_FIELDS:
+            value = data.get(key)
+            if isinstance(value, list) and len(value) == 1:
+                data[key] = value[0]
         return data
 
     def _enforce_grounding_invariants(

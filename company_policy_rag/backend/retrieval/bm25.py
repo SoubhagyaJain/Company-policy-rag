@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import pickle
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -12,22 +13,45 @@ from backend.utils.logging import logger
 
 _token_re = re.compile(r"[a-z0-9]+")
 
+# Metadata appended to chunk text in the index (legacy: all five).
+DEFAULT_METADATA_FIELDS: tuple[str, ...] = (
+    "section_path",
+    "section_title",
+    "section_number",
+    "source_file",
+    "category",
+)
+
 
 def tokenize(text: str) -> list[str]:
     return _token_re.findall(text.lower())
 
 
-def _searchable_text(chunk: Chunk) -> str:
+@lru_cache(maxsize=1)
+def _porter_stemmer() -> Any:
+    from nltk.stem import PorterStemmer  # type: ignore
+
+    return PorterStemmer()
+
+
+@lru_cache(maxsize=200_000)
+def _stem(token: str) -> str:
+    return _porter_stemmer().stem(token)
+
+
+def _searchable_text(chunk: Chunk, fields: tuple[str, ...] = DEFAULT_METADATA_FIELDS) -> str:
     meta = chunk.metadata
-    parts = [
-        chunk.text or "",
-        str(meta.section_path or ""),
-        str(meta.section_title or ""),
-        str(meta.section_number or ""),
-        str(meta.source_file or ""),
-        str(meta.category or ""),
-    ]
+    parts = [chunk.text or ""]
+    parts.extend(str(getattr(meta, field, None) or "") for field in fields)
     return " ".join(p for p in parts if p).strip()
+
+
+def parse_metadata_fields(value: str | tuple[str, ...] | list[str] | None) -> tuple[str, ...]:
+    """Normalise a comma-separated field list; an empty string means chunk text only."""
+    if value is None:
+        return DEFAULT_METADATA_FIELDS
+    items = value.split(",") if isinstance(value, str) else list(value)
+    return tuple(item.strip() for item in items if item and item.strip())
 
 
 class BM25SearchIndex:
@@ -36,8 +60,28 @@ class BM25SearchIndex:
     metadata filtering, and incremental updates.
     """
 
-    def __init__(self, storage_dir: str = "app/storage/bm25") -> None:
+    def __init__(
+        self,
+        storage_dir: str | None = None,
+        k1: float = 1.5,
+        b: float = 0.75,
+        stemming: bool = False,
+        metadata_fields: str | tuple[str, ...] | list[str] | None = None,
+        skip_zero_scores: bool = True,
+    ) -> None:
+        if storage_dir is None:
+            from src.config import settings
+
+            storage_dir = str(Path(settings.app_storage_dir) / "bm25")
         self.storage_dir = Path(storage_dir)
+        self.k1 = k1
+        self.b = b
+        self.stemming = stemming
+        self.metadata_fields = parse_metadata_fields(metadata_fields)
+        # A zero BM25 score means no query term occurs in the chunk. Returning
+        # those as hits pads the lexical list with arbitrary chunks that then
+        # earn RRF credit, and hides that BM25 found nothing.
+        self.skip_zero_scores = skip_zero_scores
         self.entries: list[Chunk] = []
         self._tokenized_corpus: list[list[str]] = []
         # Filter views (chunk.metadata.model_dump) precomputed once per chunk so
@@ -50,6 +94,47 @@ class BM25SearchIndex:
         """Serialize a chunk's metadata once for fast repeated filter matching."""
         return chunk.metadata.model_dump()
 
+    def _tokens(self, text: str) -> list[str]:
+        tokens = tokenize(text)
+        if self.stemming:
+            tokens = [_stem(token) for token in tokens]
+        return tokens
+
+    def _tokenizer_config(self) -> dict[str, Any]:
+        return {"stemming": self.stemming, "metadata_fields": list(self.metadata_fields)}
+
+    def _index_tokens(self, chunk: Chunk) -> list[str]:
+        return self._tokens(_searchable_text(chunk, self.metadata_fields))
+
+    def reconfigure(
+        self,
+        *,
+        k1: float | None = None,
+        b: float | None = None,
+        stemming: bool | None = None,
+        metadata_fields: str | tuple[str, ...] | list[str] | None = None,
+        skip_zero_scores: bool | None = None,
+    ) -> None:
+        """Change scoring or tokenization in place, re-tokenizing only when needed."""
+        retokenize = False
+        if stemming is not None and stemming != self.stemming:
+            self.stemming = stemming
+            retokenize = True
+        if metadata_fields is not None:
+            fields = parse_metadata_fields(metadata_fields)
+            if fields != self.metadata_fields:
+                self.metadata_fields = fields
+                retokenize = True
+        if k1 is not None:
+            self.k1 = k1
+        if b is not None:
+            self.b = b
+        if skip_zero_scores is not None:
+            self.skip_zero_scores = skip_zero_scores
+        if retokenize:
+            self._tokenized_corpus = [self._index_tokens(c) for c in self.entries]
+        self._rebuild_scorer()
+
     def _rebuild_scorer(self) -> None:
         """(Re)build the BM25Okapi scorer from the current tokenized corpus."""
         if not self._tokenized_corpus:
@@ -58,7 +143,7 @@ class BM25SearchIndex:
         try:
             from rank_bm25 import BM25Okapi  # type: ignore
 
-            self._bm25 = BM25Okapi(self._tokenized_corpus)
+            self._bm25 = BM25Okapi(self._tokenized_corpus, k1=self.k1, b=self.b)
         except Exception as exc:
             logger.warning("BM25Okapi import or build failed (%s). BM25 disabled.", exc)
             self._bm25 = None
@@ -70,11 +155,11 @@ class BM25SearchIndex:
         self._meta_dicts = []
 
         for chunk in chunks:
-            search_text = _searchable_text(chunk)
+            search_text = _searchable_text(chunk, self.metadata_fields)
             if not search_text:
                 continue
             self.entries.append(chunk)
-            self._tokenized_corpus.append(tokenize(search_text))
+            self._tokenized_corpus.append(self._tokens(search_text))
             self._meta_dicts.append(self._filter_view(chunk))
 
         self._rebuild_scorer()
@@ -87,11 +172,11 @@ class BM25SearchIndex:
         corpus. Returns the number of chunks added."""
         added = 0
         for chunk in chunks:
-            search_text = _searchable_text(chunk)
+            search_text = _searchable_text(chunk, self.metadata_fields)
             if not search_text:
                 continue
             self.entries.append(chunk)
-            self._tokenized_corpus.append(tokenize(search_text))
+            self._tokenized_corpus.append(self._tokens(search_text))
             self._meta_dicts.append(self._filter_view(chunk))
             added += 1
         if added:
@@ -134,6 +219,17 @@ class BM25SearchIndex:
                     return False
         return True
 
+    def _shares_query_term(
+        self,
+        idx: int,
+        query_terms: set[str],
+        doc_freqs: list[dict[str, int]] | None,
+    ) -> bool:
+        if doc_freqs is not None and idx < len(doc_freqs):
+            frequencies = doc_freqs[idx]
+            return any(term in frequencies for term in query_terms)
+        return not query_terms.isdisjoint(self._tokenized_corpus[idx])
+
     def search(
         self,
         query: str,
@@ -144,7 +240,7 @@ class BM25SearchIndex:
         if not self._bm25 or not self.entries:
             return []
 
-        tokens = tokenize(query)
+        tokens = self._tokens(query)
         if not tokens:
             return []
 
@@ -161,11 +257,22 @@ class BM25SearchIndex:
         )
 
         results: list[ScoredChunk] = []
+        query_terms = set(tokens)
+        doc_freqs = getattr(self._bm25, "doc_freqs", None)
         for idx in ranked_indices:
+            bm25_score = float(scores[idx])
+            # A non-positive score does not by itself mean "no match": when a
+            # term occurs in most documents BM25Okapi's IDF can be <= 0. Only
+            # chunks sharing no query term at all are dropped.
+            if (
+                self.skip_zero_scores
+                and bm25_score <= 0.0
+                and not self._shares_query_term(idx, query_terms, doc_freqs)
+            ):
+                continue
             chunk = self.entries[idx]
             if not self._matches_filters(self._meta_dicts[idx], chunk.metadata, filters):
                 continue
-            bm25_score = float(scores[idx])
             results.append(
                 ScoredChunk(
                     chunk=chunk,
@@ -192,6 +299,7 @@ class BM25SearchIndex:
             pickle.dump(
                 {
                     "tokenized_corpus": self._tokenized_corpus,
+                    "tokenizer_config": self._tokenizer_config(),
                 },
                 f,
             )
@@ -216,12 +324,20 @@ class BM25SearchIndex:
             try:
                 with open(index_file, "rb") as f:
                     data = pickle.load(f)
-                self._tokenized_corpus = data.get("tokenized_corpus", [])
+                # Pickles written before tokenizer options existed used the defaults.
+                saved_config = data.get(
+                    "tokenizer_config",
+                    {"stemming": False, "metadata_fields": list(DEFAULT_METADATA_FIELDS)},
+                )
+                if saved_config == self._tokenizer_config():
+                    self._tokenized_corpus = data.get("tokenized_corpus", [])
+                else:
+                    self._tokenized_corpus = [self._index_tokens(c) for c in self.entries]
             except Exception as exc:
                 logger.warning("BM25 pickle load failed (%s) — re-tokenizing corpus", exc)
-                self._tokenized_corpus = [tokenize(_searchable_text(c)) for c in self.entries]
+                self._tokenized_corpus = [self._index_tokens(c) for c in self.entries]
         else:
-            self._tokenized_corpus = [tokenize(_searchable_text(c)) for c in self.entries]
+            self._tokenized_corpus = [self._index_tokens(c) for c in self.entries]
 
         self._meta_dicts = [self._filter_view(c) for c in self.entries]
         self._rebuild_scorer()

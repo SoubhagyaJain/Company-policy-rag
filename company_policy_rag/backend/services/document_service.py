@@ -30,6 +30,7 @@ from backend.models.api_dto import (
 from backend.models.chunk import Chunk
 from backend.models.telemetry_models import SeverityLevel
 from backend.retrieval.bm25 import BM25SearchIndex
+from backend.retrieval.retrieval_cache import get_retrieval_cache
 from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
@@ -64,21 +65,29 @@ class DocumentService:
         docstore: dict[str, Chunk] | None = None,
         image_asset_manager: ImageAssetManager | None = None,
         vision_cache_manager: VisionCacheManager | None = None,
-        storage_dir: str = "app/storage/uploads",
+        storage_dir: str | None = None,
         fresh_start: bool = False,
     ) -> None:
+        if storage_dir is None:
+            storage_dir = str(Path(settings.app_storage_dir) / "uploads")
         # Each interactive app run gets an isolated library. Keep earlier files
         # intact while excluding their indexes and hashes from this run.
         session_root = Path(storage_dir).parent / "sessions" / uuid.uuid4().hex if fresh_start else None
         if session_root is not None:
             storage_dir = str(session_root / "uploads")
+        library_root = session_root if session_root is not None else Path(storage_dir).parent
         self.vector_store = vector_store or ChromaVectorStore(
             collection_name=settings.chroma_collection_name,
-            persist_dir=str(session_root / "chroma") if session_root is not None else settings.chroma_persist_dir,
+            persist_dir=str(library_root / "chroma"),
         )
-        self.bm25_index = bm25_index or (
-            BM25SearchIndex(storage_dir=str(session_root / "bm25"))
-            if session_root is not None else BM25SearchIndex()
+        bm25_options = {
+            "k1": settings.bm25_k1,
+            "b": settings.bm25_b,
+            "stemming": settings.bm25_stemming,
+            "metadata_fields": settings.bm25_metadata_fields,
+        }
+        self.bm25_index = bm25_index or BM25SearchIndex(
+            storage_dir=str(library_root / "bm25"), **bm25_options
         )
         self.embedding_service = embedding_service or EmbeddingService()
         self.docstore = docstore if docstore is not None else {}
@@ -517,7 +526,12 @@ class DocumentService:
                 else:
                     logger.warning(f"Could not extract text content from file '{filename}'. Proceeding with 0 chunks.")
 
-            pages_count = len(raw_docs)
+            # PDF loaders append VLM extractions as extra RawDocuments; they are
+            # not pages.
+            visual_extraction_count = sum(
+                1 for doc in raw_docs if (doc.metadata.extra or {}).get("is_visual_extraction")
+            )
+            pages_count = len(raw_docs) - visual_extraction_count
             t_extract = round((time.perf_counter() - t_stage) * 1000, 2)
             self._update_job_stage(
                 document_id=document_id,
@@ -765,6 +779,8 @@ class DocumentService:
 
             for c in chunks:
                 self.docstore[c.id] = c
+            # Cached candidate lists predate this document.
+            get_retrieval_cache().clear()
 
             created_at = datetime.now(UTC).isoformat()
             extracted_assets = self.image_asset_manager.list_assets(document_id)
@@ -865,8 +881,8 @@ class DocumentService:
                     current_stage="READY",
                     pages_count=pages_count,
                     chunks_count=len(chunks),
-                    visual_assets_count=len(raw_docs),
-                    vision_success_count=len(raw_docs),
+                    visual_assets_count=len(extracted_assets),
+                    vision_success_count=visual_extraction_count,
                     vision_failed_count=0,
                     total_duration_ms=t_total,
                     error=None,
@@ -922,6 +938,7 @@ class DocumentService:
                         self.docstore.pop(chunk_id, None)
                 with self._lock:
                     self._documents.pop(document_id, None)
+                get_retrieval_cache().clear()
 
             with self._lock:
                 if document_id in self._ingestion_jobs:
@@ -1289,6 +1306,8 @@ class DocumentService:
         ]
         for cid in chunk_ids_to_del:
             self.docstore.pop(cid, None)
+        # Cached candidate lists may still reference the deleted chunks.
+        get_retrieval_cache().clear()
 
         # 4. Purge derived image assets and visual response cache.
         deleted_assets = self.image_asset_manager.delete_document_assets(document_id)

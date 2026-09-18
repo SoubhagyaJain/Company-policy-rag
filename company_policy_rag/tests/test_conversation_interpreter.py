@@ -566,3 +566,26 @@ def test_grounded_generation_excludes_assistant_history_and_keeps_reused_citatio
     assert "Recent Conversation History:" not in answer_llm.prompts[0]
     assert "UNTRUSTED_ASSISTANT_FACT_6621" not in answer_llm.prompts[0]
     assert [citation.chunk_id for citation in ctx.citations] == ["trusted-evidence"]
+
+
+def test_schema_style_one_item_lists_are_unwrapped() -> None:
+    state = _state(
+        "travel limit",
+        _turn("travel-1", "What is the travel limit?", "travel limit"),
+    )
+    llm = _RecordingLLM(
+        '{"intent": ["factual"], "answer_mode": "DIRECT", "is_followup": true, '
+        '"standalone_query": "What is the international travel limit?", "retrieval_decision": ["retrieve"], '
+        '"active_topic": "travel limit", "confidence": 0.9, "rationale": "follow-up"}'
+    )
+
+    result = ConversationInterpreter(llm=llm).interpret("International?", state)
+
+    assert result.retrieval_decision == RetrievalDecision.RETRIEVE
+    assert result.standalone_query == "What is the international travel limit?"
+
+
+def test_interpreter_llm_pass_is_off_by_default() -> None:
+    from src.config import Settings
+
+    assert Settings.model_fields["enable_conversation_interpreter"].default is False

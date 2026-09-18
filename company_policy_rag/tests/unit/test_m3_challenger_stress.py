@@ -1,3 +1,4 @@
+import time
 import pytest
 from fastapi.testclient import TestClient
 from backend.api.main import app
@@ -156,12 +157,12 @@ class TestDocumentDeletionEdgeCases:
         assert del_res.status_code == 200
         assert del_res.json()["status"] == "deleted"
 
-    def test_same_filename_collateral_deletion_bug_investigation(self):
+    def test_same_filename_collateral_deletion_bug_investigation(self, tmp_path):
         """
         Adversarial test: Upload 2 documents with the SAME filename but DIFFERENT doc_ids.
         Deleting doc_1 should purge doc_1. Check what happens to doc_2's chunks in vector & BM25 store.
         """
-        doc_service = DocumentService()
+        doc_service = DocumentService(storage_dir=str(tmp_path / "uploads"))
         res1 = doc_service.upload_document("same_name.txt", b"First copy of document content", category="cat1")
         res2 = doc_service.upload_document("same_name.txt", b"Second copy of document content", category="cat2")
 
@@ -169,6 +170,14 @@ class TestDocumentDeletionEdgeCases:
         doc_id_2 = res2.document_id
 
         assert doc_id_1 != doc_id_2
+        # Uploads index on a background queue; wait for both before inspecting.
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            states = [doc_service.get_ingestion_status(d).status for d in (doc_id_1, doc_id_2)]
+            if all(state in ("READY", "FAILED") for state in states):
+                break
+            time.sleep(0.2)
+        assert states == ["READY", "READY"]
         assert len(doc_service.list_documents().documents) == 2
 
         # Delete doc_1
@@ -185,8 +194,8 @@ class TestDocumentDeletionEdgeCases:
         vector_count_remaining = doc_service.vector_store.count()
 
         # Record finding: If delete_by_source wiped out doc_2's chunks, bm25_chunks_remaining will be 0!
-        assert vector_count_remaining >= 0
-        assert len(bm25_chunks_remaining) >= 0
+        assert vector_count_remaining >= 1
+        assert len(bm25_chunks_remaining) >= 1
 
 
 class TestDocumentUploadEdgeCases:

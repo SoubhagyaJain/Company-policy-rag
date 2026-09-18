@@ -9,6 +9,8 @@ import re
 from typing import Any, Callable
 
 from backend.models.rag import Citation, ScoredChunk, VerificationReport
+from backend.rag.citations import _SOURCE_TAG_PATTERN, CitationEngine
+from backend.rag.llm_client import complete_text
 from backend.utils.logging import logger
 from src.config import settings
 
@@ -137,15 +139,6 @@ class SelfReflectionVerifier:
         answer_lower = answer.lower()
         unsupported: list[str] = []
 
-        # Check for ungrounded financial figures or equipment claims
-        if "$5,000" in answer or "$5000" in answer or "unauthorized furniture" in answer_lower:
-            if "$5,000" not in context_text and "$5000" not in context_text:
-                unsupported.append("Unsupported reimbursement amount or unverified equipment category.")
-                return 0.35, unsupported
-        elif "furniture" in answer_lower and "furniture" not in context_text:
-            unsupported.append("Unsupported equipment category: 'furniture'.")
-            return 0.35, unsupported
-
         # Named software/products are especially easy for a generator to add
         # from model memory. Treat capitalized product-like tokens that are not
         # in the evidence as unsupported (excluding sentence starts and tags).
@@ -171,7 +164,7 @@ class SelfReflectionVerifier:
 
         # Clean citations, page numbers, section headers, steps, line numbers, and years before numerical checks
         clean_for_numbers = answer
-        clean_for_numbers = re.sub(r"\[(?:VISUAL\s+)?SOURCE\s*\d+(?:,\s*\d+)*\]", " ", clean_for_numbers, flags=re.IGNORECASE)
+        clean_for_numbers = _SOURCE_TAG_PATTERN.sub(" ", clean_for_numbers)
         clean_for_numbers = re.sub(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]", " ", clean_for_numbers)
         clean_for_numbers = re.sub(r"\bpages?\s+(?:numbers?\s+)?\d+(?:\s*-\s*\d+)?\b", " ", clean_for_numbers, flags=re.IGNORECASE)
         clean_for_numbers = re.sub(r"\bp\.\s*\d+\b", " ", clean_for_numbers, flags=re.IGNORECASE)
@@ -249,10 +242,7 @@ class SelfReflectionVerifier:
 
         prompt = _LLM_FAITHFULNESS_PROMPT.format(context=context_text, answer=answer)
         try:
-            try:
-                raw = str(llm.complete(prompt, temperature=0.0, max_new_tokens=256)).strip()
-            except TypeError:
-                raw = str(llm.complete(prompt)).strip()
+            raw, _usage = complete_text(llm, prompt, temperature=0.0, max_tokens=256)
         except Exception as exc:
             logger.warning("LLM faithfulness verification failed (%s); using heuristic.", exc)
             return None
@@ -356,7 +346,7 @@ class SelfReflectionVerifier:
         if "unable to answer" in answer.lower() or "could not find this information" in answer.lower():
             return 1.0
 
-        cited_tags = re.findall(r"\[(?:VISUAL\s+)?SOURCE\s*(\d+)\]", answer, re.IGNORECASE)
+        cited_tags = [str(index) for index in CitationEngine.extract_source_tags(answer)]
         bracket_nums = re.findall(r"\[(\d+)\]", answer)
         all_tags = cited_tags + bracket_nums
         has_citations = len(citations) > 0 or len(all_tags) > 0
@@ -428,7 +418,7 @@ class SelfReflectionVerifier:
                 unsupported = []
             except Exception as exc:
                 logger.warning("Custom validator error: %s. Falling back to heuristic verification.", exc)
-                has_citations = len(citations) > 0 or bool(re.search(r"\[(?:VISUAL\s+)?Source\s*\d+\]", answer, re.IGNORECASE))
+                has_citations = len(citations) > 0 or bool(CitationEngine.extract_source_tags(answer))
                 faith, unsupported = self._evaluate_faithfulness(
                     answer, context_chunks, has_citations, allowed_derived_facts
                 )
@@ -436,7 +426,7 @@ class SelfReflectionVerifier:
                 cit = self._evaluate_citation_coverage(answer, context_chunks, citations)
                 coh = self._evaluate_coherence(answer)
         else:
-            has_citations = len(citations) > 0 or bool(re.search(r"\[(?:VISUAL\s+)?Source\s*\d+\]", answer, re.IGNORECASE))
+            has_citations = len(citations) > 0 or bool(CitationEngine.extract_source_tags(answer))
             faith, unsupported = self._evaluate_faithfulness(
                 answer, context_chunks, has_citations, allowed_derived_facts
             )
@@ -463,7 +453,7 @@ class SelfReflectionVerifier:
                             unsupported.append(claim)
                             seen.add(claim.casefold())
 
-        # Composite score calculation (PROJECT.md weights: 0.35 Faith + 0.30 Comp + 0.20 Cit + 0.15 Coh)
+        # Composite score weights: 0.35 faithfulness + 0.30 completeness + 0.20 citation + 0.15 coherence
         composite = round(
             0.35 * faith + 0.30 * comp + 0.20 * cit + 0.15 * coh,
             3,

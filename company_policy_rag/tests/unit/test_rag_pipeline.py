@@ -229,12 +229,18 @@ def test_reranker_thresholding(sample_chunks: list[Chunk]):
 def test_multi_query_decomposition():
     gen = MultiQueryGenerator()
 
-    queries = gen.generate_subqueries("What are the 6 building blocks of AI agents?")
-    assert len(queries) > 1
-    assert "Role-playing building block AI agents" in queries or any("building blocks" in q for q in queries)
+    queries = gen.generate_subqueries("What is the annual leave policy and how do I claim travel expenses?")
+    assert queries[0] == "What is the annual leave policy and how do I claim travel expenses?"
+    assert "What is the annual leave policy" in queries
+    assert "how do I claim travel expenses?" in queries
 
-    guardrail_queries = gen.generate_subqueries("How do guardrails work?")
-    assert any("Guardrails" in q for q in guardrail_queries)
+    # No corpus-specific expansion: a single question stays a single query.
+    assert gen.generate_subqueries("What are the 6 building blocks of AI agents?") == [
+        "What are the 6 building blocks of AI agents?"
+    ]
+
+    topics = gen.generate_subqueries("Summarize the travel policy including lodging limits, meal allowances")
+    assert "lodging limits" in topics and "meal allowances" in topics
 
 
 def test_query_rewriter():
@@ -242,12 +248,11 @@ def test_query_rewriter():
 
     res = rewriter.rewrite("What happens if I quit without notice?")
     assert res.is_comprehensive_list is False
-    assert res.inferred_corpus == "policy"
-    assert "employment at-will" in res.rewritten_query
+    # Retrieval sees the user's words, not appended corpus-specific vocabulary.
+    assert res.rewritten_query == "What happens if I quit without notice?"
 
     res_comp = rewriter.rewrite("List all six building blocks of AI agents and explain each")
     assert res_comp.is_comprehensive_list is True
-    assert res_comp.inferred_corpus == "guidebook"
 
 
 def test_query_rewriter_with_history():

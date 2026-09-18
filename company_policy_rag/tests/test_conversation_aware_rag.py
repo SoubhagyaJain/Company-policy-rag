@@ -56,7 +56,7 @@ from backend.rag.evidence_gate import (
     compute_monotonic_evidence_status,
 )
 from backend.rag.pipeline import (
-    GROUNDED_SYSTEM_PROMPT,
+    GROUNDED_ANSWER_WRITER_PROMPT,
     _detect_fidelity_mode,
     _format_evidence_status_directive,
     _format_history_for_prompt,
@@ -751,18 +751,17 @@ def test_11_grounded_expand_synthesis_four_tier_separation() -> None:
     assert res_eval.evidence_status == EvidenceStatus.PARTIAL
 
     # 6. Format full prompt and verify structure
-    prompt = GROUNDED_SYSTEM_PROMPT.format(
+    prompt = GROUNDED_ANSWER_WRITER_PROMPT.format(
         evidence_status_directive=dir_partial,
         mode_instructions="Mode: EXPAND",
         refinement_directive="",
         context_text="[Source 1] result = crew.kickoff()",
-        history_text=_format_history_for_prompt([{"role": "user", "content": "Tell me about CrewAI"}]),
         query="Tell about it in detail",
     )
-    assert "RULE 9: When code snippets, kickoff calls" in prompt
+    assert "Preserve retrieved code exactly" in prompt
     assert "Evidence Status: PARTIAL IMPLEMENTATION" in prompt
     assert "Mode: EXPAND" in prompt
-    assert "USER QUESTION: Tell about it in detail" in prompt
+    assert "STANDALONE QUESTION: Tell about it in detail" in prompt
 
 
 # ============================================================================

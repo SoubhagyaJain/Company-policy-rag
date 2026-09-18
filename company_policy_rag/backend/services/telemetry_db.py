@@ -34,9 +34,9 @@ class TelemetryDB:
         if db_path is not None:
             self.db_path = Path(db_path)
         else:
-            base_dir = Path("storage")
-            base_dir.mkdir(parents=True, exist_ok=True)
-            self.db_path = base_dir / "telemetry.sqlite3"
+            from src.config import settings
+
+            self.db_path = Path(settings.storage_dir) / "telemetry.sqlite3"
 
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()

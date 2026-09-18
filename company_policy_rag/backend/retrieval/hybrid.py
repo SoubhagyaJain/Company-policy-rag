@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -59,10 +60,23 @@ def reciprocal_rank_fusion(
     return fused
 
 
+def _word_count(sc: ScoredChunk) -> int:
+    return len((sc.chunk.text or "").split())
+
+
+def _timed(fn, *args, **kwargs) -> tuple[Any, float]:
+    t0 = time.perf_counter()
+    result = fn(*args, **kwargs)
+    return result, (time.perf_counter() - t0) * 1000
+
+
 class HybridRetriever:
     """
     Executes parallel dense vector and BM25 lexical searches and merges results via RRF.
     """
+
+    # Pipelines pass a per-sub-query ``trace`` dict only to retrievers that set this.
+    supports_stage_trace = True
 
     def __init__(
         self,
@@ -70,11 +84,15 @@ class HybridRetriever:
         bm25_index: BM25SearchIndex,
         reranker: CrossEncoderReranker | None = None,
         rrf_k: int = 60,
+        min_chunk_words: int = 0,
     ) -> None:
         self.dense_retriever = dense_retriever
         self.bm25_index = bm25_index
         self.reranker = reranker or CrossEncoderReranker()
         self.rrf_k = rrf_k
+        # Chunks with this many words or fewer (title pages, bare headings) are
+        # skipped at query time. 0 keeps every chunk.
+        self.min_chunk_words = min_chunk_words
 
     def _warm_dense_model(self) -> None:
         """Force the embedding model to load on the calling thread (idempotent)."""
@@ -93,12 +111,21 @@ class HybridRetriever:
         bm25_top_k: int = 25,
         filters: dict[str, Any] | None = None,
         rrf_k: int | None = None,
+        trace: dict[str, Any] | None = None,
     ) -> list[ScoredChunk]:
-        """Execute hybrid search with Reciprocal Rank Fusion."""
+        """Execute hybrid search with Reciprocal Rank Fusion.
+
+        When ``trace`` is given it receives the dense, BM25, and fused rankings
+        (chunk ids) and per-index latency.
+        """
         if not query.strip():
             return []
 
         effective_rrf_k = rrf_k if rrf_k is not None else self.rrf_k
+        min_words = max(0, int(self.min_chunk_words or 0))
+        # Over-fetch when short chunks are skipped so each list still fills its depth.
+        dense_fetch = dense_top_k * 2 + 10 if min_words else dense_top_k
+        bm25_fetch = bm25_top_k * 2 + 10 if min_words else bm25_top_k
 
         # Load the embedding model on THIS (calling) thread before fanning out:
         # the first `import sentence_transformers` pulls in native libs (pyarrow)
@@ -114,27 +141,45 @@ class HybridRetriever:
         logger.info(f"Executing dense + BM25 retrieval for query: {query}")
         with ThreadPoolExecutor(max_workers=2) as executor:
             dense_future = executor.submit(
-                self.dense_retriever.retrieve, query, top_k=dense_top_k, filters=filters
+                _timed, self.dense_retriever.retrieve, query, top_k=dense_fetch, filters=filters
             )
             bm25_future = executor.submit(
-                self.bm25_index.search, query, top_k=bm25_top_k, filters=filters
+                _timed, self.bm25_index.search, query, top_k=bm25_fetch, filters=filters
             )
-            dense_hits = dense_future.result()
-            bm25_hits = bm25_future.result()
+            dense_hits, dense_ms = dense_future.result()
+            bm25_hits, bm25_ms = bm25_future.result()
         logger.info("Dense + BM25 retrieval complete")
 
-        if not bm25_hits:
-            logger.debug("BM25 returned 0 hits; returning dense hits only.")
-            for rank, sc in enumerate(dense_hits, start=1):
-                sc.rank = rank
-            return dense_hits
+        if min_words:
+            dense_hits = [sc for sc in dense_hits if _word_count(sc) > min_words][:dense_top_k]
+            bm25_hits = [sc for sc in bm25_hits if _word_count(sc) > min_words][:bm25_top_k]
 
-        if not dense_hits:
-            logger.debug("Dense retriever returned 0 hits; returning BM25 hits only.")
-            for rank, sc in enumerate(bm25_hits, start=1):
-                sc.rank = rank
-            return bm25_hits
+        if trace is not None:
+            trace.update(
+                {
+                    "query": query,
+                    "dense": [sc.chunk.id for sc in dense_hits],
+                    "bm25": [sc.chunk.id for sc in bm25_hits],
+                    "dense_ms": round(dense_ms, 2),
+                    "bm25_ms": round(bm25_ms, 2),
+                }
+            )
 
-        fused = reciprocal_rank_fusion([dense_hits, bm25_hits], rrf_k=effective_rrf_k)
-        logger.debug("Hybrid search fused %d dense + %d BM25 -> %d chunks (rrf_k=%d)", len(dense_hits), len(bm25_hits), len(fused), effective_rrf_k)
+        if not bm25_hits or not dense_hits:
+            # One index came back empty. Score the surviving list on the RRF
+            # scale anyway: callers merge hits from several sub-queries by score,
+            # and a raw cosine (0-1) or BM25 (unbounded) score would outrank
+            # every fused 1/(k + rank) score regardless of relevance.
+            single = dense_hits or bm25_hits
+            logger.debug(
+                "%s returned 0 hits; ranking %s hits alone.",
+                "BM25" if not bm25_hits else "Dense retriever",
+                "dense" if not bm25_hits else "BM25",
+            )
+            fused = reciprocal_rank_fusion([single], rrf_k=effective_rrf_k) if single else []
+        else:
+            fused = reciprocal_rank_fusion([dense_hits, bm25_hits], rrf_k=effective_rrf_k)
+            logger.debug("Hybrid search fused %d dense + %d BM25 -> %d chunks (rrf_k=%d)", len(dense_hits), len(bm25_hits), len(fused), effective_rrf_k)
+        if trace is not None:
+            trace["fused"] = [sc.chunk.id for sc in fused]
         return fused
