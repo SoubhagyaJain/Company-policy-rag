@@ -293,10 +293,11 @@ Use this when you are changing code. Docker is for demoing; this is for iteratin
 
 | Need | Version | Check |
 |---|---|---|
-| Python | 3.11+ (CI pins 3.11) | `python --version` |
+| [uv](https://docs.astral.sh/uv/) | recommended | `uv --version` (installs Python 3.11 for you) |
+| Python | 3.11+ (CI pins 3.11), if not using uv | `python --version` |
 | Node.js | 20+ | `node --version` |
 | [Ollama](https://ollama.com/) | running on the host | `curl http://localhost:11434/api/tags` |
-| Free disk | ~8 GB | model 4.7 GB + embedder/reranker ~1.4 GB |
+| Free disk | ~8 GB (+3 GB for CUDA PyTorch) | model 4.7 GB + embedder/reranker ~1.4 GB |
 | Redis | optional | only for Celery-backed async ingestion |
 
 ### Step 1 — Pull the model
@@ -308,6 +309,19 @@ ollama pull qwen2.5:7b
 ✅ **Check:** `ollama list` shows `qwen2.5:7b`. The embedder (`BAAI/bge-small-en-v1.5`) is **not** an Ollama model — it downloads from Hugging Face on first use.
 
 ### Step 2 — Install the backend
+
+**With [uv](https://docs.astral.sh/uv/)** (recommended — no activation needed):
+
+```bash
+cd company_policy_rag
+
+uv sync                                   # Python 3.11 + every dependency, exactly as locked
+cp .env.example .env                      # optional — every setting has a working default
+```
+
+`uv sync` reads `pyproject.toml` and `uv.lock`, fetches Python 3.11 if needed (pinned in `.python-version`), and builds `.venv` with the `server`, `gpu` and `dev` dependency groups. PyTorch is the **CUDA 12.6 build**: on an NVIDIA GPU the vision model reads a page in seconds instead of ~65 s, and on a machine without one it simply runs on CPU. For a smaller CPU-only install, point `[tool.uv.sources]` in `pyproject.toml` at `https://download.pytorch.org/whl/cpu` and run `uv lock && uv sync`.
+
+**With pip** (what CI and Docker use — CPU PyTorch):
 
 ```bash
 cd company_policy_rag
@@ -323,14 +337,17 @@ pip install -r requirements.txt
 cp .env.example .env                      # optional — every setting has a working default
 ```
 
-✅ **Check:** `python -c "from backend.api.main import app; print('ok')"` prints `ok`. Run it from `company_policy_rag/`; a `ModuleNotFoundError: backend` means you are in the wrong directory or the venv is not active.
+✅ **Check:** `uv run python -c "from backend.api.main import app; print('ok')"` prints `ok` (with pip and the venv active: `python -c "…"`). Run it from `company_policy_rag/`; a `ModuleNotFoundError: backend` means you are in the wrong directory or, with pip, the venv is not active. On an NVIDIA machine, `uv run python -c "import torch; print(torch.cuda.is_available())"` should print `True`.
+
+> **`requirements.txt` stays for pip, CI and Docker.** If you add a dependency, add it to both `pyproject.toml` (then `uv lock`) and `requirements.txt`.
 
 > **On a CPU-only machine, set `VISION_ENABLED=false` in `.env` now.** The page-understanding model runs at ~65 s/page on CPU, which makes PDF ingestion look hung. With a GPU, leave it on.
 
 ### Step 3 — Start the backend
 
 ```bash
-uvicorn backend.api.main:app --reload --port 8000
+uv run uvicorn backend.api.main:app --reload --port 8000
+# pip, venv active:  uvicorn backend.api.main:app --reload --port 8000
 ```
 
 Startup warms the embedder and the LLM handle inside FastAPI's `lifespan`, so the **first request is no slower than the rest**. Expect **30–60 s** before the port accepts traffic — loading the embedder dominates that, and the reranker is skipped entirely because it is off by default.
@@ -375,14 +392,29 @@ python scripts/production_retrieval_smoke.py --assert-minimums   # self-containe
 cd frontend && npm test                                    # 216 tests, ~0.3 s
 ```
 
-If all four pass, your environment is correct. On Windows, prefix pytest-based commands with `KMP_DUPLICATE_LIB_OK=TRUE` (or set it once in your shell) — PyTorch and Intel OpenMP otherwise abort the process on import.
+If they all pass, your environment is correct. With uv, run each `python …` line as `uv run python …`. On Windows, prefix pytest-based commands with `KMP_DUPLICATE_LIB_OK=TRUE` (or set it once in your shell) — PyTorch and Intel OpenMP otherwise abort the process on import.
+
+### Day to day
+
+Once installed, two terminals from the repository root start everything (Ollama must already be running):
+
+```bash
+uv run --directory company_policy_rag uvicorn backend.api.main:app --reload --port 8000
+```
+
+```bash
+npm run dev --prefix company_policy_rag/frontend
+```
+
+Then open <http://localhost:3000>. `uv run` keeps `.venv` in sync with `uv.lock` automatically, so a pull that changes dependencies needs no extra step.
 
 ### Optional extras
 
 ```bash
 pip install -r requirements-finetuning.txt   # LoRA/QLoRA + GGUF export + Ollama registration
-pip install -e ".[marker]"                   # marker-pdf, higher-fidelity PDF parsing
 ```
+
+With uv, the fine-tuning stack is `uv sync --extra finetuning`.
 
 ---
 
@@ -430,7 +462,7 @@ Full interactive schema at <http://localhost:8000/docs>.
 | Every answer is "I could not find this information in the provided document." | The library is empty — this is the correct, grounded response, not a bug | Upload a document and wait for `READY` |
 | Answers ignore an uploaded document | Still indexing | Wait for `READY` in the library |
 | "I could not find that" on an obvious fact | Question names a document that is not selected or uploaded | Check the library, or scope the question to the right document |
-| `ModuleNotFoundError: backend` | Wrong cwd or inactive venv | Run from `company_policy_rag/` with the venv active |
+| `ModuleNotFoundError: backend` | Wrong cwd or inactive venv | Run from `company_policy_rag/` with the venv active, or use `uv run` |
 | Windows pytest aborts on import | Duplicate OpenMP runtime | `KMP_DUPLICATE_LIB_OK=TRUE` |
 
 More in [Troubleshooting](#-troubleshooting).
@@ -1093,7 +1125,7 @@ Stated plainly, because a README that only lists strengths is not an engineering
 
 **Citation numbers still drift.** Every answer now carries a tag and the tagged chunk is always one that was in the prompt, but the model sometimes picks the wrong number for a correct sentence (citation precision 0.905 on the handbook set). A lexical repair pass was tried and could not fix it safely.
 
-**Vision needs a GPU.** The Qwen3-VL page-understanding path runs at roughly **65 s/page on CPU**, which is unusable in practice. On a CPU-only host, set `VISION_ENABLED=false`. Consequence: **scanned/image-only PDFs will index 0 chunks** — there is no OCR fallback in that configuration. Text-layer PDFs are unaffected.
+**Vision needs a GPU.** The Qwen3-VL page-understanding path runs at roughly **65 s/page on CPU**, which is unusable in practice. The uv environment installs CUDA PyTorch plus `accelerate`/`bitsandbytes`, so on an NVIDIA GPU it loads 4-bit (~1.5 GB VRAM) and reads a page in seconds — but only when at least `VISION_MIN_GPU_FREE_GB` (2 GB) is free, which on a 6 GB card means the chat model must not be resident. On a CPU-only host, set `VISION_ENABLED=false`. Consequence: **scanned/image-only PDFs will index 0 chunks** — there is no OCR fallback in that configuration. Text-layer PDFs are unaffected.
 
 **Single-node by design.** SQLite telemetry, embedded Chroma, and per-process session storage do not survive horizontal scaling. Deliberate — but it is a ceiling.
 
@@ -1121,8 +1153,9 @@ See [`docs/PHASE4_AB_LOG.md`](company_policy_rag/docs/PHASE4_AB_LOG.md) (what ch
 | Upload succeeds, **0 chunks indexed** | Scanned/image-only PDF with `VISION_ENABLED=false` | No OCR fallback in that mode — use a text-layer PDF, or enable vision on a GPU host |
 | Ingestion extremely slow on a PDF | Vision path active on CPU (~65 s/page) | Set `VISION_ENABLED=false` |
 | `npm run dev` serves a stale build | Old dev server still holding port 3000 | Already handled by the `predev` hook; if it persists, kill the process manually |
-| `ModuleNotFoundError: backend...` | `PYTHONPATH` not set, or wrong cwd | Run from `company_policy_rag/`, or `export PYTHONPATH=$PWD` |
-| `No module named pytest` | Wrong virtualenv activated | Activate the venv you installed `requirements.txt` into |
+| `ModuleNotFoundError: backend...` | `PYTHONPATH` not set, or wrong cwd | Run from `company_policy_rag/`, or `export PYTHONPATH=$PWD`. With uv: `uv run --directory company_policy_rag …` |
+| `No module named pytest` | Wrong virtualenv activated | Activate the venv you installed `requirements.txt` into, or run through `uv run` |
+| Vision ingestion slow despite an NVIDIA GPU | CPU PyTorch installed, or the chat model is holding the VRAM | `uv run python -c "import torch; print(torch.cuda.is_available())"` must print `True`. Vision uses the GPU only when ≥ `VISION_MIN_GPU_FREE_GB` is free — run `ollama stop qwen2.5:7b` before a bulk upload |
 | `posthog capture()` errors in logs | Chroma anonymous telemetry | Harmless; already suppressed via `ANONYMIZED_TELEMETRY=False` |
 | Embedder/reranker download fails behind a proxy | HF hub unreachable | Point `HF_HOME` at a pre-populated cache; the reranker is already off by default |
 | `storage/sessions/` growing large | Old per-process libraries from `DOCUMENT_LIBRARY_MODE=session` | Safe to delete while the app is stopped; the default mode no longer creates them |
