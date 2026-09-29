@@ -51,7 +51,7 @@ function getLanguageMeta(lang?: string): { label: string; color: string } {
 function highlightLine(line: string, language?: string): React.ReactNode {
   // Comments
   if (/^\s*(#|\/\/|--|\/\*).*/.test(line)) {
-    return <span className="text-[#8E877C] italic">{line}</span>;
+    return <span className="text-[#7C8AA8] italic">{line}</span>;
   }
 
   // String literals
@@ -139,9 +139,9 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
   };
 
   return (
-    <div className="relative my-3.5 rounded-xl overflow-hidden border border-[#38342F] bg-[#1A1916] text-[#FAF8F5] shadow-md transition-all font-mono text-[13px] group/code">
+    <div className="relative my-3.5 rounded-xl overflow-hidden border border-[#1F2B4D] bg-[#0A1024] text-[#E6ECF7] shadow-md transition-all font-mono text-[13px] group/code">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-[#24221E] border-b border-[#33302A] select-none">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-[#0E1630] border-b border-[#1C2746] select-none">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 opacity-75 mr-1">
             <span className="w-2.5 h-2.5 rounded-full bg-[#E05A47]/80 inline-block" />
@@ -156,7 +156,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
           >
             {meta.label}
           </span>
-          <span className="text-[11px] text-[#8E877C] font-mono hidden sm:inline-block">
+          <span className="text-[11px] text-[#7C8AA8] font-mono hidden sm:inline-block">
             {lines.length} {lines.length === 1 ? 'line' : 'lines'}
           </span>
         </div>
@@ -169,7 +169,7 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
             'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition-all',
             copied
               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-              : 'text-[#B5AFA4] hover:text-[#FAF8F5] bg-[#2E2B26] hover:bg-[#38352F] border border-[#403C35]'
+              : 'text-[#AEBBD3] hover:text-[#E6ECF7] bg-[#141E3A] hover:bg-[#26345A] border border-[#26345A]'
           )}
           title="Copy code snippet"
         >
@@ -188,15 +188,15 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
       </div>
 
       {/* Code Container with line numbers and horizontal scroll */}
-      <div className="overflow-x-auto p-3.5 leading-relaxed scrollbar-thin scrollbar-thumb-[#38352F] scrollbar-track-transparent">
+      <div className="overflow-x-auto p-3.5 leading-relaxed scrollbar-thin scrollbar-thumb-[#26345A] scrollbar-track-transparent">
         <pre className="p-0 m-0 bg-transparent border-0 font-mono text-[13px] leading-6">
           <code>
             {lines.map((line, idx) => (
               <div key={idx} className="table-row group/line hover:bg-white/[0.03]">
-                <span className="table-cell pr-3.5 select-none text-right text-[11px] text-[#6E675C] font-mono w-7 shrink-0 opacity-60 group-hover/line:text-[#9E978C] group-hover/line:opacity-100 transition-colors">
+                <span className="table-cell pr-3.5 select-none text-right text-[11px] text-[#56627F] font-mono w-7 shrink-0 opacity-60 group-hover/line:text-[#8C9AB8] group-hover/line:opacity-100 transition-colors">
                   {idx + 1}
                 </span>
-                <span className="table-cell whitespace-pre font-mono text-[#EDE8DF]">
+                <span className="table-cell whitespace-pre font-mono text-[#E3E9F4]">
                   {highlightLine(line, language)}
                 </span>
               </div>

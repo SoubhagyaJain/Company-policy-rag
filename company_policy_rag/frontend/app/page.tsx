@@ -9,7 +9,7 @@ import { DocumentsView } from '@/components/DocumentsView';
 import { AdminView } from '@/components/AdminView';
 import { SpaceShell } from '@/components/space/SpaceShell';
 import { LibraryShell } from '@/components/space/LibraryShell';
-import { SpaceHero } from '@/components/space/SpaceHero';
+import { AlpineBackdrop } from '@/components/space/AlpineBackdrop';
 
 import { useChatStream } from '@/hooks/useChatStream';
 import { useSessions } from '@/hooks/useSessions';
@@ -18,16 +18,16 @@ import { apiClient } from '@/lib/api-client';
 import type { FilterOptions, HealthStatus, ResponseMode } from '@/lib/types';
 
 
-/* Direction-aware blur crossfade for tab content. Custom = travel direction:
- * +1 → new tab is to the right (old exits left, new enters from right), -1 → reverse. */
-// Compositor-only properties (opacity + transform). No animated `blur()` — a
-// full-screen blur filter re-rasterizes every frame over the live WebGL hero,
-// which is what made tab switches stutter. Opacity/translate/scale stay on the
-// GPU and cross-fade cleanly.
+/* Direction-aware crossfade for tab content. Custom = travel direction:
+ * +1 → new tab is to the right (old exits left, new enters from right), -1 → reverse.
+ * Opacity + a short translate only: both stay on the compositor. No animated
+ * blur() filter and no scale — scaling a panel re-rasterizes its text and forces
+ * every glass (backdrop-filter) layer inside it to be re-sampled each frame,
+ * which is what made tab switches stutter on integrated GPUs. */
 const panelVariants = {
-  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 24 : d < 0 ? -24 : 0, scale: 0.99 }),
-  center: { opacity: 1, x: 0, scale: 1 },
-  exit: (d: number) => ({ opacity: 0, x: d > 0 ? -24 : d < 0 ? 24 : 0, scale: 0.99 }),
+  enter: (d: number) => ({ opacity: 0, x: d > 0 ? 18 : d < 0 ? -18 : 0 }),
+  center: { opacity: 1, x: 0 },
+  exit: (d: number) => ({ opacity: 0, x: d > 0 ? -18 : d < 0 ? 18 : 0 }),
 };
 
 const reducedVariants = {
@@ -282,19 +282,19 @@ export default function HomePage() {
     ? { duration: 0.14, ease: [0.22, 1, 0.36, 1] as const }
     : {
         x: { type: 'spring' as const, stiffness: 460, damping: 44, mass: 0.9 },
-        scale: { type: 'spring' as const, stiffness: 460, damping: 44, mass: 0.9 },
         opacity: { duration: 0.26, ease: [0.22, 1, 0.36, 1] as const },
       };
 
+  // Text-dense views (a live conversation, Library, Telemetry) get a deeper
+  // veil and a still backdrop; the empty Ask view shows the scene in full.
+  const backdropFocus = activeTab !== 'chat' || messages.length > 0;
+
   return (
-    <div className="relative min-h-[100dvh] w-full">
-      {/* Deep-space fallback shown only while the shared hero first fades in. */}
-      <div aria-hidden className="sp-ambient pointer-events-none fixed inset-0 z-0" />
-      {/* One persistent WebGL hero shared by every tab. It never unmounts, so
-          switching tabs crossfades transparent content over a constant
-          background instead of tearing the hero down and rebuilding it (which
-          is what caused the black flash between tabs). */}
-      <SpaceHero light={!isDarkMode} className="fixed inset-0 z-0" />
+    <div className="relative min-h-[100dvh] w-full overflow-hidden">
+      {/* One persistent backdrop shared by every tab. It never unmounts, so
+          switching tabs crossfades transparent content over a constant scene
+          instead of tearing it down and rebuilding it. */}
+      <AlpineBackdrop focus={backdropFocus} />
       {/* Sync (crossfade) mode, NOT mode="wait": the incoming tab mounts
           immediately while the outgoing one animates away, so switching tabs
           works even while the chat is streaming (rapid re-renders would

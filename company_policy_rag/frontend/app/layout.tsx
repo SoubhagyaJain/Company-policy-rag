@@ -1,5 +1,5 @@
-import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.css';
 
 const inter = Inter({
@@ -14,6 +14,15 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-jetbrains-mono',
 });
 
+// Display serif for the few large headlines that sit directly on the backdrop.
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  display: 'swap',
+  variable: '--font-display',
+});
+
 export const metadata: Metadata = {
   title: 'Company Policy RAG Portal',
   description:
@@ -21,6 +30,11 @@ export const metadata: Metadata = {
   icons: {
     icon: '/favicon.ico',
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#050a1a',
+  colorScheme: 'dark light',
 };
 
 export default function RootLayout({
@@ -31,10 +45,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      // Space UI defaults to dark; the client effect in app/page.tsx reconciles
-      // to the user's stored `rag_dark_mode` choice. suppressHydrationWarning
-      // covers that post-hydration class change.
-      className={`dark ${inter.variable} ${jetbrainsMono.variable}`}
+      // The UI defaults to the moonlit dark theme; the client effect in
+      // app/page.tsx reconciles to the user's stored `rag_dark_mode` choice.
+      // suppressHydrationWarning covers that post-hydration class change.
+      className={`dark ${inter.variable} ${jetbrainsMono.variable} ${instrumentSerif.variable}`}
       suppressHydrationWarning
     >
       <body className={`${inter.className} antialiased min-h-screen`}>

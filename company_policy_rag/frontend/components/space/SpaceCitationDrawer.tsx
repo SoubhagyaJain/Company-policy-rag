@@ -27,7 +27,7 @@ export function SpaceCitationDrawer({ isOpen, citation, onClose }: SpaceCitation
       {/* scrim */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-[60] bg-[#04060c]/40 backdrop-blur-[2px] transition-opacity duration-300 ${
+        className={`fixed inset-0 z-[60] bg-[var(--sp-scrim)] backdrop-blur-[3px] transition-opacity duration-300 ${
           isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-hidden="true"
@@ -82,7 +82,7 @@ export function SpaceCitationDrawer({ isOpen, citation, onClose }: SpaceCitation
             </p>
           )}
 
-          <p className="sp-muted whitespace-pre-wrap text-[13.5px] leading-relaxed">
+          <p className="sp-card whitespace-pre-wrap rounded-2xl px-4 py-3.5 text-[14px] leading-[1.75] text-[var(--sp-answer-body)]">
             {citation?.chunk_text || citation?.snippet || 'No source text available.'}
           </p>
         </div>
