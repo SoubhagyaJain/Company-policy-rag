@@ -6,6 +6,52 @@
 
 /* ─── Base ─────────────────────────────────────── */
 @layer base {
+  /* shadcn/ui semantic tokens (HSL triples, consumed by tailwind.config.js).
+     Light = golden-hour, dark = moonlit night, sampled from styles/space.css. */
+  :root {
+    --background: 30 33% 91%;
+    --foreground: 223 45% 16%;
+    --card: 40 100% 99%;
+    --card-foreground: 223 45% 16%;
+    --popover: 40 100% 99%;
+    --popover-foreground: 223 45% 16%;
+    --primary: 224 49% 23%;
+    --primary-foreground: 223 100% 98%;
+    --secondary: 218 48% 95%;
+    --secondary-foreground: 223 45% 16%;
+    --muted: 36 38% 92%;
+    --muted-foreground: 223 19% 44%;
+    --accent: 223 100% 93%;
+    --accent-foreground: 223 45% 16%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 36% 88%;
+    --input: 218 36% 88%;
+    --ring: 226 53% 51%;
+  }
+
+  .dark {
+    --background: 226 68% 6%;
+    --foreground: 219 59% 94%;
+    --card: 225 56% 14%;
+    --card-foreground: 219 59% 94%;
+    --popover: 225 56% 14%;
+    --popover-foreground: 219 59% 94%;
+    --primary: 221 100% 93%;
+    --primary-foreground: 226 60% 10%;
+    --secondary: 224 53% 17%;
+    --secondary-foreground: 219 59% 92%;
+    --muted: 227 60% 12%;
+    --muted-foreground: 221 24% 64%;
+    --accent: 224 50% 24%;
+    --accent-foreground: 219 59% 94%;
+    --destructive: 0 84% 70%;
+    --destructive-foreground: 0 0% 0%;
+    --border: 224 36% 26%;
+    --input: 224 36% 26%;
+    --ring: 223 100% 81%;
+  }
+
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
@@ -72,6 +118,26 @@
 
   .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #26345A;
+  }
+
+  /* Hover-revealed hairline scrollbar for components/ui/ai-chat-input */
+  .prompt-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+    background: transparent;
+  }
+
+  .prompt-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .prompt-scrollbar::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  .prompt-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
   }
 
   /* Liquid glass focus ring for interactive elements */
