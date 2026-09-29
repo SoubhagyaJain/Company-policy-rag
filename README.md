@@ -360,7 +360,7 @@ npm run dev                               # http://localhost:3000
 
 The dev server proxies `/api/*` to `http://127.0.0.1:8000`, so **no frontend env var is needed** for the standard setup. If your backend runs elsewhere, set `BACKEND_API_URL`. `npm run dev` also runs a `predev` hook that kills a stale server holding port 3000 — a Windows papercut that otherwise silently serves an old build.
 
-✅ **Check:** <http://localhost:3000> loads the chat view and the Document Library reports 0 documents.
+✅ **Check:** <http://localhost:3000> loads the **Ask** view, and the **Library** tab reports 0 documents.
 
 On Windows, [`start_dev.bat`](company_policy_rag/start_dev.bat) launches both servers in their own windows.
 
@@ -390,12 +390,14 @@ pip install -e ".[marker]"                   # marker-pdf, higher-fidelity PDF p
 
 ### In the UI
 
-1. **Upload.** Document Library → upload [the fictional handbook](company_policy_rag/data/demo/sample_employee_handbook.md) or your own PDF/DOCX/MD/XLSX. Watch the ingestion stages; wait for `READY`.
-2. **Ask.** "What is maternity leave?" — the answer streams, then citation cards appear under it.
-3. **Follow up naturally.** "Does it apply during probation?" The pronoun is resolved before retrieval runs; you can see what it resolved to in the trace.
-4. **Open the trace drawer** on any answer: the retrieval decision and why, the resolved references, what was retrieved and what reached the prompt, verification scores, timings per stage.
-5. **Scope a question** to one document from the library when you have several — the pipeline then refuses evidence from anything else.
-6. **Admin dashboard** at `/admin`: query traces, per-stage latency, ingestion events, cache and error incidents.
+Three tabs — **Ask**, **Library**, **Telemetry** — over a moonlit alpine backdrop. The sun/moon button switches to a golden-hour theme; the choice persists.
+
+1. **Upload.** **Library** tab → upload [the fictional handbook](company_policy_rag/data/demo/sample_employee_handbook.md) or your own PDF/DOCX/MD/XLSX. Watch the ingestion stages; wait for `READY`.
+2. **Ask.** "What is maternity leave?" in the **Ask** tab. The answer streams onto a reading card; a collapsible reasoning panel above it lists each pipeline stage with its timing, and source chips appear underneath. Click a chip to read the exact cited passage.
+3. **Follow up naturally.** "Does it apply during probation?" The pronoun is resolved before retrieval runs; the query's trace shows what it resolved to.
+4. **Scroll while it streams.** Scrolling up pauses auto-follow so you can re-read; **Follow answer** jumps back to the newest line.
+5. **Tune the question** from the composer: answer depth (Compact / Standard / Detailed), the model, and the filter button to **scope** a question to one document or category — the pipeline then refuses evidence from anything else.
+6. **Inspect any answer** in the **Telemetry** tab (also served standalone at `/admin`). Open a query trace for the retrieval decision and why, the resolved references, what was retrieved and what reached the prompt, verification scores, and timings per stage — alongside per-stage latency, ingestion events, and cache and error incidents.
 
 Uploads persist across restarts. To start clean, delete the documents in the UI, or stop the app and remove `app/storage/`.
 
@@ -445,7 +447,7 @@ Five layers. Each one owns a directory, and the boundaries are real — you can 
 
 | Layer | Directory | Owns | Key modules |
 |---|---|---|---|
-| **Interface** | `frontend/` | Chat, document library, per-answer trace drawer, admin dashboard | `hooks/useChatStream.ts` (SSE), `components/` |
+| **Interface** | `frontend/` | Ask (streaming chat, reasoning panel, source drawer), Library, Telemetry with a per-query trace drawer | `hooks/useChatStream.ts` (SSE), `components/space/` (shell, backdrop, messages), `styles/space.css` (theme) |
 | **API** | `backend/api/` | HTTP surface, dependency injection, request validation | `main.py`, `dependencies.py`, `routes/` (chat · documents · admin · models · health) |
 | **RAG core** | `backend/rag/` | One turn, end to end: interpret → retrieve → assemble → generate → verify | `pipeline.py` (orchestration), `conversation_interpreter.py`, `policy_reliability.py`, `citations.py`, `verifier.py` |
 | **Retrieval & ingestion** | `backend/retrieval/`, `backend/ingestion/`, `backend/embeddings/` | Dense + lexical search, fusion, loaders, chunkers, embeddings | `hybrid.py` (RRF), `bm25.py`, `dense.py`, `reranker.py`, `chunkers/`, `loaders/` |
@@ -829,6 +831,18 @@ This is enforced in the retrieval path too: metadata-filter inference reads only
 **Honesty note:** removing the query-expansion tables *lowered* a headline number — guidebook context coverage fell 0.739 → 0.662. Those tables appended the answer's own vocabulary to 18 of 35 eval questions, so the number they produced was leakage. The context-assembly fix has since brought it back to 0.724 legitimately.
 </details>
 
+<details>
+<summary><b>10. The backdrop is identity; the answer card is the product</b></summary>
+
+**Alternative:** full glassmorphism — translucent, blurred cards everywhere over a live background.
+
+**Chosen:** a photographic night-alpine backdrop under a strict readability contract. Any surface that carries body text is at least 86% opaque; blur is reserved for fixed chrome (sidebar, nav, composer); a veil deepens and the scene freezes whenever the view is text-dense — a live conversation, Library, Telemetry.
+
+**Why:** a streaming answer is read while it moves. Translucent cards make contrast depend on whatever sits behind them, and blurred cards that scroll make the compositor re-sample the backdrop on every frame. Rendering matters as much: messages are memoised and markdown renders block by block, so each token batch re-parses only the paragraph still growing. Measured on an Intel UHD iGPU (dev build, mock SSE stream): streaming + scrolling went from 30 to ~105 fps, a 16-answer chat from 4 to ~97 fps, and main-thread long tasks during streaming from 103 to 0.
+
+**Cost:** less "glass" than the style usually implies, and ~500 KB of photos (night and golden hour). One trap worth knowing: Lightning CSS (Turbopack) keeps only the *last* of `backdrop-filter` / `-webkit-backdrop-filter`, and Chrome ignores the prefixed form — write the prefixed declaration first, or the blur silently disappears.
+</details>
+
 ---
 
 ## 📁 Repository map
@@ -1071,13 +1085,13 @@ Gates 3 and 4 are the important ones: **quality is a build failure, not a dashbo
 
 ## 📈 Observability
 
-Every query writes a full trace to SQLite (WAL mode), surfaced in the UI at `/admin` and over the API.
+Every query writes a full trace to SQLite (WAL mode), surfaced in the UI's **Telemetry** tab (also at `/admin`) and over the API.
 
 **Captured per query:** stage-by-stage timings for all 8 stages · the retrieval decision and its rationale · resolved references with confidence · candidates before and after rerank with scores · the assembled context and token count · verification scores across all four dimensions · retry count and reasons · cache hit/miss · model used.
 
 **Six event tables:** `query_traces`, `ingestion_events`, `cache_events`, `memory_events`, `vision_events`, `error_incidents`.
 
-The frontend exposes the same data in a per-message trace drawer, so you can inspect exactly why any answer came out the way it did — which is the only practical way to debug a RAG system.
+The Telemetry tab opens any query in a trace drawer with the same data, so you can inspect exactly why an answer came out the way it did — which is the only practical way to debug a RAG system.
 
 ---
 
@@ -1102,6 +1116,8 @@ Stated plainly, because a README that only lists strengths is not an engineering
 **Two code lineages.** `backend/` is production; `src/` retains the earlier pipeline plus the shared config object. This is a migration mid-flight, not a finished separation.
 
 **Open CORS, no auth.** `allow_origins=["*"]` is fine for localhost and wrong for anything reachable. There is no authentication layer — session isolation is per-process, not per-user-identity.
+
+**Desktop-first UI.** The interface is designed and performance-tuned for desktop browsers. Below ~640 px the composer's controls crowd the text input; a phone layout has not been built.
 
 **Retrieval-cost worst case.** A hard query that decomposes into parts and then fails verification twice can approach ~3× the normal latency budget — only reachable if you raise `VERIFICATION_MAX_RETRIES` above its default of 0.
 
