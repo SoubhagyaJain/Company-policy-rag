@@ -190,7 +190,7 @@ export function DocumentsView() {
         {/* ── Page heading ────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="sp-heading text-2xl font-semibold tracking-tight">
+            <h1 className="sp-display text-[32px] leading-tight">
               Document Manager
             </h1>
             <p className="sp-muted text-sm mt-0.5">
@@ -262,7 +262,7 @@ export function DocumentsView() {
             />
 
             <div className="w-12 h-12 rounded-2xl bg-terracotta-500/10 dark:bg-terracotta-500/20 flex items-center justify-center">
-              <Upload className="w-6 h-6 text-terracotta-600 dark:text-terracotta-500" />
+              <Upload className="w-6 h-6 text-terracotta-600 dark:text-terracotta-400" />
             </div>
 
             <div className="text-center">
@@ -286,7 +286,7 @@ export function DocumentsView() {
                   className={`px-2.5 py-0.5 rounded-lg text-[11px] font-mono transition-colors ${
                     selectedCategory === cat
                       ? 'bg-terracotta-600 text-white font-bold'
-                      : 'bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-300 hover:bg-cream-300 dark:hover:bg-[#2A2925]'
+                      : 'bg-cream-200 dark:bg-sand-dark text-charcoal dark:text-cream-300 hover:bg-cream-300 dark:hover:bg-[#1B2748]'
                   }`}
                 >
                   {cat}
@@ -299,7 +299,7 @@ export function DocumentsView() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="w-full max-w-sm space-y-2 mt-3 p-3.5 rounded-xl bg-cream-100/90 dark:bg-[#1A1916] border border-sand-border dark:border-sand-darkBorder"
+                className="w-full max-w-sm space-y-2 mt-3 p-3.5 rounded-xl bg-cream-100/90 dark:bg-[#0B1227] border border-sand-border dark:border-sand-darkBorder"
               >
                 <div className="flex items-center justify-between text-xs font-mono font-medium">
                   <span className="text-terracotta-700 dark:text-terracotta-400 flex items-center gap-1.5">

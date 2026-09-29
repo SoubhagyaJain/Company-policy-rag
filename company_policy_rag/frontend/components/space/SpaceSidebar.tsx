@@ -1,9 +1,9 @@
 'use client';
 
-/** Space-styled conversation sidebar. Pure presentation over the useSessions
- *  handlers already wired in app/page.tsx. Collapsible glass rail. */
+/** Conversation sidebar — a collapsible glass rail. Pure presentation over the
+ *  useSessions handlers already wired in app/page.tsx. */
 
-import { useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, PanelLeftClose, PanelLeft, Trash2, Pencil, Check, X } from 'lucide-react';
 import type { ChatSession } from '../../lib/types';
@@ -36,7 +36,9 @@ function bucketOf(iso: string): 'Today' | 'Yesterday' | 'Earlier' {
   return 'Earlier';
 }
 
-export function SpaceSidebar({
+// Memoized: rows use framer `layout`, which measures the DOM on every render,
+// so the rail must not re-render on each streamed token batch.
+export const SpaceSidebar = memo(function SpaceSidebar({
   collapsed,
   onToggleCollapse,
   sessions,
@@ -134,10 +136,7 @@ export function SpaceSidebar({
       <div className="flex items-center justify-between gap-2.5 px-4 pb-3 pt-4">
         {!collapsed && (
           <span className="sp-mono flex min-w-0 items-center gap-2.5 text-[10.5px] uppercase tracking-[0.26em]">
-            <span
-              className="h-[7px] w-[7px] flex-none rounded-full"
-              style={{ background: 'var(--sp-accent)', boxShadow: '0 0 12px rgba(127,227,176,0.85)' }}
-            />
+            <span className="sp-moon h-3 w-3 flex-none" aria-hidden="true" />
             <span className="truncate">Aperture RAG</span>
           </span>
         )}
@@ -145,7 +144,7 @@ export function SpaceSidebar({
           type="button"
           onClick={onToggleCollapse}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="sp-ibtn flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[11px]"
+          className="sp-ibtn flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full"
         >
           {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
@@ -250,10 +249,7 @@ export function SpaceSidebar({
         <div className="px-3 pb-4">
           <div className="sp-card rounded-2xl px-3.5 py-3">
             <div className="mb-2 flex items-center gap-2">
-              <span
-                className="h-[6px] w-[6px] rounded-full"
-                style={{ background: grounded ? 'var(--sp-accent)' : '#e0b45a' }}
-              />
+              <span className={`h-[6px] w-[6px] ${grounded ? 'sp-dot sp-dot-ok' : 'sp-dot sp-dot-warn'}`} />
               <span className="sp-mono sp-muted text-[9.5px] uppercase tracking-[0.24em]">
                 {grounded ? 'Grounded' : 'Degraded'}
               </span>
@@ -276,6 +272,6 @@ export function SpaceSidebar({
       )}
     </aside>
   );
-}
+});
 
 export default SpaceSidebar;

@@ -28,7 +28,7 @@ export function SpaceTracePills({ trace }: SpaceTracePillsProps) {
       <span
         key="verify"
         className={`sp-tracepill sp-mono flex items-center gap-1 rounded-full px-2.5 py-1 text-[9.5px] uppercase tracking-[0.12em] ${
-          passed === false ? 'text-amber-300' : 'text-[var(--sp-accent-text)]'
+          passed === false ? 'text-[var(--sp-warn-text)]' : 'text-[var(--sp-accent-text)]'
         }`}
       >
         <ShieldCheck className="h-3 w-3" />

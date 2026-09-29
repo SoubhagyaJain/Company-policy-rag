@@ -13,12 +13,12 @@
   }
 
   body {
-    @apply bg-[#FAF9F5] text-charcoal transition-colors duration-200;
+    @apply bg-[#efe7df] text-charcoal transition-colors duration-200;
   }
 
   .dark body,
   html.dark body {
-    @apply bg-[#141413] text-cream-100;
+    @apply bg-[#050a1a] text-cream-100;
   }
 
   /* Accessible focus ring */
@@ -28,11 +28,11 @@
 
   /* Selection highlight */
   ::selection {
-    @apply bg-terracotta-500/20 text-charcoal;
+    @apply bg-terracotta-500/25 text-charcoal;
   }
 
   .dark ::selection {
-    @apply bg-terracotta-500/30 text-cream-100;
+    @apply bg-terracotta-400/30 text-white;
   }
 }
 
@@ -41,11 +41,11 @@
   /* Custom scrollbar — thin, matching the cream/sand palette */
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: #C5BDAB transparent;
+    scrollbar-color: #C3CCDD transparent;
   }
 
   .dark .custom-scrollbar {
-    scrollbar-color: #3A3832 transparent;
+    scrollbar-color: #26345A transparent;
   }
 
   .custom-scrollbar::-webkit-scrollbar {
@@ -59,19 +59,19 @@
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
     @apply rounded-full;
-    background: #D9D3C5;
+    background: #D3DCEC;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #C5BDAB;
+    background: #AEBBD3;
   }
 
   .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #2A2925;
+    background: #1B2748;
   }
 
   .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #3A3832;
+    background: #26345A;
   }
 
   /* Liquid glass focus ring for interactive elements */

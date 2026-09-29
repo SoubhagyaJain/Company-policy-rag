@@ -6,9 +6,10 @@ import type { RefObject } from 'react';
 /**
  * useSmoothScroll — buttery wheel-driven inertia scrolling for an overflow
  * container. Intercepts wheel input and lerps `scrollTop` toward a target with
- * frame-rate-independent exponential damping (same half-life model the hero
- * shader uses), so scrolling stays glassy even while the WebGL background is
- * repainting every frame.
+ * frame-rate-independent exponential damping, so scrolling stays glassy over
+ * the animated backdrop. If anything else moves the pane mid-glide (scroll
+ * anchoring, the chat's follow-the-answer jump), the glide absorbs that offset
+ * instead of stalling or dragging the pane back toward a stale target.
  *
  * It only hijacks vertical mouse-wheel / trackpad input. Touch scrolling keeps
  * its native momentum, horizontal gestures pass through, and it bails entirely
@@ -37,6 +38,7 @@ export function useSmoothScroll(
     let animating = false;
     let raf = 0;
     let lastTime = 0;
+    let lastSet = -1; // scrollTop we wrote last frame (-1 = none yet)
 
     const maxScroll = () => el.scrollHeight - el.clientHeight;
 
@@ -46,15 +48,32 @@ export function useSmoothScroll(
 
       const factor = 1 - Math.pow(2, -dt / halfLife);
       const current = el.scrollTop;
+
+      // Moved by someone else since our last write. Small moves (the browser's
+      // scroll anchoring as streamed text re-lays out, the chat's follow-the-
+      // answer jump) are carried into the target so the glide neither stalls
+      // nor drags the pane back; a large move means someone took over.
+      if (lastSet >= 0) {
+        const drift = current - lastSet;
+        if (Math.abs(drift) > 240) {
+          animating = false;
+          lastSet = -1;
+          return;
+        }
+        if (Math.abs(drift) > 0.5) target = Math.max(0, Math.min(maxScroll(), target + drift));
+      }
+
       const next = current + (target - current) * factor;
 
       if (Math.abs(target - next) < 0.4) {
         el.scrollTop = target;
         animating = false;
+        lastSet = -1;
         return;
       }
 
       el.scrollTop = next;
+      lastSet = next;
       raf = requestAnimationFrame(step);
     };
 
@@ -83,6 +102,7 @@ export function useSmoothScroll(
 
       if (!animating) {
         animating = true;
+        lastSet = -1;
         lastTime = performance.now();
         raf = requestAnimationFrame(step);
       }

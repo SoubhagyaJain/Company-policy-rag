@@ -19,7 +19,7 @@ function StatusIcon({ status }: { status: ThinkingEvent['status'] }) {
   if (status === 'running' || status === 'pending')
     return <Loader2 className="h-3 w-3 animate-spin text-[var(--sp-accent)]" />;
   if (status === 'warning' || status === 'failed')
-    return <AlertTriangle className="h-3 w-3 text-amber-400" />;
+    return <AlertTriangle className="h-3 w-3 text-[var(--sp-warn)]" />;
   return <Check className="h-3 w-3 text-[var(--sp-accent)]" />;
 }
 

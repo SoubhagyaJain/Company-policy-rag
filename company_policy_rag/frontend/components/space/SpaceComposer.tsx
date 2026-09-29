@@ -6,7 +6,7 @@
  *  send. Active document/category scope shows as chips above the bar. All behavior
  *  (send, filters, model switch, depth, stop) comes from useComposerControls. */
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown, SlidersHorizontal, Search, X, Square, ArrowUp, Loader2,
   FileText, Folder, Gauge, Check,
@@ -29,7 +29,7 @@ interface SpaceComposerProps {
   onCancel: () => void;
 }
 
-export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: SpaceComposerProps) {
+export const SpaceComposer = memo(function SpaceComposer({ controls, isStreaming, onSend, onCancel }: SpaceComposerProps) {
   const {
     modelsList, selectedModel, selectedModelLabel, pendingModel, modelSwitchError, selectModel,
     responseMode, setResponseMode,
@@ -111,7 +111,7 @@ export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: Space
       {isFilterActive && (
         <div className="mb-2 flex flex-wrap items-center gap-1.5 px-1">
           <span className="sp-scope sp-mono flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] uppercase tracking-[0.16em]">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--sp-accent)', boxShadow: '0 0 10px rgba(127,227,176,0.9)' }} />
+            <span className="sp-dot h-1.5 w-1.5" />
             Grounded
           </span>
           {selectedDocument && (
@@ -135,14 +135,10 @@ export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: Space
 
       <form
         onSubmit={(e) => { e.preventDefault(); submit(); }}
-        className="sp-comp pointer-events-auto relative flex items-end gap-2 rounded-[20px] py-2 pl-3.5 pr-2"
+        className="sp-comp pointer-events-auto relative flex items-end gap-2.5 rounded-[24px] py-2.5 pl-4 pr-2.5"
       >
         {/* grounded dot */}
-        <span
-          className="mb-2 h-2 w-2 flex-none rounded-full"
-          style={{ background: 'var(--sp-accent)', boxShadow: '0 0 10px rgba(127,227,176,0.85)' }}
-          aria-hidden="true"
-        />
+        <span className="sp-dot mb-[15px] h-2 w-2 flex-none" aria-hidden="true" />
 
         {/* input */}
         <textarea
@@ -154,12 +150,13 @@ export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: Space
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           placeholder="Ask across your grounded corpus…"
-          className="sp-text sp-scroll max-h-[45vh] min-h-[24px] w-full flex-1 resize-none self-center bg-transparent py-1 text-[14.5px] leading-relaxed outline-none placeholder:opacity-50"
+          aria-label="Ask a question"
+          className="sp-text sp-scroll max-h-[45vh] min-h-[24px] w-full flex-1 resize-none self-center bg-transparent py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-[var(--sp-text-faint)] placeholder:opacity-90"
         />
 
         {/* counter — only when relevant */}
         {(nearLimit || (focused && input.length > 0)) && (
-          <span className={`sp-mono mb-2 flex-none text-[9px] tracking-[0.1em] ${nearLimit ? 'text-amber-300' : 'sp-faint'}`}>
+          <span className={`sp-mono mb-3 flex-none text-[9px] tracking-[0.1em] ${nearLimit ? 'text-[var(--sp-warn-text)]' : 'sp-faint'}`}>
             {input.length}/{MAX_CHARS}
           </span>
         )}
@@ -223,7 +220,7 @@ export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: Space
                     <span className="sp-faint sp-mono text-[9.5px]">{m.desc}</span>
                   </button>
                 ))}
-                {modelSwitchError && <p className="sp-mono px-3 py-1.5 text-[10px] text-amber-400">{modelSwitchError}</p>}
+                {modelSwitchError && <p className="sp-mono px-3 py-1.5 text-[10px] text-[var(--sp-warn-text)]">{modelSwitchError}</p>}
               </div>
             )}
           </div>
@@ -239,7 +236,7 @@ export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: Space
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               {isFilterActive && (
-                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full" style={{ background: 'var(--sp-accent)', boxShadow: '0 0 8px rgba(127,227,176,0.9)' }} />
+                <span className="sp-dot absolute -right-0.5 -top-0.5 h-2 w-2" />
               )}
             </button>
             {open === 'filters' && (
@@ -325,7 +322,7 @@ export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: Space
             <button
               type="button"
               onClick={onCancel}
-              className="sp-ibtn flex h-9 w-9 items-center justify-center rounded-full"
+              className="sp-ibtn flex h-10 w-10 items-center justify-center rounded-full"
               aria-label="Stop"
               title="Stop"
             >
@@ -335,18 +332,26 @@ export function SpaceComposer({ controls, isStreaming, onSend, onCancel }: Space
             <button
               type="submit"
               disabled={!canSend}
-              className="sp-send-fab flex h-9 w-9 items-center justify-center rounded-full transition-all"
+              className="sp-send-fab flex h-10 w-10 items-center justify-center rounded-full transition-all duration-300"
               aria-label="Send"
               title="Send"
-              style={{ opacity: canSend ? 1 : 0.4, transform: canSend ? 'scale(1)' : 'scale(0.94)' }}
+              style={{ opacity: canSend ? 1 : 0.38, transform: canSend ? 'scale(1)' : 'scale(0.92)' }}
             >
-              <ArrowUp className="h-4 w-4" />
+              <ArrowUp className="h-4 w-4" strokeWidth={2.4} />
             </button>
           )}
         </div>
       </form>
     </div>
   );
+}, composerPropsEqual);
+
+/** The controls object is rebuilt on every parent render, so compare its
+ *  fields (all state values or stable callbacks) instead of its identity. */
+function composerPropsEqual(a: SpaceComposerProps, b: SpaceComposerProps) {
+  if (a.isStreaming !== b.isStreaming || a.onSend !== b.onSend || a.onCancel !== b.onCancel) return false;
+  const keys = Object.keys(a.controls) as Array<keyof ComposerControls>;
+  return keys.every((k) => a.controls[k] === b.controls[k]);
 }
 
 export default SpaceComposer;

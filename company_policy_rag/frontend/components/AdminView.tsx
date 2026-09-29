@@ -288,13 +288,13 @@ export const AdminView: React.FC = () => {
                 <React.Fragment key={trace.trace_id}>
                   <tr
                     onClick={() => toggleTraceExpand(trace.trace_id)}
-                    className={`hover:bg-cream-100/60 dark:hover:bg-[#22211E]/60 cursor-pointer transition-colors ${
+                    className={`hover:bg-cream-100/60 dark:hover:bg-[#16203D]/60 cursor-pointer transition-colors ${
                       isExpanded ? 'bg-cream-100/80 dark:bg-sand-dark/90' : ''
                     }`}
                   >
                     <td className="py-3 px-3 font-medium text-charcoal dark:text-cream-100 max-w-sm xl:max-w-xl truncate">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-terracotta-600 dark:text-terracotta-500 font-semibold">{trace.request_id || trace.trace_id}</span>
+                        <span className="font-mono text-terracotta-600 dark:text-terracotta-400 font-semibold">{trace.request_id || trace.trace_id}</span>
                         <span className="text-charcoal-muted dark:text-cream-400 truncate">{trace.original_query}</span>
                       </div>
                     </td>
@@ -366,7 +366,7 @@ export const AdminView: React.FC = () => {
                             e.stopPropagation();
                             setSelectedTrace(trace);
                           }}
-                          className="p-1.5 rounded-lg bg-cream-200/80 hover:bg-cream-300 dark:bg-sand-dark dark:hover:bg-[#2A2925] text-charcoal dark:text-cream-200 border border-sand-border/60 dark:border-sand-darkBorder/60 transition-colors"
+                          className="p-1.5 rounded-lg bg-cream-200/80 hover:bg-cream-300 dark:bg-sand-dark dark:hover:bg-[#1B2748] text-charcoal dark:text-cream-200 border border-sand-border/60 dark:border-sand-darkBorder/60 transition-colors"
                           title="Open slide-over drawer"
                         >
                           <Maximize2 className="w-3.5 h-3.5" />
@@ -376,7 +376,7 @@ export const AdminView: React.FC = () => {
                             e.stopPropagation();
                             toggleTraceExpand(trace.trace_id);
                           }}
-                          className="p-1.5 rounded-lg bg-cream-200/80 hover:bg-cream-300 dark:bg-sand-dark dark:hover:bg-[#2A2925] text-charcoal dark:text-cream-200 border border-sand-border/60 dark:border-sand-darkBorder/60 transition-colors"
+                          className="p-1.5 rounded-lg bg-cream-200/80 hover:bg-cream-300 dark:bg-sand-dark dark:hover:bg-[#1B2748] text-charcoal dark:text-cream-200 border border-sand-border/60 dark:border-sand-darkBorder/60 transition-colors"
                           title="Toggle inline details"
                         >
                           {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -591,7 +591,7 @@ export const AdminView: React.FC = () => {
               className="p-4 rounded-xl bg-cream-100/90 dark:bg-sand-dark/90 border border-sand-border/80 dark:border-sand-darkBorder/80 text-xs space-y-2 cursor-pointer transition-colors"
             >
               <div className="flex justify-between items-center">
-                <span className="font-mono text-terracotta-600 dark:text-terracotta-500 font-bold">{trace.request_id || trace.trace_id}</span>
+                <span className="font-mono text-terracotta-600 dark:text-terracotta-400 font-bold">{trace.request_id || trace.trace_id}</span>
                 <span className="px-2 py-0.5 rounded-md bg-cream-200 dark:bg-sand-darkBorder text-charcoal dark:text-cream-200 font-medium">{capType}</span>
               </div>
               <p className="text-charcoal dark:text-cream-100 font-medium">{trace.original_query}</p>
@@ -669,14 +669,14 @@ export const AdminView: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
           <div>
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-terracotta-500/10 dark:bg-terracotta-500/20 border border-terracotta-500/30 text-terracotta-600 dark:text-terracotta-500">
+              <div className="p-2 rounded-xl bg-terracotta-500/10 dark:bg-terracotta-500/20 border border-terracotta-500/30 text-terracotta-600 dark:text-terracotta-400">
                 <Activity className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
+                <h1 className="sp-display flex items-center gap-2 text-[28px] leading-tight">
                   Observability &amp; Telemetry
                   {isRefreshing && (
-                    <RefreshCw className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500 animate-spin" />
+                    <RefreshCw className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400 animate-spin" />
                   )}
                 </h1>
                 <p className="text-xs text-charcoal-muted dark:text-cream-400 mt-0.5">
@@ -733,7 +733,7 @@ export const AdminView: React.FC = () => {
             <button
               onClick={() => refreshMetrics()}
               disabled={loading}
-              className="p-2 rounded-xl bg-cream-100 dark:bg-sand-dark hover:bg-cream-200 dark:hover:bg-[#2A2925] text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder transition-colors disabled:opacity-50"
+              className="p-2 rounded-xl bg-cream-100 dark:bg-sand-dark hover:bg-cream-200 dark:hover:bg-[#1B2748] text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder transition-colors disabled:opacity-50"
               title="Refresh metrics now"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -742,10 +742,10 @@ export const AdminView: React.FC = () => {
             {/* Fullscreen Toggle */}
             <button
               onClick={toggleFullscreen}
-              className="p-2 rounded-xl bg-cream-100 dark:bg-sand-dark hover:bg-cream-200 dark:hover:bg-[#2A2925] text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder transition-colors"
+              className="p-2 rounded-xl bg-cream-100 dark:bg-sand-dark hover:bg-cream-200 dark:hover:bg-[#1B2748] text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder transition-colors"
               title={isFullscreen ? 'Exit full screen' : 'Expand full screen'}
             >
-              {isFullscreen ? <Minimize2 className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" /> : <Maximize2 className="w-4 h-4" />}
+              {isFullscreen ? <Minimize2 className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400" /> : <Maximize2 className="w-4 h-4" />}
             </button>
 
             {/* Clear Telemetry */}
@@ -784,7 +784,7 @@ export const AdminView: React.FC = () => {
         <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-charcoal-muted dark:text-cream-400 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-terracotta-600 dark:text-terracotta-500" />
+              <Shield className="w-3.5 h-3.5 text-terracotta-600 dark:text-terracotta-400" />
               Global RAG Subsystem Health (10 Subsystems)
             </span>
             <span className="text-xs font-mono text-charcoal-muted dark:text-cream-500">
@@ -861,7 +861,7 @@ export const AdminView: React.FC = () => {
           <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>Total Queries</span>
-              <Search className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
+              <Search className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400" />
             </div>
             <div className="mt-2">
               <span className="text-2xl font-bold font-mono text-charcoal dark:text-cream-100">
@@ -925,7 +925,7 @@ export const AdminView: React.FC = () => {
           <div className="p-4 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark flex flex-col justify-between">
             <div className="flex items-center justify-between text-charcoal-muted dark:text-cream-400 text-xs">
               <span>Retrieval Hit Rate</span>
-              <Layers className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
+              <Layers className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400" />
             </div>
             <div className="mt-2">
               <span className="text-2xl font-bold font-mono text-terracotta-600 dark:text-terracotta-400">
@@ -993,11 +993,11 @@ export const AdminView: React.FC = () => {
               {/* Waterfall Latency Card */}
               <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
-                    <Clock className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
+                  <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400" />
                     16-Stage Waterfall Latency Breakdown
                   </h2>
-                  <span className="text-xs font-mono text-terracotta-600 dark:text-terracotta-500 font-bold">
+                  <span className="text-xs font-mono text-terracotta-600 dark:text-terracotta-400 font-bold">
                     Avg Total: {formatLatency(lb?.total_latency_ms ?? avgLat)}
                   </span>
                 </div>
@@ -1047,7 +1047,7 @@ export const AdminView: React.FC = () => {
                 {/* Retrieval Quality Card */}
                 <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
+                    <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2">
                       <Layers className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                       Retrieval Quality &amp; Proxy Indicators
                     </h2>
@@ -1081,7 +1081,7 @@ export const AdminView: React.FC = () => {
                   </div>
 
                   <div className="mt-3 p-3 rounded-xl bg-cream-100/60 dark:bg-cream-950/60 border border-sand-border/60 dark:border-sand-darkBorder/60 text-[11px] text-charcoal-muted dark:text-cream-400 flex items-start gap-2">
-                    <HelpCircle className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500 shrink-0 mt-0.5" />
+                    <HelpCircle className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400 shrink-0 mt-0.5" />
                     <span>
                       <strong>Evaluation Mode Notice:</strong> Measurable retrieval proxies are displayed. True Precision@K / Recall@K require an offline evaluation dataset benchmark.
                     </span>
@@ -1091,7 +1091,7 @@ export const AdminView: React.FC = () => {
                 {/* Grounding & Faithfulness Card */}
                 <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
+                    <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       Grounding &amp; Evidence Faithfulness
                     </h2>
@@ -1127,8 +1127,8 @@ export const AdminView: React.FC = () => {
             {/* Quick Traces Table in Overview */}
             <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
-                  <Activity className="w-4 h-4 text-terracotta-600 dark:text-terracotta-500" />
+                <h2 className="text-sm font-bold text-charcoal dark:text-cream-100 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-terracotta-600 dark:text-terracotta-400" />
                   Live Query Execution Traces ({recentTraces.length} traces)
                 </h2>
                 <button
@@ -1150,8 +1150,8 @@ export const AdminView: React.FC = () => {
             <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                 <div>
-                  <h2 className="text-base font-bold text-charcoal dark:text-cream-100 flex items-center gap-2 font-serif">
-                    <Activity className="w-5 h-5 text-terracotta-600 dark:text-terracotta-500" />
+                  <h2 className="text-base font-bold text-charcoal dark:text-cream-100 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-terracotta-600 dark:text-terracotta-400" />
                     Real Query Execution Traces ({recentTraces.length} traces)
                   </h2>
                   <p className="text-xs text-charcoal-muted dark:text-cream-400 mt-1">
@@ -1195,12 +1195,12 @@ export const AdminView: React.FC = () => {
               <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-4">
                 <div className="flex items-center justify-between border-b border-sand-border dark:border-sand-darkBorder pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-terracotta-500/10 text-terracotta-600 dark:text-terracotta-500 border border-terracotta-500/20">
+                    <div className="p-2 rounded-xl bg-terracotta-500/10 text-terracotta-600 dark:text-terracotta-400 border border-terracotta-500/20">
                       <Brain className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-charcoal dark:text-cream-100 font-serif">Text Synthesis Model</h3>
-                      <span className="font-mono text-xs text-terracotta-600 dark:text-terracotta-500 font-semibold">{models?.text_model.model_name || 'Unavailable'}</span>
+                      <h3 className="font-bold text-charcoal dark:text-cream-100">Text Synthesis Model</h3>
+                      <span className="font-mono text-xs text-terracotta-600 dark:text-terracotta-400 font-semibold">{models?.text_model.model_name || 'Unavailable'}</span>
                     </div>
                   </div>
                   {getStatusBadge(health.text_model)}
@@ -1244,7 +1244,7 @@ export const AdminView: React.FC = () => {
                       <Eye className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-charcoal dark:text-cream-100 font-serif">Vision VLM Model</h3>
+                      <h3 className="font-bold text-charcoal dark:text-cream-100">Vision VLM Model</h3>
                       <span className="font-mono text-xs text-purple-600 dark:text-purple-400 font-semibold">{models?.vision_model.model_name || 'Unavailable'}</span>
                     </div>
                   </div>
@@ -1311,7 +1311,7 @@ export const AdminView: React.FC = () => {
               ].map((cache, i) => (
                 <div key={i} className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-sm text-charcoal dark:text-cream-100 font-serif">{cache.title}</h3>
+                    <h3 className="font-bold text-sm text-charcoal dark:text-cream-100">{cache.title}</h3>
                     <span className="px-2 py-0.5 rounded-full bg-cream-200 text-charcoal-muted dark:bg-sand-darkBorder dark:text-cream-400 border border-sand-border dark:border-sand-darkBorder text-xs font-mono font-semibold">
                       Hit Rate: {formatMeasuredPercent(cache.stats?.hit_rate)}
                     </span>
@@ -1341,8 +1341,8 @@ export const AdminView: React.FC = () => {
         {activeTab === 'ingestion' && (
           <div className="space-y-4">
             <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
-              <h2 className="text-base font-bold text-charcoal dark:text-cream-100 mb-4 flex items-center gap-2 font-serif">
-                <FileText className="w-5 h-5 text-terracotta-600 dark:text-terracotta-500" />
+              <h2 className="text-base font-bold text-charcoal dark:text-cream-100 mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-terracotta-600 dark:text-terracotta-400" />
                 Document Ingestion &amp; Indexing Pipeline
               </h2>
 
@@ -1410,7 +1410,7 @@ export const AdminView: React.FC = () => {
         {activeTab === 'errors' && (
           <div className="space-y-4">
             <div className="p-5 rounded-2xl bg-white/80 dark:bg-sand-dark/90 backdrop-blur-xl border border-sand-border/80 dark:border-sand-darkBorder/80 shadow-soft dark:shadow-glassDark">
-              <h2 className="text-base font-bold text-charcoal dark:text-cream-100 mb-2 flex items-center gap-2 font-serif">
+              <h2 className="text-base font-bold text-charcoal dark:text-cream-100 mb-2 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                 Error &amp; Incident Tracking Center ({recentIncidents.length})
               </h2>
@@ -1441,7 +1441,7 @@ export const AdminView: React.FC = () => {
                           </span>
                           <span className="font-semibold text-charcoal dark:text-cream-100">{incident.component}</span>
                           {incident.request_id && (
-                            <span className="font-mono text-terracotta-600 dark:text-terracotta-500">{incident.request_id}</span>
+                            <span className="font-mono text-terracotta-600 dark:text-terracotta-400">{incident.request_id}</span>
                           )}
                         </div>
                         <span className="text-charcoal-muted dark:text-cream-500 font-mono">{new Date(incident.timestamp).toLocaleString()}</span>
@@ -1494,7 +1494,7 @@ export const AdminView: React.FC = () => {
               <button
                 onClick={() => setConfirmAction(null)}
                 disabled={confirmBusy}
-                className="px-3.5 py-2 rounded-xl bg-cream-100 dark:bg-cream-950 text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder text-xs font-semibold transition-colors hover:bg-cream-200 dark:hover:bg-[#2A2925] disabled:opacity-50"
+                className="px-3.5 py-2 rounded-xl bg-cream-100 dark:bg-cream-950 text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder text-xs font-semibold transition-colors hover:bg-cream-200 dark:hover:bg-[#1B2748] disabled:opacity-50"
               >
                 Cancel
               </button>

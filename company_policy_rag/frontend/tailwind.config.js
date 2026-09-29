@@ -10,39 +10,45 @@ module.exports = {
   ],
   theme: {
     extend: {
+      // Night-alpine palette. The legacy token NAMES (cream/sand/terracotta/
+      // charcoal) are kept so the Library and Telemetry views re-skin without
+      // touching their markup; the VALUES are now moonlit slate + navy, with
+      // "terracotta" repurposed as the moonlit-blue accent.
       colors: {
         cream: {
-          50: '#FAF9F5',
-          100: '#F3F0E6',
-          200: '#EFECE2',
-          300: '#E8E4D8',
-          400: '#D9D3C5',
-          500: '#C5BDAB',
-          600: '#A39985',
-          700: '#7E7563',
-          800: '#524B3E',
-          900: '#2D2821',
-          950: '#141413',
+          50: '#F6F8FC',
+          100: '#EEF2F9',
+          200: '#E3E9F4',
+          300: '#D3DCEC',
+          400: '#AEBBD3',
+          500: '#8C9AB8',
+          600: '#67749A',
+          700: '#4A5678',
+          800: '#2E3854',
+          900: '#161E36',
+          950: '#070C1E',
         },
         sand: {
-          light: '#F3F0E6',
-          border: '#E5E0D8',
-          dark: '#1F1E1B',
-          darkBorder: '#2A2925',
+          light: '#EEF2F9',
+          border: '#D5DDEB',
+          dark: '#0E1630',
+          darkBorder: '#223056',
         },
         terracotta: {
-          50: '#FFF7ED',
-          100: '#FFEDD5',
-          500: '#D97706',
-          600: '#C85A32',
-          700: '#B45309',
+          50: '#EEF3FF',
+          100: '#DCE6FF',
+          300: '#C9D9FF',
+          400: '#9DB9FF',
+          500: '#5577D9',
+          600: '#3F5FC4',
+          700: '#2F4BA8',
         },
         charcoal: {
-          light: '#66635B',
-          DEFAULT: '#1A1A1A',
-          muted: '#8C887B',
-          dark: '#121211',
-        }
+          light: '#4B5675',
+          DEFAULT: '#111A33',
+          muted: '#5A6684',
+          dark: '#0A1128',
+        },
       },
       fontFamily: {
         serif: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
@@ -61,9 +67,9 @@ module.exports = {
         glass: '12px',
       },
       boxShadow: {
-        glass: '0 8px 32px 0 rgba(0, 0, 0, 0.04)',
-        glassDark: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
-        soft: '0 4px 20px -2px rgba(26, 26, 26, 0.05)',
+        glass: '0 8px 32px 0 rgba(17, 26, 51, 0.06)',
+        glassDark: '0 18px 44px -18px rgba(0, 3, 12, 0.8)',
+        soft: '0 10px 30px -14px rgba(17, 26, 51, 0.18)',
       }
     },
   },
