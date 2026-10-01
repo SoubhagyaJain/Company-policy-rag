@@ -1059,6 +1059,122 @@ class TelemetryDB:
         finally:
             conn.close()
 
+    def time_bounds(self) -> dict[str, dict[str, str | None]]:
+        """Oldest and newest record timestamp of every telemetry table."""
+        conn = self._get_connection()
+        try:
+            bounds: dict[str, dict[str, str | None]] = {}
+            for table in _TELEMETRY_TABLES:
+                row = conn.execute(f"SELECT MIN(timestamp), MAX(timestamp) FROM {table};").fetchone()
+                bounds[table] = {"oldest": row[0], "newest": row[1]}
+            return bounds
+        finally:
+            conn.close()
+
+    def count_older_than(self, before_iso: str) -> int:
+        """How many records :meth:`prune` would delete for the same cutoff."""
+        conn = self._get_connection()
+        try:
+            return sum(
+                conn.execute(f"SELECT COUNT(*) FROM {table} WHERE timestamp < ?;", (before_iso,)).fetchone()[0]
+                for table in _TELEMETRY_TABLES
+            )
+        finally:
+            conn.close()
+
+    def document_query_stats(self) -> list[dict[str, Any]]:
+        """Query count and latest query time per document a question was scoped to."""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute(
+                """
+                SELECT document_id, active_document_name, COUNT(*) AS cnt, MAX(timestamp) AS last_ts
+                FROM query_traces
+                WHERE document_id IS NOT NULL OR active_document_name IS NOT NULL
+                GROUP BY document_id, active_document_name
+                """
+            ).fetchall()
+            return [
+                {
+                    "document_id": row["document_id"],
+                    "document_name": row["active_document_name"],
+                    "count": int(row["cnt"]),
+                    "last": row["last_ts"],
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
+    def model_request_stats(self) -> dict[str, dict[str, Any]]:
+        """Answered-question count and latest request time per generation model."""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT generation_model, COUNT(*) AS cnt, MAX(timestamp) AS last_ts "
+                "FROM query_traces GROUP BY generation_model"
+            ).fetchall()
+            return {
+                str(row["generation_model"]): {"count": int(row["cnt"]), "last": row["last_ts"]}
+                for row in rows
+                if row["generation_model"]
+            }
+        finally:
+            conn.close()
+
+    def cache_event_stats(self, cache_type: str, time_range: str = "7d") -> dict[str, dict[str, Any]]:
+        """Count, mean latency and latest time of each event type one cache recorded."""
+        cutoff_iso = self._parse_time_range(time_range)
+        conn = self._get_connection()
+        try:
+            rows = conn.execute(
+                """
+                SELECT event_type, COUNT(*) AS cnt, AVG(latency_ms) AS avg_ms, MAX(timestamp) AS last_ts
+                FROM cache_events
+                WHERE cache_type = ? AND timestamp >= ?
+                GROUP BY event_type
+                """,
+                (cache_type, cutoff_iso),
+            ).fetchall()
+            return {
+                str(row["event_type"]).upper(): {
+                    "count": int(row["cnt"]),
+                    "avg_ms": row["avg_ms"],
+                    "last": row["last_ts"],
+                }
+                for row in rows
+            }
+        finally:
+            conn.close()
+
+    def semantic_cache_value(self, time_range: str = "7d") -> dict[str, Any]:
+        """Share of retrieval questions answered from the semantic cache, and the time that saved."""
+        cutoff_iso = self._parse_time_range(time_range)
+        conn = self._get_connection()
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS lookups,
+                    SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) AS hits,
+                    AVG(CASE WHEN cache_hit = 1 THEN execution_time_ms END) AS avg_hit_ms,
+                    AVG(CASE WHEN cache_hit = 0 THEN execution_time_ms END) AS avg_miss_ms,
+                    MAX(CASE WHEN cache_hit = 1 THEN timestamp END) AS last_hit
+                FROM query_traces
+                WHERE timestamp >= ? AND conversational_bypass = 0 AND error IS NULL
+                """,
+                (cutoff_iso,),
+            ).fetchone()
+            return {
+                "lookups": int(row["lookups"] or 0),
+                "hits": int(row["hits"] or 0),
+                "avg_hit_ms": row["avg_hit_ms"],
+                "avg_miss_ms": row["avg_miss_ms"],
+                "last_hit": row["last_hit"],
+            }
+        finally:
+            conn.close()
+
     def prune(self, before_iso: str) -> int:
         """Delete records older than an ISO timestamp and return how many were removed."""
         removed = 0

@@ -25,6 +25,11 @@ class RetrievalCache:
         self._default_ttl = default_ttl
         self._cache: OrderedDict[str, tuple[float, list[ScoredChunk]]] = OrderedDict()
         self._lock = threading.Lock()
+        # Lookup counters since this process started, for the Storage tab.
+        self._hits = 0
+        self._misses = 0
+        self._last_hit_at: float | None = None
+        self._counting_since = time.time()
 
     def _make_key(
         self, query: str, filters: Optional[dict[str, Any]], top_k: int, version: str = ""
@@ -45,12 +50,16 @@ class RetrievalCache:
         now = time.time()
         with self._lock:
             if key not in self._cache:
+                self._misses += 1
                 return None
             expiry, results = self._cache[key]
             if now > expiry:
                 del self._cache[key]
+                self._misses += 1
                 return None
             self._cache.move_to_end(key)
+            self._hits += 1
+            self._last_hit_at = now
             return list(results)
 
     def set(
@@ -78,6 +87,19 @@ class RetrievalCache:
     def __len__(self) -> int:
         with self._lock:
             return len(self._cache)
+
+    def stats(self) -> dict[str, Any]:
+        """Entry count, limits and lookup counters since the process started."""
+        with self._lock:
+            return {
+                "entries": len(self._cache),
+                "max_entries": self._max_size,
+                "ttl_seconds": self._default_ttl,
+                "hits": self._hits,
+                "misses": self._misses,
+                "last_hit_at": self._last_hit_at,
+                "counting_since": self._counting_since,
+            }
 
 
 _global_retrieval_cache = RetrievalCache()

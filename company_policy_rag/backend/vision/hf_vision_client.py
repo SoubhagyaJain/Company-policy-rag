@@ -5,6 +5,7 @@ import io
 import importlib.util
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,7 @@ class HFVisionClient:
         self.model: Any = None
         self.processor: Any = None
         self.device = "cpu"
+        self.loaded_at: float | None = None
         self._load_lock = threading.Lock()
         self._load_error: str | None = None
 
@@ -180,6 +182,7 @@ class HFVisionClient:
             self.model = None
             self.processor = None
             self.device = "cpu"
+            self.loaded_at = None
             gc.collect()
             if was_cuda:
                 torch.cuda.empty_cache()
@@ -248,6 +251,7 @@ class HFVisionClient:
                     self.model.to("cpu")
                 self.model.eval()
                 self._load_error = None
+                self.loaded_at = time.time()
                 logger.info("HF Vision Model loaded successfully on %s.", self.device)
                 return True
             except Exception as exc:

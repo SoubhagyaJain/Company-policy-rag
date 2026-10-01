@@ -63,6 +63,8 @@ class RelativeScoreThresholdPostprocessor:
 # shared slot would hand a second reranker the first one's model whatever
 # model_name it asked for.
 _shared_reranker_models: dict[tuple[str, str, int], Any] = {}
+# When each of those models was loaded (epoch seconds), for the Storage tab.
+_shared_reranker_loaded_at: dict[tuple[str, str, int], float] = {}
 
 # Cap on ids recorded per list in a rerank trace.
 _TRACE_LIMIT = 100
@@ -144,6 +146,8 @@ class CrossEncoderReranker:
                 logger.info("Local cached reranker model not found (%s). Fallback ranking enabled.", local_err)
                 self._model = None
             _shared_reranker_models[key] = self._model
+            if self._model is not None:
+                _shared_reranker_loaded_at[key] = time.time()
         except Exception as exc:
             logger.warning("Failed to load CrossEncoder reranker (%s). Fallback ranking enabled.", exc)
             self._model = None

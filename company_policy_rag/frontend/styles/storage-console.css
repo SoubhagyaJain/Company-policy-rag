@@ -1,0 +1,292 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   STORAGE CONSOLE — dense, flat instrumentation inside the Library panel.
+   Reuses the --sp-* theme tokens from space.css; only the handful of roles
+   the console adds are defined here (light = :root, night = html.dark).
+   Colour carries meaning only: status, safety class and storage category.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --sc-surface: #fdfbf8;
+  --sc-track: rgba(38, 48, 82, 0.09);
+  --sc-row-hover: rgba(38, 48, 82, 0.04);
+  --sc-raised: rgba(255, 255, 255, 0.72);
+
+  --sc-ok-text: #1f7a55;
+  --sc-ok-bg: rgba(47, 154, 110, 0.1);
+  --sc-ok-border: rgba(47, 154, 110, 0.34);
+  --sc-critical: #c23b3b;
+  --sc-critical-text: #a02a2a;
+  --sc-critical-bg: rgba(194, 59, 59, 0.08);
+  --sc-critical-border: rgba(194, 59, 59, 0.32);
+
+  /* Storage-map categories: a fixed order, validated for adjacent CVD separation. */
+  --sc-cat-models: #2a78d6;
+  --sc-cat-documents: #eb6834;
+  --sc-cat-vector_db: #1baf7a;
+  --sc-cat-caches: #eda100;
+  --sc-cat-images: #e87ba4;
+  --sc-cat-telemetry: #008300;
+  --sc-cat-logs_eval: #4a3aa7;
+  --sc-cat-other: #8d95a9;
+}
+
+html.dark {
+  --sc-surface: #0b1330;
+  --sc-track: rgba(168, 196, 255, 0.11);
+  --sc-row-hover: rgba(157, 185, 255, 0.055);
+  --sc-raised: rgba(20, 32, 66, 0.5);
+
+  --sc-ok-text: #8fd9b8;
+  --sc-ok-bg: rgba(143, 217, 184, 0.09);
+  --sc-ok-border: rgba(143, 217, 184, 0.3);
+  --sc-critical: #e66767;
+  --sc-critical-text: #f3a0a0;
+  --sc-critical-bg: rgba(230, 103, 103, 0.1);
+  --sc-critical-border: rgba(230, 103, 103, 0.34);
+
+  --sc-cat-models: #3987e5;
+  --sc-cat-documents: #d95926;
+  --sc-cat-vector_db: #199e70;
+  --sc-cat-caches: #c98500;
+  --sc-cat-images: #d55181;
+  --sc-cat-telemetry: #008300;
+  --sc-cat-logs_eval: #9085e9;
+  --sc-cat-other: #6f7a96;
+}
+
+/* ── Text roles (no halo: the console sits on an opaque panel) ── */
+.sc-root { color: var(--sp-text); font-size: 13px; line-height: 1.45; }
+.sc-t1 { color: var(--sp-heading); }
+.sc-t2 { color: var(--sp-text-muted); }
+.sc-t3 { color: var(--sp-text-faint); }
+.sc-num {
+  font-family: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.sc-label {
+  color: var(--sp-text-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+.sc-ok { color: var(--sc-ok-text); }
+.sc-warn { color: var(--sp-warn-text); }
+.sc-crit { color: var(--sc-critical-text); }
+
+/* ── Surfaces ── */
+.sc-panel {
+  background: var(--sp-card-bg);
+  border: 1px solid var(--sp-card-border);
+  border-radius: 10px;
+}
+.sc-rule { border-top: 1px solid var(--sp-hairline); }
+.sc-rule-l { border-left: 1px solid var(--sp-hairline); }
+.sc-divide > * + * { border-top: 1px solid var(--sp-hairline); }
+.sc-row { transition: background 140ms ease; }
+.sc-row:hover { background: var(--sc-row-hover); }
+.sc-row.is-open { background: var(--sc-row-hover); }
+.sc-match { box-shadow: inset 2px 0 0 var(--sp-accent); }
+.sc-track { background: var(--sc-track); }
+.sc-th {
+  color: var(--sp-text-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+button.sc-th { cursor: pointer; }
+button.sc-th:hover, button.sc-th[aria-sort] { color: var(--sp-text); }
+
+/* The line between disk and memory. */
+.sc-boundary {
+  border-top: 1px dashed var(--sp-side-border);
+  position: relative;
+}
+
+/* ── Badges ── */
+.sc-badge {
+  border: 1px solid var(--sp-hairline);
+  border-radius: 4px;
+  color: var(--sp-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  padding: 3px 5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/* Gone after a restart: dashed, so the difference is not carried by colour. */
+.sc-badge--volatile { border-style: dashed; }
+.sc-badge--user {
+  background: var(--sp-accent-bg);
+  border-color: var(--sp-accent-border);
+  color: var(--sp-accent-text);
+}
+.sc-tag {
+  border: 1px solid;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  padding: 3px 6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sc-tag--safe { background: var(--sc-ok-bg); border-color: var(--sc-ok-border); color: var(--sc-ok-text); }
+.sc-tag--rebuildable { background: var(--sp-accent-bg); border-color: var(--sp-accent-border); color: var(--sp-accent-text); }
+.sc-tag--destructive { background: var(--sc-critical-bg); border-color: var(--sc-critical-border); color: var(--sc-critical-text); }
+
+.sc-dot { border-radius: 999px; display: inline-block; flex: none; height: 7px; width: 7px; }
+.sc-dot--idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--sp-text-faint); }
+.sc-dot--ok { background: var(--sp-success); }
+.sc-dot--warn { background: var(--sp-warn); }
+.sc-dot--crit { background: var(--sc-critical); }
+.sc-dot--active { background: var(--sp-accent); animation: connPulse 1.6s ease-in-out infinite; }
+
+/* ── Controls ── */
+.sc-btn {
+  align-items: center;
+  background: var(--sp-chip-bg);
+  border: 1px solid var(--sp-chip-border);
+  border-radius: 7px;
+  color: var(--sp-chip-text);
+  display: inline-flex;
+  font-size: 11.5px;
+  font-weight: 600;
+  gap: 6px;
+  line-height: 1;
+  padding: 6px 9px;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  white-space: nowrap;
+}
+.sc-btn:hover:not(:disabled) { background: var(--sp-chip-hover); border-color: var(--sp-card-hover-border); }
+.sc-btn:disabled { cursor: not-allowed; opacity: 0.45; }
+.sc-btn--primary {
+  background: var(--sp-send-bg);
+  border-color: var(--sp-send-border);
+  color: var(--sp-send-text);
+}
+.sc-btn--primary:hover:not(:disabled) { background: var(--sp-send-bg); filter: brightness(1.12); }
+.sc-btn--danger { border-color: var(--sc-critical-border); color: var(--sc-critical-text); }
+.sc-btn--danger:hover:not(:disabled) { background: var(--sc-critical-bg); border-color: var(--sc-critical); }
+.sc-btn--solid-danger { background: var(--sc-critical); border-color: var(--sc-critical); color: #fff; }
+.sc-btn--solid-danger:hover:not(:disabled) { background: var(--sc-critical); filter: brightness(1.08); }
+.sc-btn--ghost { background: transparent; border-color: transparent; color: var(--sp-text-muted); }
+.sc-btn--ghost:hover:not(:disabled) { background: var(--sc-row-hover); border-color: transparent; color: var(--sp-text); }
+.sc-icon-btn { border-radius: 6px; color: var(--sp-text-faint); padding: 3px; transition: background 140ms ease, color 140ms ease; }
+.sc-icon-btn:hover { background: var(--sc-row-hover); color: var(--sp-text); }
+.sc-chip {
+  border: 1px solid var(--sp-hairline);
+  border-radius: 999px;
+  color: var(--sp-text-muted);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1;
+  padding: 5px 9px;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  white-space: nowrap;
+}
+.sc-chip:hover { color: var(--sp-text); border-color: var(--sp-card-hover-border); }
+.sc-chip[aria-pressed='true'] {
+  background: var(--sp-accent-bg);
+  border-color: var(--sp-accent-border);
+  color: var(--sp-accent-text);
+}
+.sc-input {
+  background: var(--sp-field-bg);
+  border: 1px solid var(--sp-field-border);
+  border-radius: 7px;
+  color: var(--sp-text);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.sc-input::placeholder { color: var(--sp-text-faint); }
+.sc-input:focus { border-color: var(--sp-accent-border); box-shadow: 0 0 0 3px var(--sp-accent-bg); }
+.sc-check { accent-color: var(--sp-accent); height: 14px; width: 14px; }
+
+.sc-btn:focus-visible,
+.sc-chip:focus-visible,
+.sc-icon-btn:focus-visible,
+.sc-th:focus-visible,
+.sc-focus:focus-visible,
+.sc-check:focus-visible {
+  outline: 2px solid var(--sp-accent);
+  outline-offset: 2px;
+}
+
+/* ── Hover card (storage map, charts, flow nodes) ── */
+.sc-tip {
+  background: var(--sc-surface);
+  border: 1px solid var(--sp-pop-border);
+  border-radius: 8px;
+  box-shadow: 0 16px 36px -18px rgba(0, 3, 12, 0.55);
+  color: var(--sp-text);
+  font-size: 11.5px;
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* ── Overlays: native <dialog>, so focus is trapped and Esc closes ── */
+dialog.sc-dialog {
+  background: var(--sc-surface);
+  border: 1px solid var(--sp-pop-border);
+  color: var(--sp-text);
+  max-height: none;
+  max-width: none;
+  overflow: hidden;
+  padding: 0;
+}
+dialog.sc-dialog::backdrop { background: var(--sp-scrim); }
+dialog.sc-dialog[open] { display: flex; flex-direction: column; }
+dialog.sc-drawer {
+  border-width: 0 0 0 1px;
+  box-shadow: -30px 0 70px -40px rgba(0, 3, 12, 0.7);
+  height: 100dvh;
+  margin: 0 0 0 auto;
+  width: min(580px, 100vw);
+}
+dialog.sc-drawer[open] { animation: scDrawerIn 180ms var(--sp-ease) both; }
+dialog.sc-modal {
+  border-radius: 12px;
+  box-shadow: 0 30px 70px -30px rgba(0, 3, 12, 0.75);
+  margin: auto;
+  max-height: calc(100dvh - 48px);
+  width: min(480px, calc(100vw - 32px));
+}
+dialog.sc-modal[open] { animation: scModalIn 150ms var(--sp-ease) both; }
+
+.sc-toast {
+  animation: scToastIn 220ms var(--sp-ease) both;
+  background: var(--sc-surface);
+  border: 1px solid var(--sp-pop-border);
+  border-radius: 10px;
+  box-shadow: 0 22px 50px -24px rgba(0, 3, 12, 0.7);
+}
+
+/* ── Charts ── */
+.sc-grid-line { stroke: var(--sp-hairline); stroke-width: 1; }
+.sc-axis-text { fill: var(--sp-text-faint); font-size: 10px; font-family: var(--font-jetbrains-mono), ui-monospace, monospace; }
+.sc-crosshair { stroke: var(--sp-text-faint); stroke-width: 1; }
+
+@keyframes scDrawerIn { from { opacity: 0.6; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes scModalIn { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes scToastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.sc-drawer[open], dialog.sc-modal[open], .sc-toast, .sc-dot--active { animation: none; }
+}
