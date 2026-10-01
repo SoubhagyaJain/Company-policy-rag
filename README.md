@@ -12,7 +12,7 @@
 [![Tests](https://img.shields.io/badge/tests-430%20backend%20%2B%20216%20frontend-brightgreen)](#-testing-strategy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Quickstart](#-quickstart-one-command) · [Run from source](#-run-it-from-source-step-by-step) · [Using it](#-using-it) · [Architecture](#-architecture) · [Design decisions](#-design-decisions-and-trade-offs) · [Results](#-measured-results) · [Troubleshooting](#-troubleshooting)
+[Start here](#-start-the-project-beginner-guide) · [Quickstart](#-quickstart-one-command) · [Run from source](#-run-it-from-source-step-by-step) · [Using it](#-using-it) · [Architecture](#-architecture) · [Design decisions](#-design-decisions-and-trade-offs) · [Results](#-measured-results) · [Troubleshooting](#-troubleshooting)
 
 </div>
 
@@ -22,7 +22,7 @@
 
 Upload your documents. Ask questions in natural language, including messy follow-ups like *"does it apply during probation?"* or *"going back to leave — what about contractors?"* Get answers that cite the exact section they came from, verified before they reach you.
 
-Everything runs on your machine. No API keys, no data leaving the host.
+Everything runs on your machine. No API keys, no data leaving the host — with one opt-in exception, the composer's [voice dictation](#-limitations-and-known-constraints).
 
 ```text
 You:  What is maternity leave?
@@ -45,6 +45,7 @@ That second turn is the hard part, and it is what most of this codebase exists t
 | [The problem](#-the-problem-this-solves) | Why naive RAG breaks on turn two |
 | [Measured results](#-measured-results) | Three reproducible evaluation layers |
 | [How changes are decided](#-how-changes-are-decided) | Every default has an A/B behind it |
+| [Start the project](#-start-the-project-beginner-guide) | Copy-paste commands for beginners |
 | [Quickstart](#-quickstart-one-command) | Docker, ~10 min to a working demo |
 | [Run it from source](#-run-it-from-source-step-by-step) | Step by step, with a checkpoint per step |
 | [Using it](#-using-it) | UI walkthrough, API calls, first-run pitfalls |
@@ -200,6 +201,93 @@ Some of what that produced:
 | **Lexical citation repair** | 0 safe corrections on 141 stored answers | Built, measured, deleted |
 
 Two habits make this work: a **committed baseline** for every gate, so a regression is a build failure rather than a surprise; and a bias toward **deleting** anything that cannot show its value, including work already written.
+
+---
+
+## 🟢 Start the project (beginner guide)
+
+Never run a project like this before? Pick **one** path below and paste each block into a terminal, in order. A terminal is **PowerShell** on Windows and **Terminal** on macOS/Linux. The later sections explain every step in depth; this one only gets you running.
+
+### Path A — Docker (easiest)
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and [Git](https://git-scm.com/downloads), open Docker Desktop, and wait until it says it is running. Then:
+
+```bash
+git clone https://github.com/SoubhagyaJain/Company-policy-rag.git
+cd Company-policy-rag/company_policy_rag
+docker compose up --build
+```
+
+The first start downloads the AI models and takes **10–20 minutes**. When the log settles, open <http://localhost:3000>.
+
+| To… | Do this |
+|---|---|
+| Stop | Press `Ctrl+C` in that terminal, then run `docker compose down` |
+| Start again later | `cd Company-policy-rag/company_policy_rag`, then `docker compose up` (under a minute) |
+
+### Path B — Without Docker (if you want to change the code)
+
+**1. Install these four tools once**, then close and reopen your terminal so it can find them:
+
+| Tool | Get it |
+|---|---|
+| Git | <https://git-scm.com/downloads> |
+| Node.js 20 or newer | <https://nodejs.org/> (the LTS installer) |
+| Ollama | <https://ollama.com/download>, then start the Ollama app |
+| uv | Run the one-line installer below |
+
+```powershell
+# uv on Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+```bash
+# uv on macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**2. Set the project up once** (downloads about 8 GB, so give it a while):
+
+```bash
+git clone https://github.com/SoubhagyaJain/Company-policy-rag.git
+cd Company-policy-rag/company_policy_rag
+ollama pull qwen2.5:7b
+uv sync
+npm ci --prefix frontend
+```
+
+**3. Start it — every time you want to use it.** You need **two terminals**, both opened in the `Company-policy-rag/company_policy_rag` folder.
+
+Terminal 1, the backend. Wait for `Application startup complete` (30–60 seconds):
+
+```bash
+uv run uvicorn backend.api.main:app --reload --port 8000
+```
+
+Terminal 2, the website:
+
+```bash
+npm run dev --prefix frontend
+```
+
+Now open <http://localhost:3000>. To stop, press `Ctrl+C` in each terminal.
+
+> **Windows shortcut:** once step 2 is done, double-clicking [`start_dev.bat`](company_policy_rag/start_dev.bat) opens both terminals for you.
+
+### Check that it is working
+
+Open <http://localhost:8000/api/health> in your browser. You should see `"status":"ok"`. Then go to the app, upload a document in **Library**, wait for `READY`, and ask a question — [Using it](#-using-it) walks through the rest.
+
+### If something goes wrong
+
+| What you see | Fix |
+|---|---|
+| `uv`, `node` or `ollama` "is not recognized" / "command not found" | Close the terminal and open a new one. If it still fails, the install did not finish — run the installer again |
+| The page loads but says **OFFLINE**, or every question fails | The backend (terminal 1) is not running yet, or Ollama is not started. `ollama list` should print `qwen2.5:7b` |
+| `address already in use` | Something else is on port 3000 or 8000. Close the other copy, or see [Troubleshooting](#-troubleshooting) |
+| Uploading a PDF seems stuck for minutes | No NVIDIA GPU: copy `.env.example` to `.env`, set `VISION_ENABLED=false` in it, and restart the backend |
+
+Anything else is in [Troubleshooting](#-troubleshooting).
 
 ---
 
@@ -423,11 +511,23 @@ With uv, the fine-tuning stack is `uv sync --extra finetuning`.
 ### In the UI
 
 1. **Upload.** Document Library → upload [the fictional handbook](company_policy_rag/data/demo/sample_employee_handbook.md) or your own PDF/DOCX/MD/XLSX. Watch the ingestion stages; wait for `READY`.
-2. **Ask.** "What is maternity leave?" — the answer streams, then citation cards appear under it.
+2. **Ask.** Click the input pill at the bottom of the chat — it opens into the composer — and type "What is maternity leave?". Enter sends, Shift+Enter adds a line. The answer streams, then citation cards appear under it.
 3. **Follow up naturally.** "Does it apply during probation?" The pronoun is resolved before retrieval runs; you can see what it resolved to in the trace.
 4. **Open the trace drawer** on any answer: the retrieval decision and why, the resolved references, what was retrieved and what reached the prompt, verification scores, timings per stage.
-5. **Scope a question** to one document from the library when you have several — the pipeline then refuses evidence from anything else.
+5. **Scope a question** to one document or category with the filter button in the composer when you have several — the pipeline then refuses evidence from anything else. The active scope shows as chips above the input.
 6. **Admin dashboard** at `/admin`: query traces, per-stage latency, ingestion events, cache and error incidents.
+
+**The composer.** Everything that shapes a question lives in the input's bottom row:
+
+| Control | What it does |
+|---|---|
+| Model | Switches the chat model among the ones Ollama has installed. A failed switch rolls back and says why. |
+| Answer depth | Click to cycle Compact → Standard → Detailed. Remembered across reloads. |
+| Filter | Limits retrieval to one document or one category. |
+| Mic | Dictates into the input. Shown only when the input is empty and the browser supports speech recognition — read [the caveat](#-limitations-and-known-constraints) before using it on sensitive questions. |
+| Send / Stop | The same button: it sends, and while an answer is streaming it stops generation. |
+
+Questions are capped at 4,000 characters; a counter appears as you approach the limit.
 
 Uploads persist across restarts. To start clean, delete the documents in the UI, or stop the app and remove `app/storage/`.
 
@@ -477,7 +577,7 @@ Five layers. Each one owns a directory, and the boundaries are real — you can 
 
 | Layer | Directory | Owns | Key modules |
 |---|---|---|---|
-| **Interface** | `frontend/` | Chat, document library, per-answer trace drawer, admin dashboard | `hooks/useChatStream.ts` (SSE), `components/` |
+| **Interface** | `frontend/` | Chat, document library, per-answer trace drawer, admin dashboard | `hooks/useChatStream.ts` (SSE), `components/space/SpaceComposer.tsx` (composer, on `components/ui/ai-chat-input.tsx`), `components/` |
 | **API** | `backend/api/` | HTTP surface, dependency injection, request validation | `main.py`, `dependencies.py`, `routes/` (chat · documents · admin · models · health) |
 | **RAG core** | `backend/rag/` | One turn, end to end: interpret → retrieve → assemble → generate → verify | `pipeline.py` (orchestration), `conversation_interpreter.py`, `policy_reliability.py`, `citations.py`, `verifier.py` |
 | **Retrieval & ingestion** | `backend/retrieval/`, `backend/ingestion/`, `backend/embeddings/` | Dense + lexical search, fusion, loaders, chunkers, embeddings | `hybrid.py` (RRF), `bm25.py`, `dense.py`, `reranker.py`, `chunkers/`, `loaders/` |
@@ -884,7 +984,10 @@ Company-policy-rag/
     │   ├── models/                    ← Pydantic domain + DTO models
     │   ├── vision/                    ← optional VLM page understanding
     │   └── evaluation/  tasks/  utils/
-    ├── frontend/                      ← Next.js 16 app-router UI
+    ├── frontend/                      ← Next.js 16 app-router UI (Tailwind 3)
+    │   ├── components/space/          ← the chat shell: composer, messages, sidebar, citations
+    │   ├── components/ui/             ← reusable primitives (shadcn-style tokens in styles/globals.css)
+    │   └── hooks/  lib/               ← SSE stream, composer controls, API client
     ├── scripts/                       ← 24 CLI tools: eval harnesses · CI gates · benchmarks · finetune
     ├── tests/                         ← unit · integration · e2e · adversarial
     ├── docs/                          ← A/B log, eval baselines, audits, roadmap, failure taxonomy
@@ -1126,6 +1229,8 @@ Stated plainly, because a README that only lists strengths is not an engineering
 **Citation numbers still drift.** Every answer now carries a tag and the tagged chunk is always one that was in the prompt, but the model sometimes picks the wrong number for a correct sentence (citation precision 0.905 on the handbook set). A lexical repair pass was tried and could not fix it safely.
 
 **Vision needs a GPU.** The Qwen3-VL page-understanding path runs at roughly **65 s/page on CPU**, which is unusable in practice. The uv environment installs CUDA PyTorch plus `accelerate`/`bitsandbytes`, so on an NVIDIA GPU it loads 4-bit (~1.5 GB VRAM) and reads a page in seconds — but only when at least `VISION_MIN_GPU_FREE_GB` (2 GB) is free, which on a 6 GB card means the chat model must not be resident. On a CPU-only host, set `VISION_ENABLED=false`. Consequence: **scanned/image-only PDFs will index 0 chunks** — there is no OCR fallback in that configuration. Text-layer PDFs are unaffected.
+
+**Voice dictation is not local.** The mic button in the composer uses the browser's Web Speech API. In Chrome and Edge that sends the recorded audio to the browser vendor's speech service for transcription, so a dictated question leaves the host even though retrieval and generation do not. Nothing is recorded unless you press the mic, and typing is unaffected. There is no setting to turn it off yet; Firefox does not implement the API, so the button never appears there.
 
 **Single-node by design.** SQLite telemetry, embedded Chroma, and per-process session storage do not survive horizontal scaling. Deliberate — but it is a ceiling.
 
