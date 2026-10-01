@@ -552,6 +552,7 @@ class DocumentService:
             # not pages, except on a scanned page where the extraction is the
             # only document that page produced.
             visual_docs = [doc for doc in raw_docs if (doc.metadata.extra or {}).get("is_visual_extraction")]
+            visual_extraction_count = len(visual_docs)
             text_page_numbers = {
                 doc.metadata.page_number
                 for doc in raw_docs
