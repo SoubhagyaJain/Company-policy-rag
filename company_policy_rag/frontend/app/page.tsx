@@ -272,7 +272,7 @@ export default function HomePage() {
             onToggleTheme={toggleTheme}
             connected={connected}
           >
-            <StorageView />
+            <StorageView onOpenLibrary={() => changeTab('documents')} />
           </LibraryShell>
         );
       default:

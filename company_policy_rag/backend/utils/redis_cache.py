@@ -48,6 +48,11 @@ class RedisCache:
         self._redis_connected = False
         self._memory_store: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
+        # Lookup counters since this process started, for the Storage tab.
+        self._hits = 0
+        self._misses = 0
+        self._last_hit_at: float | None = None
+        self._counting_since = time.time()
 
         if self.enabled and REDIS_INSTALLED:
             self._connect()
@@ -91,11 +96,20 @@ class RedisCache:
             self._redis_connected = False
             return False
 
+    def _count_lookup(self, hit: bool) -> None:
+        with self._lock:
+            if hit:
+                self._hits += 1
+                self._last_hit_at = time.time()
+            else:
+                self._misses += 1
+
     def get(self, key: str, default: Any = None) -> Any:
         """Retrieve key from cache (Redis or in-memory fallback)."""
         if self._redis_connected and self._redis_client:
             try:
                 raw = self._redis_client.get(key)
+                self._count_lookup(raw is not None)
                 if raw is not None:
                     try:
                         return json.loads(raw)
@@ -112,9 +126,11 @@ class RedisCache:
                 item = self._memory_store[key]
                 expire_at = item.get("expire_at")
                 if expire_at is None or expire_at > time.time():
+                    self._count_lookup(True)
                     return item.get("value")
                 # Expired
                 del self._memory_store[key]
+            self._count_lookup(False)
             return default
 
     def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
@@ -172,16 +188,24 @@ class RedisCache:
         return True
 
     def stats(self) -> dict[str, Any]:
-        """Which backend is live and how many of this app's keys it holds."""
+        """Which backend is live, how many of this app's keys it holds, and lookup counters."""
+        with self._lock:
+            counters = {
+                "default_ttl_seconds": self.default_ttl,
+                "hits": self._hits,
+                "misses": self._misses,
+                "last_hit_at": self._last_hit_at,
+                "counting_since": self._counting_since,
+            }
         if self._redis_connected and self._redis_client:
             try:
                 keys = sum(1 for prefix in _APP_KEY_PREFIXES for _ in self._redis_client.scan_iter(f"{prefix}*"))
-                return {"backend": "redis", "keys": keys}
+                return {"backend": "redis", "keys": keys, **counters}
             except Exception as exc:
                 logger.warning("Redis stats error: %s", exc)
                 self._redis_connected = False
         with self._lock:
-            return {"backend": "memory", "keys": len(self._memory_store)}
+            return {"backend": "memory", "keys": len(self._memory_store), **counters}
 
     def clear_app_keys(self) -> int:
         """Remove this app's cached entries and return how many were dropped.

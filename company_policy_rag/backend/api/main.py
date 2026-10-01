@@ -155,7 +155,18 @@ def warmup_rag_system() -> None:
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager: preloads and warms up all models before accepting traffic."""
     await asyncio.to_thread(warmup_rag_system)
+    # Size snapshots keep recording while nobody has the Storage tab open.
+    storage_service = None
+    try:
+        from backend.api.dependencies import get_storage_service
+
+        storage_service = get_storage_service()
+        storage_service.start_snapshot_loop()
+    except Exception as exc:
+        logger.warning("Storage snapshots were not started: %s", exc)
     yield
+    if storage_service is not None:
+        storage_service.stop_snapshot_loop()
 
 
 def create_app() -> FastAPI:

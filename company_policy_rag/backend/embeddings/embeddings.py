@@ -16,6 +16,7 @@ def normalize_vector(vector: list[float]) -> list[float]:
 
 
 import threading
+import time
 from collections import OrderedDict
 
 
@@ -26,6 +27,11 @@ class EmbeddingCache:
         self._cache: OrderedDict[str, list[float]] = OrderedDict()
         self._max_size = max_size
         self._lock = threading.Lock()
+        # Lookup counters since this process started, for the Storage tab.
+        self._hits = 0
+        self._misses = 0
+        self._last_hit_at: float | None = None
+        self._counting_since = time.time()
 
     def _hash_text(self, text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -35,7 +41,10 @@ class EmbeddingCache:
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
+                self._hits += 1
+                self._last_hit_at = time.time()
                 return self._cache[key]
+            self._misses += 1
         return None
 
     def set(self, text: str, embedding: list[float]) -> None:
@@ -55,9 +64,24 @@ class EmbeddingCache:
         with self._lock:
             return len(self._cache)
 
+    def stats(self) -> dict[str, Any]:
+        """Entry count, limit, vector width and lookup counters since the process started."""
+        with self._lock:
+            first = next(iter(self._cache.values()), None)
+            return {
+                "entries": len(self._cache),
+                "max_entries": self._max_size,
+                "vector_dim": len(first) if first is not None else None,
+                "hits": self._hits,
+                "misses": self._misses,
+                "last_hit_at": self._last_hit_at,
+                "counting_since": self._counting_since,
+            }
+
 
 _shared_embedding_model: Any | None = None
 _shared_embedding_model_loaded: bool = False
+_shared_embedding_model_loaded_at: float | None = None
 
 
 def _default_query_instruction(model_name: str) -> str:
@@ -113,7 +137,7 @@ class EmbeddingService:
         return self._model_loaded and self._model is None
 
     def _init_model(self) -> None:
-        global _shared_embedding_model, _shared_embedding_model_loaded
+        global _shared_embedding_model, _shared_embedding_model_loaded, _shared_embedding_model_loaded_at
         if self._model_loaded:
             return
         if _shared_embedding_model_loaded:
@@ -156,6 +180,7 @@ class EmbeddingService:
 
         _shared_embedding_model = self._model
         _shared_embedding_model_loaded = True
+        _shared_embedding_model_loaded_at = time.time() if self._model is not None else None
 
     def _fallback_embed(self, text: str) -> list[float]:
         """Deterministic pseudo-embedding for testing when ML packages are unavailable."""

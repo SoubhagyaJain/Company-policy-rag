@@ -1221,6 +1221,29 @@ class DocumentService:
         with self._lock:
             return any(job.status in _IN_FLIGHT_STATUSES for job in self._ingestion_jobs.values())
 
+    def in_flight_jobs(self) -> list[IngestionStatusResponse]:
+        """Copies of the jobs still indexing text or reading page images."""
+        active = _IN_FLIGHT_STATUSES | {IngestionStatus.VISION_PROCESSING.value}
+        with self._lock:
+            return [job.model_copy(deep=True) for job in self._ingestion_jobs.values() if job.status in active]
+
+    def storage_records(self) -> list[dict[str, Any]]:
+        """What the Storage tab needs to know about each document in the library."""
+        with self._lock:
+            return [
+                {
+                    "document_id": doc_id,
+                    "filename": record.get("filename", ""),
+                    "file_size_bytes": int(record.get("file_size_bytes") or 0),
+                    "chunk_count": int(record.get("chunk_count") or 0),
+                    "pages_count": int(record.get("pages_count") or 0),
+                    "created_at": record.get("created_at"),
+                    "status": record.get("status", "READY"),
+                    "storage_state": record.get("storage_state", "HEALTHY"),
+                }
+                for doc_id, record in self._documents.items()
+            ]
+
     def _with_live_job(self, record: dict[str, Any]) -> dict[str, Any]:
         """Overlay a running ingestion job onto its registry record.
 

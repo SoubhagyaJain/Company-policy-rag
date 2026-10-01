@@ -46,6 +46,7 @@ python-multipart>=0.0.9
 celery[redis]>=5.3.6
 redis>=5.0.0
 cachetools>=5.3.0  # TTLCache for conversation state + chat service
+psutil>=5.9.0  # Process and system RAM for the Storage tab
 
 # Evaluation & exploration (notebook)
 jupyter>=1.0.0

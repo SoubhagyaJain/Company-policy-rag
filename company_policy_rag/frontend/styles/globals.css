@@ -1,4 +1,5 @@
 @import './space.css';
+@import './storage-console.css';
 
 @tailwind base;
 @tailwind components;

@@ -17,7 +17,15 @@ import {
   ReasoningSummary,
   ResponseMode,
   StorageActionResult,
+  StorageCleanupPlan,
+  StorageCleanupResult,
+  StorageCleanupSelection,
+  StorageDocuments,
   StorageHistory,
+  StorageInspect,
+  StorageLive,
+  StoragePreview,
+  StorageRange,
   StorageSummary,
 } from './types';
 
@@ -1028,8 +1036,8 @@ export class ApiClient {
   /**
    * Storage API: GET /api/admin/storage
    */
-  async getStorage(): Promise<StorageSummary> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage`);
+  async getStorage(refresh = false): Promise<StorageSummary> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage${refresh ? '?refresh=true' : ''}`);
     if (!res.ok) {
       throw new Error(`Failed to load storage summary (${res.status})`);
     }
@@ -1037,12 +1045,76 @@ export class ApiClient {
   }
 
   /**
+   * Storage API: GET /api/admin/storage/live — RAM, VRAM, loaded models, running operations.
+   */
+  async getStorageLive(): Promise<StorageLive> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/live`);
+    if (!res.ok) {
+      throw new Error(`Failed to load runtime state (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Storage API: GET /api/admin/storage/documents
+   */
+  async getStorageDocuments(deep = false): Promise<StorageDocuments> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/documents${deep ? '?deep=true' : ''}`);
+    if (!res.ok) {
+      throw new Error(`Failed to load document storage (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
    * Storage API: GET /api/admin/storage/history
    */
-  async getStorageHistory(): Promise<StorageHistory> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/history`);
+  async getStorageHistory(range?: StorageRange): Promise<StorageHistory> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/history${range ? `?range=${range}` : ''}`);
     if (!res.ok) {
       throw new Error(`Failed to load storage history (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Storage API: GET /api/admin/storage/{store_id}/inspect
+   */
+  async inspectStorage(storeId: string): Promise<StorageInspect> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/${encodeURIComponent(storeId)}/inspect`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Inspection failed (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Storage API: POST /api/admin/storage/{store_id}/{action_id}/preview — nothing is deleted.
+   */
+  async previewStorageAction(storeId: string, actionId: string, olderThanDays?: number): Promise<StoragePreview> {
+    const res = await fetch(
+      `${this.baseUrl}/api/admin/storage/${encodeURIComponent(storeId)}/${encodeURIComponent(actionId)}/preview`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ older_than_days: olderThanDays }),
+      },
+    );
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Preview failed (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Storage API: GET /api/admin/storage/cleanup/plan
+   */
+  async getCleanupPlan(): Promise<StorageCleanupPlan> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/cleanup/plan`);
+    if (!res.ok) {
+      throw new Error(`Failed to load the cleanup plan (${res.status})`);
     }
     return res.json();
   }
@@ -1073,8 +1145,12 @@ export class ApiClient {
   /**
    * Storage API: POST /api/admin/storage/cleanup
    */
-  async cleanStorage(): Promise<{ freed_bytes: number; removed_items: number; results: StorageActionResult[] }> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/cleanup`, { method: 'POST' });
+  async cleanStorage(items?: StorageCleanupSelection[]): Promise<StorageCleanupResult> {
+    // Stores and actions travel as logical ids; the backend owns every path.
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/cleanup`, {
+      method: 'POST',
+      ...(items ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) } : {}),
+    });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.detail || `Storage cleanup failed (${res.status})`);

@@ -323,3 +323,377 @@ def test_storage_api(env):
 
     history = client.get("/api/admin/storage/history").json()
     assert [a["store"] for a in history["actions"]][0] == "page_images"
+
+
+# ── Observability console ───────────────────────────────────────────────────
+
+
+def test_every_store_and_action_is_classified(env):
+    summary = env.service.summary()
+
+    for store in summary["stores"]:
+        assert store["kinds"], store["id"]
+        assert store["info"]["what"] and store["info"]["delete_effect"], store["id"]
+    for item in summary["memory"]["items"]:
+        assert item["kinds"] and item["info"], item["id"]
+    assert {c["id"] for c in summary["caches"]} == {
+        "semantic_cache",
+        "vision_cache",
+        "retrieval_cache",
+        "embedding_cache",
+        "kv_cache",
+        "conversations",
+    }
+
+    for spec in env.service._actions.values():
+        assert spec.safety in {"SAFE", "REBUILDABLE", "DESTRUCTIVE"}
+        assert spec.deletes and spec.rebuild and spec.performance
+        # Whatever the one-click cleanup runs must lose nothing.
+        assert not spec.safe or spec.safety == "SAFE"
+    safety = {key: spec.safety for key, spec in env.service._actions.items()}
+    assert safety[("page_images", "remove_orphaned")] == "SAFE"
+    assert safety[("semantic_cache", "clear")] == "REBUILDABLE"
+    assert safety[("telemetry_db", "clear")] == "DESTRUCTIVE"
+    assert safety[("eval_artifacts", "delete")] == "DESTRUCTIVE"
+
+
+def test_summary_explains_where_storage_goes(env):
+    _seed_images_and_cache(env)
+    _write(env.root / "uploads" / f"{LIVE_DOC}_handbook.pdf", 9000)
+
+    summary = env.service.summary()
+
+    segments = {s["id"]: s for s in summary["map"]}
+    assert segments["images"]["size_bytes"] == 6000
+    assert segments["images"]["reclaimable_bytes"] == 5000
+    assert segments["documents"]["size_bytes"] == 9000
+    assert sum(s["size_bytes"] for s in summary["map"]) == summary["totals"]["storage_bytes"]
+    assert summary["totals"]["orphan_bytes"] == 5400
+    assert summary["disk"]["free_bytes"] > 0
+
+    checks = {c["id"]: c for c in summary["health"]}
+    assert checks["databases"]["ok"] is False  # no Chroma file exists in this fixture
+    assert checks["orphans"]["ok"] is False
+    assert checks["redis"]["ok"] is False
+    assert any(o["id"] == "orphans" for o in summary["observations"])
+    # No baseline yet, so growth is unknown rather than zero.
+    assert _store(summary, "page_images")["growth"] == {"d1": None, "d7": None, "d30": None}
+
+
+def test_action_is_audited_with_before_and_after(env):
+    _seed_images_and_cache(env)
+
+    entry = env.service.run_action("page_images", "remove_orphaned")
+
+    assert entry["status"] == "success"
+    assert (entry["before_bytes"], entry["after_bytes"], entry["freed_bytes"]) == (6000, 1000, 5000)
+    assert entry["initiated_by"] == "manual" and entry["safety"] == "SAFE"
+    assert entry["duration_ms"] >= 0 and entry["id"].startswith("act_")
+
+    memory_only = env.service.run_action("retrieval_cache", "clear")
+    assert memory_only["before_bytes"] is None and memory_only["after_bytes"] is None
+
+
+def test_failed_action_is_audited_and_releases_the_lock(env, monkeypatch):
+    def boom(*_args):
+        raise RuntimeError("disk on fire")
+
+    spec = env.service._actions[("vision_cache", "clear")]
+    monkeypatch.setitem(
+        env.service._actions,
+        ("vision_cache", "clear"),
+        module.ActionSpec(spec.id, spec.label, spec.description, boom, safety=spec.safety),
+    )
+
+    with pytest.raises(RuntimeError, match="disk on fire"):
+        env.service.run_action("vision_cache", "clear")
+
+    failed = env.service.history()["actions"][-1]
+    assert (failed["status"], failed["error"]) == ("failed", "disk on fire")
+    # The lock is released, so the next action is not refused.
+    assert env.service.run_action("retrieval_cache", "clear")["status"] == "success"
+
+
+def test_second_cleanup_is_refused_while_one_runs(env):
+    assert env.service._op_lock.acquire(blocking=False)
+    try:
+        with pytest.raises(StorageBusyError, match="Another storage operation"):
+            env.service.run_action("retrieval_cache", "clear")
+    finally:
+        env.service._op_lock.release()
+
+
+def test_preview_reports_what_an_age_cutoff_would_remove(env):
+    _write(env.root / "vision_cache" / f"{LIVE_DOC}_p1_aaaaaaaaaaaaaaaa_{MODEL}.json", 100, age_days=40)
+    _write(env.root / "vision_cache" / f"{LIVE_DOC}_p2_dddddddddddddddd_{MODEL}.json", 300)
+    _write(env.logs / "app.log", 500, age_days=90)
+    _write(env.logs / "old_report.json", 700, age_days=90)
+    connection = sqlite3.connect(env.telemetry.db.db_path)
+    with connection:
+        for index in range(10):
+            stamp = "2020-01-01T00:00:00+00:00" if index < 4 else "2999-01-01T00:00:00+00:00"
+            connection.execute(
+                "INSERT INTO cache_events (id, timestamp, cache_type, event_type, latency_ms) VALUES (?, ?, 'x', 'HIT', 1.0)",
+                (f"evt_{index}", stamp),
+            )
+    connection.close()
+
+    vision = env.service.preview("vision_cache", "older_than", older_than_days=30)
+    assert (vision["affected_items"], vision["estimated_bytes"], vision["exact"]) == (1, 100, True)
+    assert vision["safety"] == "REBUILDABLE" and "25 seconds" in vision["impact"]["performance"]
+
+    logs = env.service.preview("logs", "older_than", older_than_days=30)
+    assert (logs["affected_items"], logs["estimated_bytes"]) == (1, 700)
+
+    telemetry = env.service.preview("telemetry_db", "older_than", older_than_days=30)
+    assert telemetry["affected_items"] == 4 and telemetry["exact"] is False
+
+    # A preview deletes nothing.
+    assert len(list((env.root / "vision_cache").glob("*.json"))) == 2
+    assert env.telemetry.db.table_counts()["cache_events"] == 10
+    with pytest.raises(ValueError, match="older_than_days"):
+        env.service.preview("logs", "older_than")
+    with pytest.raises(UnknownStorageActionError):
+        env.service.preview("uploads", "delete")
+
+
+def test_cleanup_plan_preselects_only_what_loses_nothing(env):
+    _seed_images_and_cache(env)
+    _write(env.logs / "old_report.json", 700, age_days=90)
+
+    plan = env.service.cleanup_plan()
+    items = {(i["store_id"], i["action_id"]): i for i in plan["items"]}
+
+    assert items[("page_images", "remove_orphaned")]["selected"] is True
+    assert items[("page_images", "remove_orphaned")]["estimated_bytes"] == 5000
+    assert items[("vision_cache", "clear")]["selected"] is False
+    assert items[("logs", "older_than")]["default_days"] == 30
+    assert items[("logs", "older_than")]["estimated_bytes"] == 700
+    assert items[("vision_cache", "remove_orphaned")]["estimated_bytes"] == 400
+    assert plan["safe_reclaimable_bytes"] == sum(i["estimated_bytes"] for i in plan["items"] if i["selected"])
+    # Loading and unloading models is a runtime control, not a cleanup.
+    assert not any(store == "ollama_models" for store, _ in items)
+    assert all(i["selected"] is False for i in plan["items"] if i["safety"] != "SAFE")
+
+
+def test_selective_cleanup_runs_exactly_the_chosen_items(env):
+    _seed_images_and_cache(env)
+    old_report = _write(env.logs / "old_report.json", 700, age_days=90)
+
+    result = env.service.clean_safe(
+        [
+            {"store_id": "page_images", "action_id": "remove_orphaned"},
+            {"store_id": "logs", "action_id": "older_than", "older_than_days": 30},
+        ]
+    )
+
+    assert result["freed_bytes"] == 5700
+    assert not old_report.exists()
+    assert {a["initiated_by"] for a in env.service.history()["actions"]} == {"cleanup"}
+    # The orphaned vision cache page was not selected, so it is still there.
+    assert (env.root / "vision_cache" / f"{ORPHAN_DOC}_p1_bbbbbbbbbbbbbbbb_{MODEL}.json").is_file()
+
+    with pytest.raises(UnknownStorageActionError):
+        env.service.clean_safe([{"store_id": "uploads", "action_id": "delete"}])
+    with pytest.raises(UnknownStorageActionError, match="not a cleanup"):
+        env.service.clean_safe([{"store_id": "ollama_models", "action_id": "unload"}])
+    with pytest.raises(ValueError, match="older_than_days"):
+        env.service.clean_safe([{"store_id": "logs", "action_id": "older_than"}])
+
+
+def test_documents_report_footprint_and_orphans(env):
+    _seed_images_and_cache(env)
+    _write(env.root / "images" / LIVE_DOC / "assets.json", 20)
+    env.docs.storage_records = lambda: [
+        {
+            "document_id": LIVE_DOC,
+            "filename": "handbook.pdf",
+            "file_size_bytes": 9000,
+            "chunk_count": 12,
+            "pages_count": 3,
+            "created_at": "2026-09-01T00:00:00+00:00",
+            "status": "READY",
+        }
+    ]
+    orphan_chunk = SimpleNamespace(metadata=SimpleNamespace(document_id=ORPHAN_DOC))
+    env.docs.bm25_index.entries = [orphan_chunk, SimpleNamespace(metadata=SimpleNamespace(document_id=LIVE_DOC))]
+
+    report = env.service.documents()
+
+    document = report["documents"][0]
+    assert document["images"] == {"count": 1, "bytes": 1020}
+    assert document["vision_cache"] == {"entries": 1, "bytes": 100}
+    assert (document["chunks"], document["embeddings"]) == (12, 12)
+    # No vectors are stored in this fixture, so the index share is unknown, not zero.
+    assert document["index_bytes_estimated"] is None
+    assert document["total_bytes_estimated"] == 9000 + 1020 + 100
+    assert document["last_queried"] is None and document["query_count"] == 0
+
+    orphans = report["orphans"]
+    assert orphans["images"] == {
+        "count": 1,
+        "files": 2,
+        "bytes": 5000,
+        "items": [{"name": ORPHAN_DOC, "bytes": 5000, "files": 2}],
+        "store_id": "page_images",
+        "action_id": "remove_orphaned",
+        "safety": "SAFE",
+    }
+    assert (orphans["vision_cache"]["count"], orphans["vision_cache"]["bytes"]) == (1, 400)
+    assert orphans["total_bytes"] == 5400
+    assert orphans["chunk_references"]["bm25"] == 1
+    assert orphans["chunk_references"]["vector"] is None  # only counted on a deep scan
+
+
+def test_live_attributes_vram_to_what_each_runtime_reports(env, monkeypatch):
+    gib = 1024**3
+    monkeypatch.setattr(
+        module,
+        "list_loaded_models",
+        lambda **_: [
+            {
+                "name": "qwen2.5:7b",
+                "size": 5 * gib,
+                "size_vram": 4 * gib,
+                "context_length": 4096,
+                "expires_at": "2319-01-01T00:00:00Z",
+                "details": {"parameter_size": "7.6B", "quantization_level": "Q4_K_M"},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        module, "gpu_memory_mb", lambda *_: {"name": "RTX 4050", "total_mb": 6144.0, "used_mb": 5120.0, "free_mb": 1024.0}
+    )
+    monkeypatch.setattr(module.runtime, "torch_reserved_bytes", lambda: None)
+    env.docs.busy = True
+
+    live = env.service.live()
+
+    model = live["loaded_models"][0]
+    assert (model["vram_bytes"], model["ram_bytes"], model["gpu_pct"]) == (4 * gib, gib, 80.0)
+    assert model["pinned"] is True and model["quantization"] == "Q4_K_M"
+    # Ollama does not say when a model was loaded; that stays unknown.
+    assert model["loaded_at"] is None and model["requests"] is None
+
+    segments = {s["id"]: s["bytes"] for s in live["gpu_breakdown"]["segments"]}
+    assert segments == {"ollama:qwen2.5:7b": 4 * gib, "other": gib}
+    assert live["operations"]["blocks_index_cleanup"] is True
+    assert live["caches"]["retrieval_cache"]["hits"] is not None
+    assert live["caches"]["kv_cache"]["backend"] == "memory"
+
+
+def test_live_without_gpu_or_models(env):
+    live = env.service.live()
+
+    assert live["gpu"] is None and live["gpu_breakdown"] is None
+    assert live["loaded_models"] == []
+    assert live["operations"] == {"indexing": [], "cleanup": None, "blocks_index_cleanup": False}
+
+
+def test_inspect_describes_a_store_and_rejects_unknown_ids(env):
+    connection = sqlite3.connect(env.telemetry.db.db_path)
+    with connection:
+        connection.execute(
+            "INSERT INTO cache_events (id, timestamp, cache_type, event_type, latency_ms) "
+            "VALUES ('e1', '2026-01-02T00:00:00+00:00', 'x', 'HIT', 1.0)"
+        )
+    connection.close()
+
+    telemetry = env.service.inspect("telemetry_db")
+    events = next(t for t in telemetry["tables"] if t["name"] == "cache_events")
+    assert (events["rows"], events["oldest"]) == (1, "2026-01-02T00:00:00+00:00")
+    assert telemetry["filesystem"]["path"].endswith("telemetry.sqlite3")
+    assert telemetry["filesystem"]["rebuildable"] is False
+
+    cache = env.service.inspect("vision_cache")
+    assert cache["filesystem"]["rebuildable"] is True and cache["info"]["rebuild"]
+    assert env.service.inspect("kv_cache")["filesystem"] is None
+
+    with pytest.raises(UnknownStorageActionError):
+        env.service.inspect("../../etc")
+
+
+def test_history_window_returns_series_events_and_no_premature_forecast(env):
+    _seed_images_and_cache(env)
+    env.service.summary()
+    env.service.run_action("page_images", "remove_orphaned")
+
+    report = env.service.history(window="7d")
+
+    assert [p["categories"]["images"] for p in report["series"]] == [6000, 1000]
+    assert all(p["app_bytes"] >= p["categories"]["images"] for p in report["series"])
+    assert [e["kind"] for e in report["events"]] == ["cleanup"]
+    assert report["events"][0]["bytes"] == -5000
+    # Two snapshots a moment apart cannot support a projection.
+    assert report["forecast"] is None
+    with pytest.raises(ValueError, match="range"):
+        env.service.history(window="1y")
+
+
+def test_cache_counters_track_hits_and_misses():
+    from backend.embeddings.embeddings import EmbeddingCache
+    from backend.retrieval.retrieval_cache import RetrievalCache
+
+    retrieval = RetrievalCache()
+    assert retrieval.get("q") is None
+    retrieval.set("q", [])
+    assert retrieval.get("q") == []
+    stats = retrieval.stats()
+    assert (stats["entries"], stats["hits"], stats["misses"]) == (1, 1, 1)
+    assert stats["last_hit_at"] is not None
+
+    embedding = EmbeddingCache()
+    assert embedding.get("text") is None
+    embedding.set("text", [0.1, 0.2, 0.3])
+    assert embedding.get("text") == [0.1, 0.2, 0.3]
+    stats = embedding.stats()
+    assert (stats["hits"], stats["misses"], stats["vector_dim"]) == (1, 1, 3)
+
+    kv = RedisCache(enabled=False)
+    assert kv.get("missing") is None
+    kv.set("k", "v")
+    assert kv.get("k") == "v"
+    stats = kv.stats()
+    assert (stats["backend"], stats["keys"], stats["hits"], stats["misses"]) == ("memory", 1, 1, 1)
+
+
+def test_console_api(env):
+    from backend.api.dependencies import get_storage_service
+    from backend.api.main import create_app
+
+    _seed_images_and_cache(env)
+    app = create_app()
+    app.dependency_overrides[get_storage_service] = lambda: env.service
+    client = TestClient(app)
+
+    assert client.get("/api/admin/storage/live").json()["operations"]["cleanup"] is None
+    assert client.get("/api/admin/storage/documents").json()["orphans"]["total_bytes"] == 5400
+    assert client.get("/api/admin/storage?refresh=true").status_code == 200
+
+    assert client.get("/api/admin/storage/vision_cache/inspect").json()["id"] == "vision_cache"
+    assert client.get("/api/admin/storage/nope/inspect").status_code == 404
+
+    preview = client.post("/api/admin/storage/page_images/remove_orphaned/preview")
+    assert preview.status_code == 200 and preview.json()["estimated_bytes"] == 5000
+    assert client.post("/api/admin/storage/logs/older_than/preview", json={}).status_code == 400
+    assert client.post("/api/admin/storage/uploads/delete/preview").status_code == 404
+
+    plan = client.get("/api/admin/storage/cleanup/plan").json()
+    assert plan["safe_reclaimable_bytes"] >= 5400
+
+    # Paths and arbitrary ids are rejected before they reach the service.
+    bad = client.post("/api/admin/storage/cleanup", json={"items": [{"store_id": "../etc", "action_id": "x"}]})
+    assert bad.status_code == 422
+    unknown = client.post("/api/admin/storage/cleanup", json={"items": [{"store_id": "uploads", "action_id": "delete"}]})
+    assert unknown.status_code == 404
+
+    chosen = client.post(
+        "/api/admin/storage/cleanup",
+        json={"items": [{"store_id": "vision_cache", "action_id": "remove_orphaned"}]},
+    )
+    assert chosen.status_code == 200 and chosen.json()["freed_bytes"] == 400
+    assert (env.root / "images" / ORPHAN_DOC).exists()
+
+    windowed = client.get("/api/admin/storage/history?range=24h").json()
+    assert {"series", "events", "forecast", "actions"} <= windowed.keys()
+    assert client.get("/api/admin/storage/history?range=1y").status_code == 422
