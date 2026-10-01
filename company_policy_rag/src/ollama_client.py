@@ -113,12 +113,21 @@ def list_loaded_models(
     return [m for m in payload.get("models") or [] if isinstance(m, dict) and m.get("name")]
 
 
+def is_local_model(entry: dict[str, Any]) -> bool:
+    """True when the model's weights are on this machine.
+
+    Ollama also lists cloud models in /api/tags: a manifest of a few hundred
+    bytes that forwards requests to a remote host. They are not installed here.
+    """
+    return not (entry.get("remote_host") or entry.get("remote_model"))
+
+
 def list_installed_models(
     base_url: str | None = None,
     *,
     timeout: float = 5.0,
 ) -> list[dict[str, Any]]:
-    """Call Ollama GET /api/tags. Returns every installed model with its size on disk."""
+    """Call Ollama GET /api/tags. Returns every locally installed model with its size on disk."""
     url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/tags"
     try:
         with urlopen(url, timeout=timeout) as response:
@@ -126,15 +135,23 @@ def list_installed_models(
     except Exception as exc:
         logger.debug("Could not list installed Ollama models: %s", exc)
         return []
-    return [m for m in payload.get("models") or [] if isinstance(m, dict) and m.get("name")]
+    return [
+        m
+        for m in payload.get("models") or []
+        if isinstance(m, dict) and m.get("name") and is_local_model(m)
+    ]
 
 
 def probe_ollama_tags(
     base_url: str | None = None,
     *,
     timeout: float = 5.0,
+    local_only: bool = False,
 ) -> tuple[bool, list[str], str | None]:
-    """Call Ollama GET /api/tags. Returns (ok, model_names, error_message)."""
+    """Call Ollama GET /api/tags. Returns (ok, model_names, error_message).
+
+    ``local_only`` leaves out cloud models, which Ollama lists but does not store here.
+    """
     url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/tags"
     try:
         with urlopen(url, timeout=timeout) as response:
@@ -148,6 +165,8 @@ def probe_ollama_tags(
     names: list[str] = []
     for item in models:
         if isinstance(item, dict) and item.get("name"):
+            if local_only and not is_local_model(item):
+                continue
             names.append(str(item["name"]))
     return True, sorted(names), None
 
@@ -250,13 +269,14 @@ def fetch_model_details(
 
 
 def _parse_param_size(details: dict[str, Any]) -> str | None:
-    for key in ("parameter_size", "parameters"):
-        val = details.get(key)
-        if val:
-            return str(val)
+    # /api/show also has a top-level "parameters": the Modelfile's sampling
+    # settings (temperature, stop tokens), not a size. Reading it here put that
+    # text in the model picker where "7.6B" belongs.
     params = details.get("details") or {}
     if isinstance(params, dict) and params.get("parameter_size"):
         return str(params["parameter_size"])
+    if details.get("parameter_size"):
+        return str(details["parameter_size"])
     return None
 
 
