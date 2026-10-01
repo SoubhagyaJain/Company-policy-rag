@@ -37,7 +37,8 @@ Step-by-step instructions with a checkpoint after each step, plus the failures w
 ## Checks
 
 ```bash
-python scripts/run_core_tests.py                            # 430 backend tests, ~30 s
+python scripts/run_core_tests.py                            # 431 backend tests, ~30 s
+pytest tests/test_storage_service.py tests/test_storage_insights.py   # Storage tab backend, 36 tests
 python scripts/benchmark_conversation.py --assert-minimums  # conversation gate
 python scripts/ci_retrieval_smoke.py                        # retrieval gate (labelled fixture)
 python scripts/production_retrieval_smoke.py --assert-minimums   # retrieval gate (self-contained)
