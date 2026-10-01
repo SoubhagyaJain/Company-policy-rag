@@ -216,6 +216,13 @@ class Settings(BaseSettings):
     # cancelled safely in-process. Query-time vision therefore requires a GPU
     # by default; cached visual understanding remains available on every host.
     vision_allow_cpu_query_time: bool = Field(default=False, alias="VISION_ALLOW_CPU_QUERY_TIME")
+    # A page with no text layer is transcribed in full, so it needs a far larger
+    # budget than the concise visual descriptions above (a dense page is ~700 tokens).
+    vision_scan_num_predict: int = Field(default=1024, alias="VISION_SCAN_NUM_PREDICT")
+    vision_scan_timeout: float = Field(default=90.0, alias="VISION_SCAN_TIMEOUT")
+    # The chat model is pinned in VRAM, which on a small GPU leaves no room for
+    # Qwen3-VL. Ingesting a scanned document evicts it for the duration.
+    vision_evict_ollama_for_ingestion: bool = Field(default=True, alias="VISION_EVICT_OLLAMA_FOR_INGESTION")
 
     @property
     def VISION_MODEL(self) -> str:
@@ -398,6 +405,10 @@ class Settings(BaseSettings):
     response_prompt_version: Literal["v1_standard", "v2_strict", "v2_balanced", "v3_qwen_compact"] = Field(
         default="v3_qwen_compact", alias="RESPONSE_PROMPT_VERSION"
     )
+    # Deterministic source-fidelity layer (backend/rag/source_fidelity.py): rebuilds
+    # lists the source defines, keeps navigation pages out of the evidence, names
+    # continuation chunks, and checks answers for invented members and terms.
+    source_fidelity_enabled: bool = Field(default=True, alias="SOURCE_FIDELITY_ENABLED")
     # Legacy override — true forces strict mode regardless of GROUNDING_STRICTNESS
     strict_grounding: bool = Field(default=False, alias="STRICT_GROUNDING")
     enable_faithfulness_check: bool = Field(default=True, alias="ENABLE_FAITHFULNESS_CHECK")

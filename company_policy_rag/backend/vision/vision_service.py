@@ -13,6 +13,7 @@ from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
 from src.config import settings
+from src.ollama_client import list_loaded_models, preload_model, unload_model
 from backend.vision.hf_vision_client import HFVisionClient
 _CODE_CUES = re.compile(
     r"(?:def\s+|class\s+|import\s+|from\s+\w+\s+import|function\s+|const\s+|let\s+|"
@@ -64,6 +65,13 @@ Preserve:
 - Exact row labels and hierarchy
 - Exact numeric and textual values
 Do not add conversational explanations or omit rows."""
+
+SCANNED_PAGE_PROMPT = """Transcribe all text on this document page exactly as written, in reading order.
+Keep headings, list numbering and table rows on their own lines.
+Output only the transcribed text."""
+
+# Ollama reports a pinned model (keep_alive=-1) with an expiry centuries away.
+_PINNED_EXPIRY_YEARS = 50
 
 
 class VisualContentType(str, Enum):
@@ -135,6 +143,16 @@ class VisionCircuitBreaker:
                     self.failure_count,
                     self.recovery_cooldown,
                 )
+
+
+@dataclass
+class IngestionGpuLease:
+    """Ollama models evicted so one scanned document can be read on the GPU."""
+
+    # model name -> VRAM bytes it held before eviction
+    evicted: dict[str, int] = field(default_factory=dict)
+    # the evicted models that were pinned and so must be put back
+    pinned: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -214,6 +232,69 @@ class VisionService:
             return False, "CPU-only vision is disabled for interactive queries."
         return True, f"Interactive vision is available on {device}."
 
+    def acquire_ingestion_gpu(self) -> IngestionGpuLease:
+        """Make room on the GPU for reading a scanned document.
+
+        The chat model is pinned in VRAM, which on a small GPU leaves too little
+        for Qwen3-VL; vision then resolves to CPU and is refused as too slow. A
+        page without a text layer has no other route into the index, so evict the
+        Ollama models for the duration of the ingestion instead of failing it.
+        """
+        lease = IngestionGpuLease()
+        if not getattr(settings, "vision_evict_ollama_for_ingestion", True):
+            return lease
+        ready, _ = self.is_available()
+        if not ready:
+            return lease
+
+        client = HFVisionClient.get_instance()
+        if client.gpu_free_gb() is None or (client.is_loaded and client.device == "cuda"):
+            return lease
+
+        if not client.has_gpu_headroom():
+            this_year = time.gmtime().tm_year
+            for model in list_loaded_models():
+                name, vram = str(model["name"]), int(model.get("size_vram") or 0)
+                if vram <= 0 or not unload_model(name):
+                    continue
+                lease.evicted[name] = vram
+                expiry_year = str(model.get("expires_at") or "")[:4]
+                if expiry_year.isdigit() and int(expiry_year) - this_year >= _PINNED_EXPIRY_YEARS:
+                    lease.pinned.append(name)
+            # Ollama frees the weights asynchronously after acknowledging the unload.
+            deadline = time.monotonic() + 20.0
+            while lease.evicted and not client.has_gpu_headroom() and time.monotonic() < deadline:
+                time.sleep(0.5)
+            if lease.evicted:
+                logger.info(
+                    "[VISION] Evicted Ollama model(s) %s for scanned-document ingestion; %.2f GiB VRAM now free.",
+                    ", ".join(lease.evicted),
+                    client.gpu_free_gb() or 0.0,
+                )
+
+        if client.is_loaded and client.has_gpu_headroom():
+            # Loaded on CPU earlier while VRAM was short; let the next call reload on the GPU.
+            with self._semaphore:
+                client.unload()
+        return lease
+
+    def release_ingestion_gpu(self, lease: IngestionGpuLease) -> None:
+        """Hand the GPU back to the models evicted by acquire_ingestion_gpu()."""
+        if not lease.evicted:
+            return
+        with self._semaphore:
+            HFVisionClient.get_instance().unload()
+
+        resident = {str(m["name"]): int(m.get("size_vram") or 0) for m in list_loaded_models()}
+        for name, vram_before in lease.evicted.items():
+            # A chat sent mid-ingestion reloads the model beside Qwen3-VL, where it
+            # only partly fits and spills onto the CPU. Ollama never rebalances a
+            # loaded model, so drop it and let the next load place it on the freed GPU.
+            if name in resident and resident[name] < vram_before * 0.9:
+                unload_model(name)
+            if name in lease.pinned:
+                preload_model(name)
+
     def detect_visual_content(
         self,
         page_text: str,
@@ -276,6 +357,24 @@ class VisionService:
                 visual_type=cue_visual_type,
                 confidence=0.95,
                 reason=f"Prior page continuation cue '{continuation_cue}' with visual content on current page.",
+                image_bytes=image_bytes,
+                image_hash=img_hash,
+                page_number=page_number,
+                display_page_number=display_page_number,
+                page_label=disp_label,
+                internal_page_index=internal_page_index,
+                image_count=image_count,
+                dimensions=(image_width, image_height) if image_width and image_height else None,
+            )
+
+        # Rule 3b: No text layer at all. The image is the page itself (a scan or a
+        # flattened export), so it is transcribed rather than read as a code screenshot.
+        if not page_text.strip() and image_bytes is not None:
+            return VisualDetectionResult(
+                has_visual=True,
+                visual_type=VisualContentType.SCANNED_TEXT,
+                confidence=0.85,
+                reason="Page has no text layer; its image is the only content.",
                 image_bytes=image_bytes,
                 image_hash=img_hash,
                 page_number=page_number,
@@ -392,7 +491,12 @@ class VisionService:
         if not image_bytes:
             return None
 
-        effective_timeout = timeout or getattr(settings, "vision_request_timeout", 30.0)
+        is_scan = visual_type == VisualContentType.SCANNED_TEXT
+        effective_timeout = timeout or (
+            getattr(settings, "vision_scan_timeout", 90.0)
+            if is_scan
+            else getattr(settings, "vision_request_timeout", 30.0)
+        )
         image_hash = VisionCacheManager.compute_image_hash(image_bytes)
         asset_id = f"ast_{image_hash[:12]}"
         disp_label = str(page_label) if page_label is not None else str(display_page_number or page_number or 1)
@@ -475,6 +579,9 @@ class VisionService:
         elif visual_type == VisualContentType.TABLE_DATA:
             prompt = TABLE_EXTRACTION_PROMPT
             content_type = "table"
+        elif is_scan:
+            prompt = SCANNED_PAGE_PROMPT
+            content_type = "prose"
         else:
             prompt = DIAGRAM_EXTRACTION_PROMPT
             content_type = "prose"
@@ -493,10 +600,16 @@ class VisionService:
 
         # 6. Optimize/Downscale Image for Fast VLM Inference
         max_dim = getattr(settings, "vision_inference_max_dimension", 1024)
+        # A full page of small text needs the same high-resolution path as code.
         inference_image_bytes = ImageAssetManager.get_optimized_inference_bytes(
             image_bytes,
-            is_code=is_code_type,
+            is_code=is_code_type or is_scan,
             max_dim=max_dim,
+        )
+        max_new_tokens = (
+            getattr(settings, "vision_scan_num_predict", 1024)
+            if is_scan
+            else getattr(settings, "vision_num_predict", 160)
         )
 
         # 7. Determine Retry Policy: Ingestion = 0 retries (1 attempt), Query-time = configured retries
@@ -539,7 +652,7 @@ class VisionService:
                         prompt=prompt,
                         image_bytes=cur_img_bytes,
                         timeout=cur_timeout,
-                        max_new_tokens=getattr(settings, "vision_num_predict", 160),
+                        max_new_tokens=max_new_tokens,
                     )
                     if extracted_text:
                         self._circuit_breaker.record_success()
@@ -592,8 +705,9 @@ class VisionService:
                 )
             return None
 
-        # Check if the extracted text looks like code even if detected as diagram initially
-        is_code = (
+        # Check if the extracted text looks like code even if detected as diagram initially.
+        # A transcribed page stays prose: its text mentioning code is not itself code.
+        is_code = not is_scan and (
             visual_type == VisualContentType.CODE_SCREENSHOT
             or "```python" in extracted_text
             or "```" in extracted_text

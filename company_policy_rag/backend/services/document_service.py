@@ -50,6 +50,13 @@ class DuplicateDocumentError(ValueError):
         super().__init__(f"This file is already indexed as '{filename}' ({document_id}).")
 
 
+_IN_FLIGHT_STATUSES = {
+    IngestionStatus.UPLOADING.value,
+    IngestionStatus.TEXT_INDEXING.value,
+    "PROCESSING",
+}
+
+
 class DocumentService:
     """
     Service managing multi-format document ingestion (PDF, DOCX, TXT, MD, HTML, CSV, JSON),
@@ -512,7 +519,22 @@ class DocumentService:
                 "file_path": str(file_path),
             }
 
-            raw_docs = load_document(file_path, base_metadata=base_metadata)
+            def _report_scan_progress(page: int, total: int) -> None:
+                # Reading a scanned page takes ~20s on the GPU, so a long scan would
+                # otherwise sit on one unchanging status line for its whole duration.
+                self._update_job_stage(
+                    document_id=document_id,
+                    stage=IngestionStage.TEXT_EXTRACTION,
+                    status="IN_PROGRESS",
+                    progress=15 + (10 * (page - 1)) // max(total, 1),
+                    message=f"Reading scanned page {page} of {total} with the vision model...",
+                )
+
+            raw_docs = load_document(
+                file_path,
+                base_metadata=base_metadata,
+                progress_callback=_report_scan_progress,
+            )
             if not raw_docs:
                 # A scanned PDF has no text layer at all, so vision extraction is the only
                 # way to read one. Name that cause instead of a generic parse failure.
@@ -527,11 +549,16 @@ class DocumentService:
                     logger.warning(f"Could not extract text content from file '{filename}'. Proceeding with 0 chunks.")
 
             # PDF loaders append VLM extractions as extra RawDocuments; they are
-            # not pages.
-            visual_extraction_count = sum(
-                1 for doc in raw_docs if (doc.metadata.extra or {}).get("is_visual_extraction")
-            )
-            pages_count = len(raw_docs) - visual_extraction_count
+            # not pages, except on a scanned page where the extraction is the
+            # only document that page produced.
+            visual_docs = [doc for doc in raw_docs if (doc.metadata.extra or {}).get("is_visual_extraction")]
+            text_page_numbers = {
+                doc.metadata.page_number
+                for doc in raw_docs
+                if not (doc.metadata.extra or {}).get("is_visual_extraction")
+            }
+            scanned_page_numbers = {doc.metadata.page_number for doc in visual_docs} - text_page_numbers
+            pages_count = len(raw_docs) - len(visual_docs) + len(scanned_page_numbers)
             t_extract = round((time.perf_counter() - t_stage) * 1000, 2)
             self._update_job_stage(
                 document_id=document_id,
@@ -1184,6 +1211,35 @@ class DocumentService:
 
         return job
 
+    def known_document_ids(self) -> set[str]:
+        """Every document the library still refers to: indexed, stored, or mid-ingestion."""
+        with self._lock:
+            return set(self._documents) | set(self._stored_files) | set(self._ingestion_jobs)
+
+    def has_ingestion_in_flight(self) -> bool:
+        with self._lock:
+            return any(job.status in _IN_FLIGHT_STATUSES for job in self._ingestion_jobs.values())
+
+    def _with_live_job(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Overlay a running ingestion job onto its registry record.
+
+        The registry only learns a document's outcome when ingestion ends, so a
+        retry of a failed file would otherwise keep listing as FAILED for as long
+        as it is being re-indexed. Caller holds ``self._lock``.
+        """
+        job = self._ingestion_jobs.get(record["document_id"])
+        if job is None or job.status not in _IN_FLIGHT_STATUSES:
+            return record
+        return {
+            **record,
+            "status": job.status,
+            "progress": job.progress,
+            "current_stage": job.current_stage,
+            "text_ready": job.text_ready,
+            "error": None,
+            "failed_stage": None,
+        }
+
     def list_documents(
         self,
         category: str | None = None,
@@ -1192,7 +1248,7 @@ class DocumentService:
     ) -> DocumentListResponse:
         """Return list of all registered documents."""
         with self._lock:
-            records = list(self._documents.values())
+            records = [self._with_live_job(record) for record in self._documents.values()]
 
         duplicate_groups = self.get_duplicate_groups()
 
@@ -1242,6 +1298,8 @@ class DocumentService:
         """Get full details and chunk metadata for a document."""
         with self._lock:
             r = self._documents.get(document_id)
+            if r:
+                r = self._with_live_job(r)
         if not r:
             return None
 

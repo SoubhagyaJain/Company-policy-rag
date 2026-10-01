@@ -97,6 +97,38 @@ def preload_model(
         return False
 
 
+def list_loaded_models(
+    base_url: str | None = None,
+    *,
+    timeout: float = 5.0,
+) -> list[dict[str, Any]]:
+    """Call Ollama GET /api/ps. Returns the models currently resident in memory."""
+    url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/ps"
+    try:
+        with urlopen(url, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        logger.debug("Could not list loaded Ollama models: %s", exc)
+        return []
+    return [m for m in payload.get("models") or [] if isinstance(m, dict) and m.get("name")]
+
+
+def list_installed_models(
+    base_url: str | None = None,
+    *,
+    timeout: float = 5.0,
+) -> list[dict[str, Any]]:
+    """Call Ollama GET /api/tags. Returns every installed model with its size on disk."""
+    url = (base_url or settings.ollama_base_url).rstrip("/") + "/api/tags"
+    try:
+        with urlopen(url, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        logger.debug("Could not list installed Ollama models: %s", exc)
+        return []
+    return [m for m in payload.get("models") or [] if isinstance(m, dict) and m.get("name")]
+
+
 def probe_ollama_tags(
     base_url: str | None = None,
     *,

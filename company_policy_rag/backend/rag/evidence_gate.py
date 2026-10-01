@@ -52,6 +52,24 @@ _NUMBER_WORDS = {
 }
 
 
+_VISUAL_REFERENCE_REGEX = re.compile(
+    r"\b(?:depicted|illustrated|shown|figure|diagram|chart|table|visual)\b",
+    re.IGNORECASE,
+)
+
+# "Five techniques are depicted below": a counted list whose items live in a visual.
+_ENUMERATION_PROMISE_REGEX = re.compile(
+    r"\b(?P<count>\d+|two|three|four|five|six|seven|eight|nine|ten)\b"
+    r".{0,80}\b(?P<noun>technique|method|step|type|way|item)s?\b"
+    r".{0,120}\b(?:depicted|illustrated|shown|listed|presented)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# Below this much prose (a heading, a page header), the retrieved text is a
+# pointer to the visual, not an answer.
+_MIN_WORDS_BESIDE_VISUAL_REFERENCE = 15
+
+
 def _referenced_enumeration_is_complete(candidate_chunks: list[ScoredChunk]) -> bool:
     """Return true when continuation text contains every item promised by a visual cue.
 
@@ -68,13 +86,7 @@ def _referenced_enumeration_is_complete(candidate_chunks: list[ScoredChunk]) -> 
         ),
     )
     combined = "\n".join(sc.chunk.text for sc in ordered)
-    cue_match = re.search(
-        r"\b(?P<count>\d+|two|three|four|five|six|seven|eight|nine|ten)\b"
-        r".{0,80}\b(?:techniques?|methods?|steps?|types?|ways?|items?)\b"
-        r".{0,120}\b(?:depicted|illustrated|shown|listed|presented)\b",
-        combined,
-        re.IGNORECASE | re.DOTALL,
-    )
+    cue_match = _ENUMERATION_PROMISE_REGEX.search(combined)
     if not cue_match:
         return False
 
@@ -88,6 +100,37 @@ def _referenced_enumeration_is_complete(candidate_chunks: list[ScoredChunk]) -> 
         for value in re.findall(r"(?m)^\s*(\d{1,2})\s*[.)]\s*\S", combined)
     }
     return all(item in numbered_items for item in range(1, expected + 1))
+
+
+def text_answers_without_visual(query: str, candidate_chunks: list[ScoredChunk]) -> bool:
+    """Return true when the readable text is still an answer after an unread visual.
+
+    "The workflow is depicted below" followed by a prose walkthrough can be
+    answered from the text. "Five techniques are depicted below" with no list in
+    the text cannot: those labels exist only in the visual.
+    """
+    readable = [
+        sc
+        for sc in candidate_chunks
+        if (getattr(sc.chunk.metadata, "extra", None) or {}).get("visual_status") != "ASSET_AVAILABLE"
+    ]
+    combined = "\n".join(sc.chunk.text for sc in readable)
+
+    promise = _ENUMERATION_PROMISE_REGEX.search(combined)
+    if (
+        promise
+        and re.search(rf"\b{promise.group('noun')}s?\b", query, re.IGNORECASE)
+        and not _referenced_enumeration_is_complete(readable)
+    ):
+        return False
+
+    # Sentences that only announce the visual carry none of its content.
+    remaining_words = 0
+    for segment in re.split(r"(?<=[.!?:])\s+|\n+", combined):
+        if any(_VISUAL_REFERENCE_REGEX.search(cue) for cue in detect_continuation_signals(segment)):
+            continue
+        remaining_words += len(re.findall(r"\w+", segment))
+    return remaining_words >= _MIN_WORDS_BESIDE_VISUAL_REFERENCE
 
 
 @dataclass
@@ -350,13 +393,7 @@ class EvidenceSufficiencyGate:
         # not the five techniques themselves. Force visual extraction instead of
         # allowing the generator to fill the absent labels from model memory.
         visual_reference_cues = [
-            cue
-            for cue in all_cues
-            if re.search(
-                r"\b(?:depicted|illustrated|shown|figure|diagram|chart|table|visual)\b",
-                cue,
-                re.IGNORECASE,
-            )
+            cue for cue in all_cues if _VISUAL_REFERENCE_REGEX.search(cue)
         ]
         text_resolves_visual_reference = _referenced_enumeration_is_complete(candidate_chunks)
         if (

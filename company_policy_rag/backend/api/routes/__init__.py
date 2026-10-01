@@ -3,6 +3,7 @@ from backend.api.routes.chat import router as chat_router
 from backend.api.routes.documents import router as documents_router
 from backend.api.routes.health import router as health_router
 from backend.api.routes.models import router as models_router
+from backend.api.routes.storage import router as storage_router
 
 __all__ = [
     "admin_router",
@@ -10,4 +11,5 @@ __all__ = [
     "documents_router",
     "health_router",
     "models_router",
+    "storage_router",
 ]

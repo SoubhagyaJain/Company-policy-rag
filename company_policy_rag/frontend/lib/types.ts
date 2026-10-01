@@ -51,6 +51,10 @@ export interface VerificationReport {
   critique?: string | null;
   missing_aspects?: string[];
   unsupported_claims?: string[];
+  /** Names and technical terms in the answer found in neither evidence nor question. */
+  unsupported_terms?: string[];
+  /** Sentences whose cited source does not state them. */
+  citation_errors?: string[];
   retry_count?: number;
 }
 
@@ -568,4 +572,101 @@ export interface TelemetryFilterOptions {
   vision?: string;
   cache?: string;
   hasError?: boolean;
+}
+
+/* ─── Storage tab ──────────────────────────────── */
+export interface StorageActionMeta {
+  id: string;
+  label: string;
+  description: string;
+  needs_days: boolean;
+  needs_target: boolean;
+  safe: boolean;
+}
+
+export interface StorageTableRow {
+  name: string;
+  rows: number;
+}
+
+export interface StorageStore {
+  id: string;
+  label: string;
+  group: 'databases' | 'caches' | 'library' | string;
+  description: string;
+  path: string | null;
+  size_bytes: number;
+  items: number | null;
+  items_label: string;
+  reclaimable_bytes: number;
+  last_modified: string | null;
+  details: {
+    engine?: string;
+    tables?: StorageTableRow[];
+    queue_rows?: number | null;
+    file_bytes?: number;
+    page_count?: number;
+    free_pages?: number;
+    free_bytes?: number;
+    bloat_pct?: number;
+    orphaned?: number;
+    largest?: Array<{ name: string; size_bytes: number; orphaned?: boolean }>;
+  };
+  actions: StorageActionMeta[];
+}
+
+export interface StorageLoadedModel {
+  name: string;
+  size_bytes: number;
+  vram_bytes: number;
+  context_length: number | null;
+  pinned: boolean;
+}
+
+export interface StorageMemoryItem {
+  id: string;
+  label: string;
+  description: string;
+  value: number;
+  unit: string;
+  models?: StorageLoadedModel[];
+  actions: StorageActionMeta[];
+}
+
+export interface StorageGpu {
+  name: string;
+  total_mb: number;
+  used_mb: number;
+  free_mb: number;
+}
+
+export interface StorageModelEntry {
+  id: string;
+  label: string;
+  path: string | null;
+  size_bytes: number;
+}
+
+export interface StorageSummary {
+  generated_at: string;
+  busy: boolean;
+  totals: { disk_bytes: number; reclaimable_bytes: number; stores: number; databases: number };
+  stores: StorageStore[];
+  memory: { gpu: StorageGpu | null; process_rss_bytes: number | null; items: StorageMemoryItem[] };
+  models: StorageModelEntry[];
+}
+
+export interface StorageActionResult {
+  ts?: string;
+  store?: string;
+  action?: string;
+  freed_bytes: number;
+  removed_items: number;
+  message?: string;
+  skipped?: string;
+}
+
+export interface StorageHistory {
+  snapshots: Array<{ ts: string; sizes: Record<string, number>; items?: Record<string, number> }>;
+  actions: Array<StorageActionResult & { ts: string; store: string; action: string }>;
 }

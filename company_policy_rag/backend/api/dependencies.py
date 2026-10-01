@@ -22,6 +22,7 @@ from backend.retrieval.reranker import CrossEncoderReranker
 from backend.retrieval.vector import DenseVectorRetriever
 from backend.services.chat_service import ChatService
 from backend.services.document_service import DocumentService
+from backend.services.storage_service import StorageService
 from backend.services.telemetry_service import TelemetryService
 
 _lock = threading.RLock()
@@ -33,6 +34,7 @@ _semantic_cache_manager: SemanticCacheManager | None = None
 _conversation_state_manager: ConversationStateManager | None = None
 _rag_pipeline: RAGPipeline | None = None
 _chat_service: ChatService | None = None
+_storage_service: StorageService | None = None
 
 
 def get_telemetry_service() -> TelemetryService:
@@ -76,6 +78,21 @@ def get_semantic_cache_manager() -> SemanticCacheManager:
                     persist_dir=doc_service.vector_store.persist_dir,
                 )
     return _semantic_cache_manager
+
+
+def get_storage_service() -> StorageService:
+    global _storage_service
+    if _storage_service is None:
+        with _lock:
+            if _storage_service is None:
+                _storage_service = StorageService(
+                    doc_service=get_document_service(),
+                    telemetry_service=get_telemetry_service(),
+                    semantic_cache=get_semantic_cache_manager(),
+                    session_count=lambda: get_conversation_state_manager().count(),
+                    clear_sessions=lambda: get_chat_service().clear_all_sessions(),
+                )
+    return _storage_service
 
 
 def get_rag_pipeline() -> RAGPipeline:

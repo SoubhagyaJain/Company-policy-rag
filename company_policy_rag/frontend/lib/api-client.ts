@@ -16,6 +16,9 @@ import {
   ThinkingDetailLevel,
   ReasoningSummary,
   ResponseMode,
+  StorageActionResult,
+  StorageHistory,
+  StorageSummary,
 } from './types';
 
 // Prefer the same-origin /api proxy configured in next.config.mjs. This keeps
@@ -155,6 +158,8 @@ export function mapVerificationReport(raw: any): VerificationReport | null {
     unsupported_claims: Array.isArray(raw.unsupported_claims)
       ? raw.unsupported_claims
       : (Array.isArray(raw.unsupportedClaims) ? raw.unsupportedClaims : []),
+    unsupported_terms: Array.isArray(raw.unsupported_terms) ? raw.unsupported_terms : [],
+    citation_errors: Array.isArray(raw.citation_errors) ? raw.citation_errors : [],
     retry_count: typeof raw.retry_count === 'number'
       ? raw.retry_count
       : (typeof raw.retryCount === 'number' ? raw.retryCount : 0),
@@ -1018,6 +1023,63 @@ export class ApiClient {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Storage API: GET /api/admin/storage
+   */
+  async getStorage(): Promise<StorageSummary> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage`);
+    if (!res.ok) {
+      throw new Error(`Failed to load storage summary (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Storage API: GET /api/admin/storage/history
+   */
+  async getStorageHistory(): Promise<StorageHistory> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/history`);
+    if (!res.ok) {
+      throw new Error(`Failed to load storage history (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Storage API: POST /api/admin/storage/{store_id}/{action_id}
+   */
+  async runStorageAction(
+    storeId: string,
+    actionId: string,
+    options: { olderThanDays?: number; target?: string } = {},
+  ): Promise<StorageActionResult> {
+    const res = await fetch(
+      `${this.baseUrl}/api/admin/storage/${encodeURIComponent(storeId)}/${encodeURIComponent(actionId)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ older_than_days: options.olderThanDays, target: options.target }),
+      },
+    );
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Storage action failed (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Storage API: POST /api/admin/storage/cleanup
+   */
+  async cleanStorage(): Promise<{ freed_bytes: number; removed_items: number; results: StorageActionResult[] }> {
+    const res = await fetch(`${this.baseUrl}/api/admin/storage/cleanup`, { method: 'POST' });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Storage cleanup failed (${res.status})`);
+    }
+    return res.json();
   }
 }
 

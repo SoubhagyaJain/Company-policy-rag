@@ -23,6 +23,16 @@ from backend.models.telemetry_models import (
 from backend.utils.logging import logger
 
 
+_TELEMETRY_TABLES = (
+    "query_traces",
+    "vision_events",
+    "memory_events",
+    "cache_events",
+    "error_incidents",
+    "ingestion_events",
+)
+
+
 class TelemetryDB:
     """
     Thread-safe SQLite persistent telemetry repository with async write-behind buffering.
@@ -1035,5 +1045,39 @@ class TelemetryDB:
                     conn.execute("DELETE FROM cache_events;")
                     conn.execute("DELETE FROM error_incidents;")
                     conn.execute("DELETE FROM ingestion_events;")
+            finally:
+                conn.close()
+
+    def table_counts(self) -> dict[str, int]:
+        """Row count of every telemetry table."""
+        conn = self._get_connection()
+        try:
+            return {
+                table: conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+                for table in _TELEMETRY_TABLES
+            }
+        finally:
+            conn.close()
+
+    def prune(self, before_iso: str) -> int:
+        """Delete records older than an ISO timestamp and return how many were removed."""
+        removed = 0
+        with self._lock:
+            conn = self._get_connection()
+            try:
+                with conn:
+                    for table in _TELEMETRY_TABLES:
+                        removed += conn.execute(f"DELETE FROM {table} WHERE timestamp < ?;", (before_iso,)).rowcount
+            finally:
+                conn.close()
+        return removed
+
+    def vacuum(self) -> None:
+        """Return the pages freed by deletes to the filesystem."""
+        with self._lock:
+            conn = self._get_connection()
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                conn.execute("VACUUM;")
             finally:
                 conn.close()

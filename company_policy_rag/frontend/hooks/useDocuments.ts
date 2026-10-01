@@ -48,7 +48,9 @@ export function useDocuments() {
     }
   }, []);
 
-  const pollDocumentStatus = useCallback(async (docId: string) => {
+  // Resolves to the job's last-progress timestamp so the caller can tell a
+  // long-running job from a stalled one.
+  const pollDocumentStatus = useCallback(async (docId: string): Promise<string | null> => {
     try {
       const statusRes = await apiClient.getDocumentStatus(docId);
       setActiveJob(statusRes);
@@ -77,8 +79,10 @@ export function useDocuments() {
         setError(statusRes.error || `Ingestion failed at stage: ${statusRes.failed_stage || statusRes.current_stage}`);
         fetchDocuments();
       }
+      return statusRes.updated_at ?? null;
     } catch (err) {
       console.warn('Status poll warning:', err);
+      return null;
     }
   }, [fetchDocuments, stopPolling]);
 
@@ -87,18 +91,29 @@ export function useDocuments() {
   // real per-stage progress (parse → chunk → embed → index) rather than guessing.
   const startPolling = useCallback((docId: string) => {
     stopPolling();
-    let ticks = 0;
-    const MAX_TICKS = 1200; // ~20 min ceiling at 1s cadence
-    pollDocumentStatus(docId);
+    // The ceiling counts time without reported progress, not total time: a
+    // scanned PDF is read page by page and can legitimately run for an hour.
+    let idleTicks = 0;
+    let lastProgressAt: string | null = null;
+    const MAX_IDLE_TICKS = 1200; // ~20 min without progress at 1s cadence
+    const poll = () => {
+      pollDocumentStatus(docId).then((progressAt) => {
+        if (progressAt && progressAt !== lastProgressAt) {
+          lastProgressAt = progressAt;
+          idleTicks = 0;
+        }
+      });
+    };
+    poll();
     pollingRef.current = setInterval(() => {
-      ticks += 1;
-      if (ticks > MAX_TICKS) {
+      idleTicks += 1;
+      if (idleTicks > MAX_IDLE_TICKS) {
         stopPolling();
         setUploading(false);
         setError('Ingestion is taking unusually long. It may still finish — refresh to check.');
         return;
       }
-      pollDocumentStatus(docId);
+      poll();
     }, 1000);
   }, [pollDocumentStatus, stopPolling]);
 

@@ -15,6 +15,9 @@ except ImportError:
 
 from backend.utils.logging import logger
 
+# Key namespaces written by the high-level helpers below.
+_APP_KEY_PREFIXES = ("query:", "emb:", "session:")
+
 
 class RedisCache:
     """
@@ -168,6 +171,38 @@ class RedisCache:
             self._memory_store.clear()
         return True
 
+    def stats(self) -> dict[str, Any]:
+        """Which backend is live and how many of this app's keys it holds."""
+        if self._redis_connected and self._redis_client:
+            try:
+                keys = sum(1 for prefix in _APP_KEY_PREFIXES for _ in self._redis_client.scan_iter(f"{prefix}*"))
+                return {"backend": "redis", "keys": keys}
+            except Exception as exc:
+                logger.warning("Redis stats error: %s", exc)
+                self._redis_connected = False
+        with self._lock:
+            return {"backend": "memory", "keys": len(self._memory_store)}
+
+    def clear_app_keys(self) -> int:
+        """Remove this app's cached entries and return how many were dropped.
+
+        On Redis only the app's own prefixes are deleted: the database is shared
+        with the Celery broker, so ``flushdb`` would also wipe queued tasks.
+        """
+        removed = 0
+        if self._redis_connected and self._redis_client:
+            try:
+                for prefix in _APP_KEY_PREFIXES:
+                    for key in self._redis_client.scan_iter(f"{prefix}*"):
+                        removed += int(self._redis_client.delete(key))
+            except Exception as exc:
+                logger.warning("Redis clear error: %s", exc)
+                self._redis_connected = False
+        with self._lock:
+            removed += len(self._memory_store)
+            self._memory_store.clear()
+        return removed
+
     # High-level specialized methods
 
     def get_query_cache(self, query_hash: str) -> dict[str, Any] | None:
@@ -200,13 +235,19 @@ class RedisCache:
 
 
 _redis_cache_instance: RedisCache | None = None
+_redis_cache_lock = threading.Lock()
 
 
 def get_redis_cache() -> RedisCache:
     """Get global RedisCache singleton instance."""
     global _redis_cache_instance
     if _redis_cache_instance is None:
-        _redis_cache_instance = RedisCache()
+        # Construction blocks on the connect timeout when Redis is down. Without the
+        # lock every request arriving meanwhile builds its own instance and repeats
+        # both the wait and the fallback warning.
+        with _redis_cache_lock:
+            if _redis_cache_instance is None:
+                _redis_cache_instance = RedisCache()
     return _redis_cache_instance
 
 

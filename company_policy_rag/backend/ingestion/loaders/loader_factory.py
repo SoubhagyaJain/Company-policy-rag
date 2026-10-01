@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -49,12 +50,20 @@ class LoaderFactory:
         self,
         file_path: Path,
         base_metadata: dict[str, Any] | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[RawDocument]:
-        """Convenience method to load a document file using the appropriate loader."""
+        """Convenience method to load a document file using the appropriate loader.
+
+        ``progress_callback(done, total)`` is reported by loaders with a slow
+        per-page stage; today that is only scanned-page reading in PDFs.
+        """
         loader = self.get_loader_for_file(file_path)
         if file_path.stat().st_size > MAX_DOCUMENT_BYTES:
             raise ValueError("Document exceeds the 100MB limit.")
-        documents = loader.load(file_path, base_metadata=base_metadata)
+        if progress_callback is not None and isinstance(loader, PDFLoader):
+            documents = loader.load(file_path, base_metadata=base_metadata, progress_callback=progress_callback)
+        else:
+            documents = loader.load(file_path, base_metadata=base_metadata)
         if not any(doc.content.strip() for doc in documents):
             raise ValueError(
                 "No readable text found. For scans or image-only documents, run OCR and upload a searchable PDF."
@@ -73,5 +82,10 @@ def get_loader_for_file(file_path: Path) -> BaseLoader:
 def load_document(
     file_path: Path,
     base_metadata: dict[str, Any] | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[RawDocument]:
-    return _default_factory.load_document(file_path, base_metadata=base_metadata)
+    return _default_factory.load_document(
+        file_path,
+        base_metadata=base_metadata,
+        progress_callback=progress_callback,
+    )

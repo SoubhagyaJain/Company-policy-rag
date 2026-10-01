@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
-import type { ViewTab } from '@/components/Header';
-import { tabDirection } from '@/components/space/SpaceTabNav';
+import { tabDirection, type ViewTab } from '@/components/space/SpaceTabNav';
 import { DocumentsView } from '@/components/DocumentsView';
 import { AdminView } from '@/components/AdminView';
+import { StorageView } from '@/components/StorageView';
 import { SpaceShell } from '@/components/space/SpaceShell';
 import { LibraryShell } from '@/components/space/LibraryShell';
 import { AlpineBackdrop } from '@/components/space/AlpineBackdrop';
@@ -261,6 +261,18 @@ export default function HomePage() {
             connected={connected}
           >
             <DocumentsView />
+          </LibraryShell>
+        );
+      case 'storage':
+        return (
+          <LibraryShell
+            activeTab={activeTab}
+            setActiveTab={changeTab}
+            isLight={!isDarkMode}
+            onToggleTheme={toggleTheme}
+            connected={connected}
+          >
+            <StorageView />
           </LibraryShell>
         );
       default:
