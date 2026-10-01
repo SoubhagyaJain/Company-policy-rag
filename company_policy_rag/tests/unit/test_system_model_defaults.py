@@ -9,6 +9,7 @@ Authoritative Reference:
 
 from __future__ import annotations
 
+import json
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
@@ -176,6 +177,63 @@ class TestModelRoutesIntegration:
         with pytest.raises(HTTPException) as exc_info:
             select_active_model(req=req, chat_service=mock_chat_service)
         assert exc_info.value.status_code == 400
+
+    @staticmethod
+    def _ollama_tags() -> MagicMock:
+        """What Ollama's /api/tags returns: two local models and one cloud model."""
+        payload = {
+            "models": [
+                {"name": "qwen2.5:7b", "size": 4_683_087_332, "details": {"parameter_size": "7.6B"}},
+                {"name": "llama3.2:3b", "size": 2_019_393_189, "details": {"parameter_size": "3.2B"}},
+                {
+                    "name": "gpt-oss:120b-cloud",
+                    "size": 384,
+                    "remote_host": "https://ollama.com:443",
+                    "remote_model": "gpt-oss:120b",
+                },
+            ]
+        }
+        response = MagicMock()
+        response.read.return_value = json.dumps(payload).encode("utf-8")
+        response.__enter__.return_value = response
+        return response
+
+    def test_cloud_models_are_not_listed_as_installed(self) -> None:
+        """A cloud model is a manifest pointing at a remote host, not weights on this machine."""
+        from src import ollama_client
+
+        with patch.object(ollama_client, "urlopen", side_effect=lambda *a, **k: self._ollama_tags()):
+            _ok, every_name, _ = ollama_client.probe_ollama_tags()
+            _ok, local_names, _ = ollama_client.probe_ollama_tags(local_only=True)
+            installed = [m["name"] for m in ollama_client.list_installed_models()]
+
+        assert "gpt-oss:120b-cloud" in every_name
+        assert local_names == ["llama3.2:3b", "qwen2.5:7b"]
+        assert installed == ["qwen2.5:7b", "llama3.2:3b"]
+
+    def test_model_picker_offers_and_accepts_only_installed_models(self) -> None:
+        from fastapi import HTTPException
+        from backend.api.routes.models import ModelSelectRequest, get_available_models, select_active_model
+        from src import ollama_client
+
+        with (
+            patch.object(ollama_client, "urlopen", side_effect=lambda *a, **k: self._ollama_tags()),
+            patch.object(ollama_client, "fetch_model_details", return_value={}),
+        ):
+            listed = [m.id for m in get_available_models().models]
+            with pytest.raises(HTTPException) as exc_info:
+                select_active_model(req=ModelSelectRequest(model="gpt-oss:120b-cloud"), chat_service=MagicMock())
+
+        assert sorted(listed) == ["llama3.2:3b", "qwen2.5:7b"]
+        assert exc_info.value.status_code == 400
+
+    def test_parameter_size_is_the_model_size_not_its_sampling_settings(self) -> None:
+        from src.ollama_client import _parse_param_size
+
+        shown = {"parameters": 'temperature 0.6\nstop "<|eot_id|>"', "details": {"parameter_size": "8.2B"}}
+
+        assert _parse_param_size(shown) == "8.2B"
+        assert _parse_param_size({"parameters": "temperature 0.6"}) is None
 
 
 class TestPipelineAndServiceDefaults:

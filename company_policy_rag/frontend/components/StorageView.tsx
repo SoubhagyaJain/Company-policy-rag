@@ -65,9 +65,6 @@ const MEMORY_ICONS: Record<string, React.ReactNode> = {
   docstore: <FileText className="w-4 h-4 text-emerald-500" />,
 };
 
-// Cloud-hosted Ollama entries are a few hundred bytes of manifest, not a local model.
-const LOCAL_MODEL_MIN_BYTES = 1024 * 1024;
-
 const TEXT = 'text-charcoal dark:text-cream-100';
 const MUTED = 'text-charcoal-muted dark:text-cream-400';
 const ACTION_BTN =
@@ -148,9 +145,10 @@ export function StorageView() {
     return map;
   }, [summary]);
 
-  // Chat models that can be loaded: skip embedding-only and cloud-hosted entries.
+  // Chat models that can be loaded. The server lists only models installed on
+  // this machine; embedding-only models cannot be loaded for chat.
   const loadable = (summary?.models ?? [])
-    .filter((m) => m.id.startsWith('ollama:') && m.size_bytes >= LOCAL_MODEL_MIN_BYTES && !/embed/i.test(m.id))
+    .filter((m) => m.id.startsWith('ollama:') && !/embed/i.test(m.id))
     .map((m) => m.id.slice('ollama:'.length));
   const chosenTarget = loadTarget || loadable[0] || '';
 
@@ -539,14 +537,12 @@ export function StorageView() {
                   title="Models"
                   hint={`${formatBytes(summary.models.reduce((sum, m) => sum + m.size_bytes, 0), 2)} · read-only`}
                 />
-                {summary.models
-                  .filter((m) => m.size_bytes >= LOCAL_MODEL_MIN_BYTES)
-                  .map((m) => (
-                    <div key={m.id} className="flex items-center justify-between gap-3 text-xs" title={m.path ?? undefined}>
-                      <span className={`truncate ${TEXT}`}>{m.label}</span>
-                      <span className={`font-mono font-semibold shrink-0 ${TEXT}`}>{formatBytes(m.size_bytes)}</span>
-                    </div>
-                  ))}
+                {summary.models.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between gap-3 text-xs" title={m.path ?? undefined}>
+                    <span className={`truncate ${TEXT}`}>{m.label}</span>
+                    <span className={`font-mono font-semibold shrink-0 ${TEXT}`}>{formatBytes(m.size_bytes)}</span>
+                  </div>
+                ))}
               </LiquidGlassCard>
             </section>
 
