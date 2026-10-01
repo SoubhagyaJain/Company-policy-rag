@@ -1,6 +1,6 @@
 'use client';
 
-/** SpaceTabNav — the shared Ask / Library / Telemetry switcher.
+/** SpaceTabNav — the shared Ask / Library / Telemetry / Storage switcher.
  *
  *  Motion system: Magnetic Pill + Glow Trail.
  *  A single indicator pill glides between tabs with spring physics, stretching
@@ -14,12 +14,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
-export type ViewTab = 'chat' | 'documents' | 'observability';
+export type ViewTab = 'chat' | 'documents' | 'observability' | 'storage';
 
 export const NAV: Array<{ id: ViewTab; label: string }> = [
   { id: 'chat', label: 'Ask' },
   { id: 'documents', label: 'Library' },
   { id: 'observability', label: 'Telemetry' },
+  { id: 'storage', label: 'Storage' },
 ];
 
 const ORDER = NAV.map((n) => n.id);

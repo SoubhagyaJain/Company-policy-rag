@@ -76,3 +76,30 @@ def test_global_singleton():
     g_cache = get_redis_cache()
     assert g_cache is not None
     assert redis_cache is not None
+
+
+def test_concurrent_first_access_builds_one_instance(monkeypatch):
+    """Requests racing the slow first connect must share one attempt, not each make their own."""
+    import threading
+
+    from backend.utils import redis_cache as module
+
+    built: list[object] = []
+
+    class SlowCache:
+        def __init__(self) -> None:
+            built.append(self)
+            time.sleep(0.2)  # stands in for the connect timeout when Redis is down
+
+    monkeypatch.setattr(module, "_redis_cache_instance", None)
+    monkeypatch.setattr(module, "RedisCache", SlowCache)
+
+    results: list[object] = []
+    threads = [threading.Thread(target=lambda: results.append(module.get_redis_cache())) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(built) == 1
+    assert all(result is built[0] for result in results)

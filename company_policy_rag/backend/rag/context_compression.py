@@ -278,10 +278,14 @@ class ContextCompressor:
         self,
         chunks: list[ScoredChunk],
         max_token_budget: int | None = None,
+        continuation_labels: dict[str, str] | None = None,
     ) -> str:
         """
         Format retrieved scored chunks into structured [Source N] and [VISUAL SOURCE N]
         context blocks for LLM synthesis with canonical human-readable page labels.
+
+        ``continuation_labels`` maps a chunk id to the heading that chunk continues
+        from, for chunks whose text begins partway through an item.
         """
         if not chunks:
             return "No relevant context found."
@@ -319,6 +323,9 @@ class ContextCompressor:
             else:
                 c_type = "CODE" if ("```" in sc.chunk.text or meta.content_type == ContentType.CODE) else "TEXT"
                 header = f"[Source {idx}] File: {source_file} | Section: {section} | Page: {page_label_str} | Evidence Type: {c_type}"
+                continues = (continuation_labels or {}).get(sc.chunk.id)
+                if continues:
+                    header += f'\n(This text continues "{continues}" from the previous page.)'
                 block = f"{header}\n{sc.chunk.text.strip()}\n"
 
             # Token estimate: ~1.3 tokens per word

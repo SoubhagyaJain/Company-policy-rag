@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from backend.ingestion.loaders.base import BaseLoader
 from backend.ingestion.page_detector import PrintedPageDetector
-from backend.models.document import DocumentType, RawDocument
+from backend.models.document import DocumentMetadata, DocumentType, RawDocument
 from backend.models.logical_document import detect_continuation_signals
 from backend.models.page_identity import PageIdentity
 from backend.utils.logging import logger
@@ -49,18 +50,25 @@ class PDFLoader(BaseLoader):
         self,
         file_path: Path,
         base_metadata: dict[str, Any] | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[RawDocument]:
         base_meta = self._build_base_metadata(file_path, DocumentType.PDF, base_metadata)
-        documents: list[RawDocument] = []
-        section_tracker = SectionTracker()
         enable_vision = getattr(settings, "vision_enabled", True)
-        doc_id = base_meta.document_id or f"doc_{file_path.stem}"
+
+        # 1. Read all pages
+        fitz_pages = self._read_with_fitz(file_path)
+        pages = fitz_pages if fitz_pages is not None else self._read_with_pypdf(file_path)
+        scanned_numbers = {page_num for page_num, text in pages if not text.strip()}
+        scanned_pages = len(scanned_numbers)
 
         # Uncached extraction is only affordable where interactive vision is permitted
         # (a GPU, or an explicit CPU opt-in). CPU generation runs for minutes per page
         # and cannot be cancelled, so elsewhere every page stays cache-only.
         live_vision_ok = False
-        if enable_vision and self.vision_service:
+        live_vision_reason = "Vision processing is disabled via VISION_ENABLED=false."
+        gpu_lease = None
+        if enable_vision and self.vision_service and scanned_pages:
+            gpu_lease = self.vision_service.acquire_ingestion_gpu()
             live_vision_ok, live_vision_reason = self.vision_service.is_query_time_available()
             if not live_vision_ok:
                 logger.info(
@@ -69,10 +77,42 @@ class PDFLoader(BaseLoader):
                     live_vision_reason,
                 )
 
-        # 1. Read all pages
-        fitz_pages = self._read_with_fitz(file_path)
-        pages = fitz_pages if fitz_pages is not None else self._read_with_pypdf(file_path)
+        try:
+            documents = self._build_documents(file_path, base_meta, pages, live_vision_ok, progress_callback)
+        finally:
+            if gpu_lease is not None:
+                self.vision_service.release_ingestion_gpu(gpu_lease)
+
+        if scanned_pages:
+            pages_read = len({doc.metadata.page_number for doc in documents} & scanned_numbers)
+            logger.info(
+                "[INGESTION] Read %d/%d scanned pages of %s via vision.",
+                pages_read,
+                scanned_pages,
+                file_path.name,
+            )
+            if not live_vision_ok and not any(doc.content.strip() for doc in documents):
+                raise ValueError(
+                    f"No readable text found: this PDF has no text layer ({scanned_pages} scanned "
+                    f"pages) and the vision model could not read it. {live_vision_reason}"
+                )
+        return documents
+
+    def _build_documents(
+        self,
+        file_path: Path,
+        base_meta: DocumentMetadata,
+        pages: list[tuple[int, str]],
+        live_vision_ok: bool,
+        progress_callback: Callable[[int, int], None] | None,
+    ) -> list[RawDocument]:
+        documents: list[RawDocument] = []
+        section_tracker = SectionTracker()
+        enable_vision = getattr(settings, "vision_enabled", True)
+        doc_id = base_meta.document_id or f"doc_{file_path.stem}"
         total_pages = len(pages)
+        scanned_total = sum(1 for _, text in pages if not text.strip())
+        scanned_seen = 0
 
         # 2. Sequence-Aware Printed Page Identity Resolution
         page_identities = PrintedPageDetector.resolve_document_pages(pages)
@@ -164,6 +204,10 @@ class PDFLoader(BaseLoader):
                 active_cue = prev_continuation_cues[0] if (is_continuation and prev_continuation_cues) else (continuation_signals[0] if continuation_signals else None)
                 page_has_text = bool(text.strip())
                 live_inference = live_vision_ok and not page_has_text
+                if live_inference:
+                    scanned_seen += 1
+                    if progress_callback is not None:
+                        progress_callback(scanned_seen, scanned_total)
                 visual_chunks = self.vision_service.process_pdf_page_visuals(
                     pdf_path=file_path,
                     page_number=physical_page_num,

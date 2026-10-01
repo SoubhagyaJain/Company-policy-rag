@@ -13,8 +13,9 @@ import {
 } from 'lucide-react';
 import { HealthStatus } from '../lib/types';
 import { cn } from '../lib/utils';
+import type { ViewTab } from './space/SpaceTabNav';
 
-export type ViewTab = 'chat' | 'documents' | 'observability';
+export type { ViewTab };
 
 const NAV_ITEMS: Array<{
   id: ViewTab;

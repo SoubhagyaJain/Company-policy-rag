@@ -93,6 +93,10 @@ class QueryContext:
     # True only when incremental token emission to the client is permitted.
     is_high_risk: bool = False
     stream_live: bool = False
+    # A list the source defines and how the question relates to it
+    # (see backend/rag/source_fidelity.py): "list", "members" or "related".
+    source_structure: Any = None
+    structure_scope: str = ""
 
     # ── Per-attempt working state ──────────────────────────────────────────
     attempt: int = 0

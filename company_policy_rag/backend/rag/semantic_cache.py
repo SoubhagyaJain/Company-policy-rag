@@ -158,7 +158,12 @@ class SemanticCacheManager:
     def _resolve_prompt_version(self, explicit_version: Optional[str]) -> str:
         if explicit_version is not None:
             return explicit_version
-        return str(getattr(self.settings, "response_prompt_version", "unknown"))
+        version = str(getattr(self.settings, "response_prompt_version", "unknown"))
+        # The fidelity layer changes the answer prompt and evidence, so answers
+        # cached without it must not be served with it (or the reverse).
+        if getattr(self.settings, "source_fidelity_enabled", False):
+            version += "+fidelity1"
+        return version
 
     def get(
         self,

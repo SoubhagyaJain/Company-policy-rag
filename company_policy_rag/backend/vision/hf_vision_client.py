@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import gc
 import io
 import importlib.util
+import subprocess
 import threading
 from pathlib import Path
 from typing import Any
@@ -47,6 +49,37 @@ def _ensure_runtime() -> tuple[bool, str | None]:
         finally:
             _runtime_imported = True
     return _runtime_error is None, _runtime_error
+
+
+def gpu_memory_mb(device_index: int = 0) -> dict[str, Any] | None:
+    """Device-wide VRAM use as the driver sees it, or None without nvidia-smi.
+
+    Needs no torch import, so status pages can call it without loading the runtime.
+    """
+    try:
+        completed = subprocess.run(
+            [
+                "nvidia-smi",
+                f"--id={device_index}",
+                "--query-gpu=name,memory.total,memory.used,memory.free",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        name, total, used, free = (part.strip() for part in completed.stdout.strip().splitlines()[0].split(","))
+        return {"name": name, "total_mb": float(total), "used_mb": float(used), "free_mb": float(free)}
+    except Exception:
+        return None
+
+
+def _driver_free_gb(device_index: int) -> float | None:
+    """Device-wide free VRAM in GiB as the driver sees it, or None without nvidia-smi."""
+    memory = gpu_memory_mb(device_index)
+    return None if memory is None else memory["free_mb"] / 1024
 
 
 class HFVisionClient:
@@ -98,25 +131,59 @@ class HFVisionClient:
         state = "loaded" if self.is_loaded else "available (lazy load)"
         return True, f"HF Vision model {self.model_path.name} is {state}."
 
-    def _choose_device(self) -> str:
-        if torch is None or not torch.cuda.is_available():
-            return "cpu"
+    def gpu_free_gb(self) -> float | None:
+        """Free VRAM in GiB, or None when there is no usable CUDA device.
+
+        Readiness probes call this before any load, so it imports the runtime
+        itself; otherwise ``torch`` is still None and a GPU host reports "cpu".
+        """
+        runtime_ready, _ = _ensure_runtime()
+        if not runtime_ready or not torch.cuda.is_available():
+            return None
         try:
             free_bytes, _ = torch.cuda.mem_get_info()
-            free_gb = free_bytes / (1024**3)
-            required_gb = float(getattr(settings, "vision_min_gpu_free_gb", 2.0))
-            if free_gb < required_gb:
-                logger.warning(
-                    "Only %.2f GiB GPU memory is free; loading Qwen3-VL on CPU "
-                    "instead of triggering slow GPU/CPU offload (minimum %.2f GiB).",
-                    free_gb,
-                    required_gb,
-                )
-                return "cpu"
+            device_index = torch.cuda.current_device()
         except Exception as exc:
             logger.warning("Could not inspect free GPU memory; using CPU for Qwen3-VL: %s", exc)
+            return None
+        free_gb = free_bytes / (1024**3)
+        # Under Windows WDDM torch reports this process's own budget and does not see
+        # VRAM held by other processes such as Ollama, so trust the lower figure.
+        driver_free_gb = _driver_free_gb(device_index)
+        return free_gb if driver_free_gb is None else min(free_gb, driver_free_gb)
+
+    def has_gpu_headroom(self) -> bool:
+        free_gb = self.gpu_free_gb()
+        return free_gb is not None and free_gb >= float(getattr(settings, "vision_min_gpu_free_gb", 2.0))
+
+    def _choose_device(self) -> str:
+        free_gb = self.gpu_free_gb()
+        if free_gb is None:
+            return "cpu"
+        required_gb = float(getattr(settings, "vision_min_gpu_free_gb", 2.0))
+        if free_gb < required_gb:
+            logger.warning(
+                "Only %.2f GiB GPU memory is free; loading Qwen3-VL on CPU "
+                "instead of triggering slow GPU/CPU offload (minimum %.2f GiB).",
+                free_gb,
+                required_gb,
+            )
             return "cpu"
         return "cuda"
+
+    def unload(self) -> None:
+        """Drop the loaded weights and hand their VRAM back to the driver."""
+        with self._load_lock:
+            if not self.is_loaded:
+                return
+            was_cuda = self.device == "cuda"
+            self.model = None
+            self.processor = None
+            self.device = "cpu"
+            gc.collect()
+            if was_cuda:
+                torch.cuda.empty_cache()
+            logger.info("HF Vision Model unloaded.")
 
     def load_model(self) -> bool:
         if self.is_loaded:

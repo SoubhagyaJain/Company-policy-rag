@@ -11,6 +11,7 @@ from typing import Any, Callable
 from backend.models.rag import Citation, ScoredChunk, VerificationReport
 from backend.rag.citations import _SOURCE_TAG_PATTERN, CitationEngine
 from backend.rag.llm_client import complete_text
+from backend.rag.source_fidelity import SourceStructure, check_answer
 from backend.utils.logging import logger
 from src.config import settings
 
@@ -65,6 +66,15 @@ _GENERAL_INTEGER_REGEX = re.compile(
     r"\b\d{2,}(?:,\d{3})*(?:\.\d+)?\b",
     re.IGNORECASE,
 )
+
+
+def _metadata_evidence(context_chunks: list[ScoredChunk], derived_facts: list[str] | None) -> str:
+    """Names an answer may legitimately use that are not in the chunk text itself."""
+    parts: list[str] = list(derived_facts or [])
+    for sc in context_chunks:
+        meta = sc.chunk.metadata
+        parts += [str(value) for value in (meta.section_title, meta.section_path, meta.source_file) if value]
+    return "\n".join(parts)
 
 
 class SelfReflectionVerifier:
@@ -392,8 +402,14 @@ class SelfReflectionVerifier:
             | None
         ) = None,
         use_llm_judge: bool = False,
+        structure: SourceStructure | None = None,
+        enforce_members: bool = True,
     ) -> VerificationReport:
-        """Evaluate answer across 4 dimensions and return comprehensive VerificationReport."""
+        """Evaluate answer across 4 dimensions and return comprehensive VerificationReport.
+
+        ``structure`` is a list the source defines that the question involves;
+        ``enforce_members`` says whether the answer must contain all of it.
+        """
         if not answer or not answer.strip():
             return VerificationReport(
                 faithfulness=0.0,
@@ -407,6 +423,8 @@ class SelfReflectionVerifier:
                 unsupported_claims=[],
             )
 
+        unsupported_terms: list[str] = []
+        citation_errors: list[str] = []
         if custom_validator is not None:
             try:
                 res = custom_validator(query, answer, context_chunks)
@@ -434,12 +452,36 @@ class SelfReflectionVerifier:
             cit = self._evaluate_citation_coverage(answer, context_chunks, citations)
             coh = self._evaluate_coherence(answer)
 
+            answer_l = answer.lower()
+            is_abstention = "unable to answer" in answer_l or "could not find" in answer_l
+
+            # Source fidelity: word overlap cannot tell that a list gained a
+            # member the source never defined, that a name was swapped for one
+            # from model memory, or that a tag points at a source which does not
+            # say the sentence. These checks read the evidence for exactly that.
+            if getattr(settings, "source_fidelity_enabled", True) and not is_abstention:
+                findings = check_answer(
+                    answer,
+                    context_chunks,
+                    query,
+                    structure,
+                    enforce_members=enforce_members,
+                    extra_evidence=_metadata_evidence(context_chunks, allowed_derived_facts),
+                )
+                unsupported_terms = findings.unsupported_terms
+                citation_errors = findings.citation_errors
+                missing.extend(f"List member left out: {label}" for label in findings.missing_items)
+                unsupported.extend(f"Not in the source's list: {label}" for label in findings.extra_items)
+                unsupported.extend(findings.unreported_conflicts)
+                if unsupported_terms:
+                    unsupported.append("Terms not found in the sources: " + ", ".join(unsupported_terms))
+                if not findings.clean:
+                    faith = min(faith, 0.5)
+
             # LLM claim-support audit augments the lexical heuristic: it can only
             # make the verdict stricter (catch hallucinations the overlap check
             # misses), never inflate a weak answer. Skipped for abstentions, and
             # any LLM/parse failure leaves the heuristic verdict untouched.
-            answer_l = answer.lower()
-            is_abstention = "unable to answer" in answer_l or "could not find" in answer_l
             if use_llm_judge and not is_abstention:
                 llm_result = self._evaluate_faithfulness_llm(
                     answer, context_chunks, llm if llm is not None else self.llm
@@ -467,6 +509,7 @@ class SelfReflectionVerifier:
             and cit >= getattr(settings, "verification_citation_threshold", 0.60)
             and not unsupported
             and not missing
+            and not citation_errors
         )
 
         # Special case: unanswerable notice is considered passed
@@ -496,5 +539,7 @@ class SelfReflectionVerifier:
             critique=critique,
             missing_aspects=missing,
             unsupported_claims=unsupported,
+            unsupported_terms=unsupported_terms,
+            citation_errors=citation_errors,
             overall_grounded=passed,
         )

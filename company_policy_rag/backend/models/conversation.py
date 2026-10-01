@@ -229,6 +229,11 @@ class ConversationStateManager:
         with self._lock:
             self._cache.clear()
 
+    def count(self) -> int:
+        """Number of conversations currently held in memory."""
+        with self._lock:
+            return len(self._cache)
+
     def exists(self, conversation_id: str) -> bool:
         """Check if conversation_id exists in active cache."""
         with self._lock:

@@ -58,6 +58,7 @@ import {
   SubsystemStatusType,
 } from '../lib/types';
 import { QueryTraceDrawer } from './QueryTraceDrawer';
+import { ConfirmDialog } from './ui/ConfirmDialog';
 
 function formatLatency(ms?: number | null): string {
   if (ms === null || ms === undefined || isNaN(ms)) return '0 ms';
@@ -131,8 +132,7 @@ export const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'queries' | 'models' | 'caches' | 'ingestion' | 'errors'>('overview');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // In-app confirmation (replaces window.confirm, which browsers/webviews can
-  // silently suppress — that made destructive actions like delete appear dead).
+  // Pending destructive action, confirmed through the shared ConfirmDialog.
   const [confirmAction, setConfirmAction] = useState<null | {
     title: string;
     message: string;
@@ -1468,48 +1468,15 @@ export const AdminView: React.FC = () => {
         />
       </div>
 
-      {/* ── CONFIRMATION MODAL (replaces window.confirm) ─────────── */}
-      {confirmAction && (
-        <div
-          className="fixed inset-0 z-[400] flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => !confirmBusy && setConfirmAction(null)}
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div
-            className="relative w-full max-w-sm rounded-2xl bg-white dark:bg-sand-dark border border-sand-border dark:border-sand-darkBorder shadow-xl p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shrink-0">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-charcoal dark:text-cream-100">{confirmAction.title}</h3>
-                <p className="text-xs text-charcoal-muted dark:text-cream-400 mt-1 leading-relaxed">{confirmAction.message}</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button
-                onClick={() => setConfirmAction(null)}
-                disabled={confirmBusy}
-                className="px-3.5 py-2 rounded-xl bg-cream-100 dark:bg-cream-950 text-charcoal dark:text-cream-200 border border-sand-border dark:border-sand-darkBorder text-xs font-semibold transition-colors hover:bg-cream-200 dark:hover:bg-[#1B2748] disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={runConfirm}
-                disabled={confirmBusy}
-                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors disabled:opacity-60 flex items-center gap-1.5"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {confirmBusy ? 'Working…' : confirmAction.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction?.title ?? ''}
+        message={confirmAction?.message ?? ''}
+        confirmLabel={confirmAction?.confirmLabel ?? ''}
+        busy={confirmBusy}
+        onConfirm={runConfirm}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 };

@@ -176,6 +176,8 @@ class VerificationReport(BaseModel):
     critique: str | None = None
     missing_aspects: list[str] = Field(default_factory=list)
     unsupported_claims: list[str] = Field(default_factory=list)
+    # Names and technical terms in the answer found in neither evidence nor question.
+    unsupported_terms: list[str] = Field(default_factory=list)
     incorrect_numbers: list[str] = Field(default_factory=list)
     missed_conditions: list[str] = Field(default_factory=list)
     missed_exceptions: list[str] = Field(default_factory=list)

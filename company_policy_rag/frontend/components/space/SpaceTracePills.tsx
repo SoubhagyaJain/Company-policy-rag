@@ -61,8 +61,39 @@ export function SpaceTracePills({ trace }: SpaceTracePillsProps) {
     );
   }
 
+  // What the grounding check could not find in the sources. The answer itself is
+  // never altered for these; they are listed so the reader can judge.
+  const verification = trace.verification;
+  const terms = passed === false ? verification?.unsupported_terms ?? [] : [];
+  const statements =
+    passed === false
+      ? [
+          ...(verification?.missing_aspects ?? []),
+          ...(verification?.unsupported_claims ?? []).filter((c) => !c.startsWith('Terms not found in the sources')),
+          ...(verification?.citation_errors ?? []),
+        ].slice(0, 3)
+      : [];
+
   if (pills.length === 0) return null;
-  return <div className="flex flex-wrap items-center gap-1.5">{pills}</div>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">{pills}</div>
+      {(terms.length > 0 || statements.length > 0) && (
+        <div className="sp-muted text-[11px] leading-relaxed" role="note">
+          {terms.length > 0 && (
+            <p>
+              <span className="text-[var(--sp-warn-text)]">Not found in the sources:</span> {terms.join(', ')}
+            </p>
+          )}
+          {statements.map((statement) => (
+            <p key={statement}>
+              <span className="text-[var(--sp-warn-text)]">Check:</span> {statement}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default SpaceTracePills;

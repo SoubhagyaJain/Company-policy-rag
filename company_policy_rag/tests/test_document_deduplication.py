@@ -124,3 +124,35 @@ def test_same_filename_with_different_content_is_preserved(tmp_path: Path) -> No
     assert service.get_duplicate_groups() == []
     assert service.deduplicate_documents(dry_run=False)["duplicates_removed"] == 0
     assert len(list((tmp_path / "uploads").glob("doc_*_*"))) == 2
+
+
+def test_listing_reflects_a_retry_that_is_still_running(tmp_path: Path) -> None:
+    """A stored-but-unindexed file lists as FAILED; while it is being re-indexed it must not."""
+    from backend.models.api_dto import IngestionStatusResponse
+
+    document_id = "doc_aaaaaaaaaaaa"
+    service = _service(
+        tmp_path,
+        [{"document_id": document_id, "source_file": "scan.pdf", "content": b"%PDF-1.4", "indexed": False}],
+    )
+    assert service.list_documents().documents[0].status == "FAILED"
+
+    job = IngestionStatusResponse(
+        document_id=document_id,
+        filename="scan.pdf",
+        status="TEXT_INDEXING",
+        progress=18,
+        current_stage="TEXT_EXTRACTION",
+        text_ready=False,
+    )
+    service._ingestion_jobs[document_id] = job
+
+    listed = service.list_documents().documents[0]
+    assert (listed.status, listed.progress, listed.current_stage) == ("TEXT_INDEXING", 18, "TEXT_EXTRACTION")
+    assert listed.error is None
+    detail = service.get_document_detail(document_id)
+    assert detail is not None and detail.status == "TEXT_INDEXING"
+
+    # Once the job ends, the registry record is authoritative again.
+    job.status = "FAILED"
+    assert service.list_documents().documents[0].status == "FAILED"

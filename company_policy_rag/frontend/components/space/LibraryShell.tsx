@@ -1,6 +1,6 @@
 'use client';
 
-/** LibraryShell — shared wrapper for the Library (documents) and Telemetry tabs.
+/** LibraryShell — shared wrapper for the Library (documents), Telemetry and Storage tabs.
  *  Transparent over the persistent AlpineBackdrop rendered at the page root (see
  *  app/page.tsx), which switches to its deeper "focus" veil for these dense
  *  views. Adds the shared top nav, connection status, and theme toggle, and

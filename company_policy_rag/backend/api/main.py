@@ -14,6 +14,7 @@ from backend.api.routes import (
     documents_router,
     health_router,
     models_router,
+    storage_router,
 )
 from backend.utils.logging import logger
 
@@ -184,6 +185,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(health_router)
     app.include_router(models_router)
+    app.include_router(storage_router)
 
     # Clean Request Logging Middleware (Filters out spammy polling endpoints)
     @app.middleware("http")

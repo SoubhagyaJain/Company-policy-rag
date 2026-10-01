@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import MagicMock
+
 from backend.models.chunk import Chunk, ChunkMetadata, ContentType
 from backend.models.conversation import AnswerMode
 from backend.models.document import DocumentMetadata, DocumentType, RawDocument
 from backend.models.rag import QueryCategory, ScoredChunk
 from backend.ingestion.chunkers.base import BaseChunker
-from backend.rag.evidence_gate import EvidenceSufficiencyGate
+from backend.rag.evidence_gate import EvidenceSufficiencyGate, text_answers_without_visual
 from backend.rag.citations import CitationEngine
 from backend.rag.context_compression import ContextCompressor
 from backend.rag.pipeline import (
+    UNREAD_VISUAL_DIRECTIVE,
+    RAGPipeline,
     _answer_matches_requested_enumeration,
     _extract_requested_numbered_list,
     _is_cacheable_grounded_answer,
@@ -167,6 +172,98 @@ def test_numbered_continuation_text_resolves_visual_list_reference() -> None:
 
     assert result.is_sufficient is True
     assert "referenced_visual_content" not in result.missing_evidence_types
+
+
+_AGENTIC_RAG_PAGE = (
+    "These systems retrieve once and generate once. If the retrieved context isn't "
+    "enough, the LLM can not dynamically search for more information.\n"
+    "The workflow of agentic RAG is depicted below:\n"
+    "Steps 1-2) The user inputs the query, and an agent rewrites it.\n"
+    "Step 3) Another agent decides whether it needs more details to answer the query.\n"
+    "Step 10) A final agent checks if the answer is relevant to the query and context."
+)
+
+
+def test_unread_visual_does_not_block_text_that_answers_the_question() -> None:
+    walkthrough = _chunk("agentic-rag", _AGENTIC_RAG_PAGE, "AI Engineering Guidebook.pdf")
+    pointer_only = _chunk(
+        "visual-list",
+        "Five popular fine-tuning techniques are depicted below.",
+        "AI Engineering Guidebook.pdf",
+    )
+    promised_list = _chunk(
+        "visual-list-in-prose",
+        "Traditional fine-tuning updates every weight, which is infeasible for large "
+        "models because of the compute, memory, and storage each full copy needs. "
+        "Five popular fine-tuning techniques are depicted below.",
+        "AI Engineering Guidebook.pdf",
+    )
+
+    assert text_answers_without_visual("Compare naive RAG and Agentic RAG.", [walkthrough]) is True
+    assert text_answers_without_visual("What are the five fine-tuning techniques?", [pointer_only]) is False
+    # Surrounding prose does not supply labels that only the visual lists.
+    assert text_answers_without_visual("What are the fine-tuning techniques?", [promised_list]) is False
+    assert text_answers_without_visual("Why is traditional fine-tuning infeasible?", [promised_list]) is True
+
+
+class _UnavailableVision:
+    """Vision service whose model cannot run at query time (e.g. no free VRAM)."""
+
+    vision_model = "Qwen3-VL-2B-Instruct"
+
+    def __init__(self) -> None:
+        self.image_asset_manager = MagicMock()
+        self.image_asset_manager.get_page_assets_by_physical_page.return_value = []
+        self.image_asset_manager.get_page_assets.return_value = []
+
+    def is_query_time_available(self) -> tuple[bool, str]:
+        return False, "CPU-only vision is disabled for interactive queries."
+
+
+def _pipeline_without_vision(tmp_path: Path, text: str) -> tuple[RAGPipeline, MagicMock]:
+    pdf = tmp_path / "guide.pdf"
+    pdf.write_bytes(b"%PDF-1.4 dummy")
+    scored = _chunk("anchor", text, "guide.pdf")
+    scored.chunk.metadata.document_id = "doc_guide"
+    scored.chunk.metadata.file_path = str(pdf)
+    scored.chunk.metadata.page_number = 130
+
+    retriever = MagicMock()
+    retriever.retrieve.return_value = [scored]
+    llm = MagicMock()
+    llm.complete.return_value = (
+        "Traditional RAG retrieves once and generates once, while agentic RAG adds agents "
+        "that rewrite the query and check the answer [Source 1]."
+    )
+    pipeline = RAGPipeline(
+        hybrid_retriever=retriever,
+        docstore={scored.chunk.id: scored.chunk},
+        llm=llm,
+        vision_service=_UnavailableVision(),
+    )
+    return pipeline, llm
+
+
+def test_answer_is_generated_from_text_when_vision_is_unavailable(tmp_path: Path) -> None:
+    pipeline, llm = _pipeline_without_vision(tmp_path, _AGENTIC_RAG_PAGE)
+
+    response = pipeline.query(user_query="Compare naive RAG and Agentic RAG.")
+
+    assert response.answer == llm.complete.return_value
+    assert _is_degraded_or_abstention_answer(response.answer) is False
+    assert UNREAD_VISUAL_DIRECTIVE in llm.complete.call_args.args[0]
+    assert response.trace.vision_status == "DEGRADED"
+
+
+def test_visual_only_answer_still_abstains_when_vision_is_unavailable(tmp_path: Path) -> None:
+    pipeline, llm = _pipeline_without_vision(
+        tmp_path, "Five popular fine-tuning techniques are depicted below."
+    )
+
+    response = pipeline.query(user_query="What are the five fine-tuning techniques?")
+
+    assert _is_degraded_or_abstention_answer(response.answer) is True
+    llm.complete.assert_not_called()
 
 
 def test_degraded_visual_abstention_is_never_cacheable() -> None:

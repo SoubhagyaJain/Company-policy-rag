@@ -12,7 +12,7 @@ import { Moon, Sun, Compass, CalendarClock, Plane, KeyRound, ArrowUpRight, Arrow
 import type { ChatMessageData, ChatSession, Citation, FilterOptions, HealthStatus, ResponseMode } from '../../lib/types';
 import { useComposerControls } from '../../hooks/useComposerControls';
 import { useSmoothScroll } from '../../hooks/useSmoothScroll';
-import { SpaceTabNav } from './SpaceTabNav';
+import { SpaceTabNav, type ViewTab } from './SpaceTabNav';
 import { SpaceSidebar } from './SpaceSidebar';
 import { SpaceComposer } from './SpaceComposer';
 import { SpaceMessage } from './SpaceMessage';
@@ -20,7 +20,7 @@ import { SpaceCitationDrawer } from './SpaceCitationDrawer';
 import { BlackHoleProvider } from './BlackHoleAbsorption';
 import { backdropPoint, MOON, SUNSET_GLOW } from './AlpineBackdrop';
 
-export type ViewTab = 'chat' | 'documents' | 'observability';
+export type { ViewTab };
 
 const SUGGESTED_PROMPTS = [
   { title: 'Remote Work & Stipends', prompt: 'What are the rules and eligible stipends for working remotely?', icon: Compass },
