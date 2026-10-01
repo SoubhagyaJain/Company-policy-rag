@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js 16](https://img.shields.io/badge/UI-Next.js%2016-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama%20%7C%20Qwen2.5-000000)](https://ollama.com/)
-[![Tests](https://img.shields.io/badge/tests-430%20backend%20%2B%20216%20frontend-brightgreen)](#-testing-strategy)
+[![Tests](https://img.shields.io/badge/tests-431%20backend%20%2B%20216%20frontend-brightgreen)](#-testing-strategy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [Start here](#-start-the-project-beginner-guide) · [Quickstart](#-quickstart-one-command) · [Run from source](#-run-it-from-source-step-by-step) · [Using it](#-using-it) · [Architecture](#-architecture) · [Design decisions](#-design-decisions-and-trade-offs) · [Results](#-measured-results) · [Troubleshooting](#-troubleshooting)
@@ -54,8 +54,8 @@ That second turn is the hard part, and it is what most of this codebase exists t
 | [Repository map](#-repository-map) | Where everything lives |
 | [Configuration](#-configuration-reference) | Every knob that matters |
 | [API reference](#-api-reference) | All 30+ endpoints |
-| [Testing strategy](#-testing-strategy) | 518 checks and the CI gates |
-| [Observability](#-observability) | Traces, metrics, health |
+| [Testing strategy](#-testing-strategy) | 647 checks and the CI gates |
+| [Observability](#-observability) | Traces, metrics, health, and the storage console |
 | [Limitations](#-limitations-and-known-constraints) | Honest scope |
 | [Troubleshooting](#-troubleshooting) | Fixes for the common failures |
 
@@ -473,7 +473,7 @@ On Windows, [`start_dev.bat`](company_policy_rag/start_dev.bat) launches both se
 
 ```bash
 cd company_policy_rag
-python scripts/run_core_tests.py                           # 430 tests, ~30 s, no network, no GPU
+python scripts/run_core_tests.py                           # 431 tests, ~30 s, no network, no GPU
 python scripts/benchmark_conversation.py --assert-minimums # conversation gate
 python scripts/ci_retrieval_smoke.py                       # retrieval gate vs the committed baseline
 python scripts/production_retrieval_smoke.py --assert-minimums   # self-contained retrieval gate
@@ -516,6 +516,7 @@ With uv, the fine-tuning stack is `uv sync --extra finetuning`.
 4. **Open the trace drawer** on any answer: the retrieval decision and why, the resolved references, what was retrieved and what reached the prompt, verification scores, timings per stage.
 5. **Scope a question** to one document or category with the filter button in the composer when you have several — the pipeline then refuses evidence from anything else. The active scope shows as chips above the input.
 6. **Admin dashboard** at `/admin`: query traces, per-stage latency, ingestion events, cache and error incidents.
+7. **Storage tab**: where disk, RAM and VRAM go, which document produced which files, what survives a restart, and what can be cleared. **Review cleanup** lists every cleanup with what it deletes and what it costs before anything runs. See [Storage and runtime](#storage-and-runtime).
 
 **The composer.** Everything that shapes a question lives in the input's bottom row:
 
@@ -577,11 +578,11 @@ Five layers. Each one owns a directory, and the boundaries are real — you can 
 
 | Layer | Directory | Owns | Key modules |
 |---|---|---|---|
-| **Interface** | `frontend/` | Chat, document library, per-answer trace drawer, admin dashboard | `hooks/useChatStream.ts` (SSE), `components/space/SpaceComposer.tsx` (composer, on `components/ui/ai-chat-input.tsx`), `components/` |
-| **API** | `backend/api/` | HTTP surface, dependency injection, request validation | `main.py`, `dependencies.py`, `routes/` (chat · documents · admin · models · health) |
+| **Interface** | `frontend/` | Chat, document library, per-answer trace drawer, admin dashboard, storage console | `hooks/useChatStream.ts` (SSE), `components/space/SpaceComposer.tsx` (composer, on `components/ui/ai-chat-input.tsx`), `components/StorageView.tsx` + `components/storage-console/`, `components/` |
+| **API** | `backend/api/` | HTTP surface, dependency injection, request validation | `main.py`, `dependencies.py`, `routes/` (chat · documents · admin · storage · models · health) |
 | **RAG core** | `backend/rag/` | One turn, end to end: interpret → retrieve → assemble → generate → verify | `pipeline.py` (orchestration), `conversation_interpreter.py`, `policy_reliability.py`, `citations.py`, `verifier.py` |
 | **Retrieval & ingestion** | `backend/retrieval/`, `backend/ingestion/`, `backend/embeddings/` | Dense + lexical search, fusion, loaders, chunkers, embeddings | `hybrid.py` (RRF), `bm25.py`, `dense.py`, `reranker.py`, `chunkers/`, `loaders/` |
-| **Services & storage** | `backend/services/`, `storage/` | Document lifecycle, chat sessions, telemetry, Chroma + BM25 + SQLite on disk | `document_service.py`, `chat_service.py`, `telemetry_service.py` |
+| **Services & storage** | `backend/services/`, `storage/` | Document lifecycle, chat sessions, telemetry, storage inventory and cleanup, Chroma + BM25 + SQLite on disk | `document_service.py`, `chat_service.py`, `telemetry_service.py`, `storage_service.py` |
 
 Two things sit deliberately outside that stack: `src/config.py`, the single `Settings` object every layer reads, and `backend/evaluation/` plus `scripts/`, which hold the harnesses that decide what the defaults are.
 
@@ -612,12 +613,14 @@ flowchart TB
     subgraph Client["Client — Next.js 16 / React 18"]
         UI[Chat · Library · Trace drawer]
         ADMIN[Observability dashboard]
+        STOR[Storage and runtime console]
     end
 
     subgraph API["API — FastAPI"]
         CHAT[chat + chat/stream SSE]
         DOCS[documents]
         OBS[admin observability]
+        STO[admin storage]
     end
 
     subgraph Core["RAG core"]
@@ -666,6 +669,9 @@ flowchart TB
     DOCS -.traces.-> TEL
     TEL --> OBS
     OBS --> ADMIN
+    CH -.sizes and cleanup.-> STO
+    TEL -.sizes and cleanup.-> STO
+    STO --> STOR
 ```
 
 ### Request lifecycle
@@ -976,16 +982,17 @@ Company-policy-rag/
     ├── docker-compose.yml             ← the one-command stack
     ├── pyproject.toml  requirements*.txt
     ├── backend/                       ← production application
-    │   ├── api/                       ← FastAPI app, DI container, 5 route modules
+    │   ├── api/                       ← FastAPI app, DI container, 6 route modules
     │   ├── rag/                       ← the core (21 modules)
     │   ├── retrieval/                 ← dense · bm25 · hybrid RRF · reranker · cache
     │   ├── ingestion/                 ← 11 loaders · 6 chunkers · metadata · pages
-    │   ├── services/                  ← chat · document · telemetry (+ SQLite layer)
+    │   ├── services/                  ← chat · document · telemetry (+ SQLite layer) · storage inventory + cleanup
     │   ├── models/                    ← Pydantic domain + DTO models
     │   ├── vision/                    ← optional VLM page understanding
     │   └── evaluation/  tasks/  utils/
     ├── frontend/                      ← Next.js 16 app-router UI (Tailwind 3)
     │   ├── components/space/          ← the chat shell: composer, messages, sidebar, citations
+    │   ├── components/storage-console/ ← sections of the Storage tab (entry point: components/StorageView.tsx)
     │   ├── components/ui/             ← reusable primitives (shadcn-style tokens in styles/globals.css)
     │   └── hooks/  lib/               ← SSE stream, composer controls, API client
     ├── scripts/                       ← 24 CLI tools: eval harnesses · CI gates · benchmarks · finetune
@@ -1151,6 +1158,22 @@ Full interactive schema at `/docs`. CORS is currently open (`allow_origins=["*"]
 | `GET` | `/api/admin/traces/{id}` | Stage-level trace detail |
 | `DELETE` | `/api/admin/observability/clear` | Purge telemetry |
 
+**Storage**
+
+Stores and actions are addressed by logical id (`vector_index`, `telemetry_db`, `vision_cache`, …). No request carries a filesystem path; the backend owns the mapping and checks every delete against the store's root.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/admin/storage` | Every store with size, persistence kind, growth, reclaimable bytes and offered actions; `?refresh=true` rescans the directories |
+| `GET` | `/api/admin/storage/live` | RAM, VRAM breakdown, loaded models, cache counters, running operations — cheap enough to poll |
+| `GET` | `/api/admin/storage/documents` | Footprint per document and orphaned artifacts; `?deep=true` also scans vector rows |
+| `GET` | `/api/admin/storage/history` | Size snapshots and the audit log; `?range=24h\|7d\|30d` adds chart series, events and a forecast |
+| `GET` | `/api/admin/storage/{store}/inspect` | Internals of one store: collections, tables, largest files, location |
+| `POST` | `/api/admin/storage/{store}/{action}/preview` | What an action would remove, without running it |
+| `POST` | `/api/admin/storage/{store}/{action}` | Run one action (`409` while indexing or another cleanup holds the store) |
+| `GET` | `/api/admin/storage/cleanup/plan` | Every cleanup on offer, classified and costed |
+| `POST` | `/api/admin/storage/cleanup` | Run the chosen items; with no body, remove orphans and compact both databases |
+
 **System**
 
 | Method | Endpoint | Purpose |
@@ -1163,19 +1186,21 @@ Full interactive schema at `/docs`. CORS is currently open (`allow_origins=["*"]
 
 ## 🧪 Testing strategy
 
-**646 automated checks**, all verified green at the time of writing.
+**647 automated checks**, all verified green at the time of writing.
 
 | Suite | Count | Runtime | Network |
 |---|---:|---|---|
-| Backend core regression | **430** | ~30 s | None |
+| Backend core regression | **431** | ~30 s | None |
 | Frontend | **216** | ~0.3 s | None |
+| Storage console (run on demand, not in the CI manifest) | 36 | ~7 s | None |
 | Conversation benchmark gate | 12 cases | ~30 s | None (deterministic mode) |
 | Retrieval smoke gate (labelled fixture) | 21 queries | ~40 s | None (embedder from the HF cache) |
 | Production retrieval smoke gate | 8 cases | ~20 s | None at all |
 
 ```bash
 cd company_policy_rag
-python scripts/run_core_tests.py                              # the CI manifest, 430 tests
+python scripts/run_core_tests.py                              # the CI manifest, 431 tests
+pytest tests/test_storage_service.py tests/test_storage_insights.py   # storage inventory, cleanup, growth
 python scripts/benchmark_conversation.py --assert-minimums    # conversation gate
 python scripts/ci_retrieval_smoke.py                          # retrieval gate (labelled fixture)
 python scripts/production_retrieval_smoke.py --assert-minimums  # retrieval gate (self-contained)
@@ -1194,7 +1219,7 @@ On Windows, set `KMP_DUPLICATE_LIB_OK=TRUE` before pytest — PyTorch and the In
 
 **CI gates** ([`rag-ci.yml`](.github/workflows/rag-ci.yml)) — the build fails if:
 
-1. Any of the 430 backend regressions fail
+1. Any of the 431 backend regressions fail
 2. Any of the 216 frontend tests fail, or the production Next.js build breaks
 3. The conversation benchmark drops **below 90% hit@3 or policy accuracy**, or regresses below the stored baseline
 4. Either retrieval gate fails: the labelled-fixture one falls more than 0.03 below its [committed baseline](company_policy_rag/data/eval/retrieval/handbook_smoke_baseline.json) on context Hit@6, Hit@2, MRR or coverage, or the [self-contained one](company_policy_rag/scripts/production_retrieval_smoke.py) drops below 100% hit@3 / 80% MRR on its [public dataset](company_policy_rag/data/eval/retrieval_smoke.json)
@@ -1213,6 +1238,37 @@ Every query writes a full trace to SQLite (WAL mode), surfaced in the UI at `/ad
 **Six event tables:** `query_traces`, `ingestion_events`, `cache_events`, `memory_events`, `vision_events`, `error_incidents`.
 
 The frontend exposes the same data in a per-message trace drawer, so you can inspect exactly why any answer came out the way it did — which is the only practical way to debug a RAG system.
+
+### Storage and runtime
+
+The **Storage** tab is the other half of observability: not why an answer came out the way it did, but where the disk, RAM and VRAM went. It is served by [`storage_service.py`](company_policy_rag/backend/services/storage_service.py) and the `/api/admin/storage*` endpoints.
+
+| Section | What it answers |
+|---|---|
+| Overview and storage map | Total local storage by category (models, documents, vector database, caches, images, telemetry, logs), how much is safely reclaimable, backend RAM, GPU VRAM, loaded models, running operations |
+| Observations and health | Concrete findings only: fragmentation, orphaned data, VRAM pressure, the fastest-growing store, Redis fallback. A checklist of measured conditions, no score |
+| Databases | Chroma and SQLite: used and unused space, fragmentation, WAL, pending writes, last compaction, growth. **Inspect** opens collections, tables and page stats |
+| Documents and generated artifacts | Footprint per document (original, chunks, extracted images, vision cache, estimated vectors) and the artifacts whose document is gone |
+| Caches | Entries, size, hit rate and time saved per hit where telemetry records it, so you can tell whether a cache earns its keep |
+| Runtime memory, GPU and models | What disappears on restart; VRAM attributed per Ollama model and to the backend process; unload a model from its card |
+| Storage growth | Size over 24 hours / 7 days / 30 days, the uploads, cleanups and compactions behind each step, and a forecast once 3 days of history exist |
+| Cleanup center and audit history | Every cleanup classified and costed before it runs; every run recorded with before, after, duration and status |
+
+Every store carries persistence badges (user data, persistent, cache, rebuildable, runtime only, temporary) and an info drawer that says what it is, what creates and reads it, whether it survives a restart, and what happens if it is deleted. Search and filter chips narrow the page; **Simple** hides the internals, **Advanced** adds paths, table counts, audit ids, the storage hierarchy and the data lifecycle.
+
+**Cleanup safety.** Each action is one of three classes, shown with an icon and a label, never colour alone:
+
+| Class | Meaning | Examples |
+|---|---|---|
+| `SAFE` | Removes nothing the app still uses | Remove orphaned images, compact a database, delete old logs |
+| `REBUILDABLE` | Regenerated on demand, at a performance cost | Clear the semantic, retrieval, embedding or vision cache |
+| `DESTRUCTIVE` | Cannot be brought back | Clear telemetry, delete evaluation indexes |
+
+Only `SAFE` items are preselected in the cleanup center, and destructive ones need an explicit acknowledgement. Cleanups that touch the indexes are refused while a document is being indexed, and a second cleanup is refused while one is running. Documents are never deleted from this tab; that stays in the Library.
+
+**What it does not claim to know.** A figure the runtime does not expose is labelled as unavailable or estimated instead of being filled in: the attention KV cache inside a loaded model (part of that model's VRAM figure), when Ollama loaded a model, bytes per document inside Chroma (estimated as chunks × vector width × 4), and the RAM held by the in-memory caches. The *application* KV cache (Redis, or its in-memory fallback) is a separate thing and is reported separately.
+
+Size snapshots are recorded every 15 minutes by the backend, so growth is tracked whether or not the tab is open. Directory sizes are cached for a minute; **Refresh** rescans.
 
 ---
 
@@ -1263,7 +1319,10 @@ See [`docs/PHASE4_AB_LOG.md`](company_policy_rag/docs/PHASE4_AB_LOG.md) (what ch
 | Vision ingestion slow despite an NVIDIA GPU | CPU PyTorch installed, or the chat model is holding the VRAM | `uv run python -c "import torch; print(torch.cuda.is_available())"` must print `True`. Vision uses the GPU only when ≥ `VISION_MIN_GPU_FREE_GB` is free — run `ollama stop qwen2.5:7b` before a bulk upload |
 | `posthog capture()` errors in logs | Chroma anonymous telemetry | Harmless; already suppressed via `ANONYMIZED_TELEMETRY=False` |
 | Embedder/reranker download fails behind a proxy | HF hub unreachable | Point `HF_HOME` at a pre-populated cache; the reranker is already off by default |
-| `storage/sessions/` growing large | Old per-process libraries from `DOCUMENT_LIBRARY_MODE=session` | Safe to delete while the app is stopped; the default mode no longer creates them |
+| `storage/sessions/` growing large | Old per-process libraries from `DOCUMENT_LIBRARY_MODE=session` | Storage tab → Orphaned data → **Remove old** (destructive: those folders hold that session's uploads), or delete them while the app is stopped. The default mode no longer creates them |
+| Disk filling up and no idea why | Model files, a fragmented Chroma file, orphaned images or old logs | Storage tab → **Where your storage goes**, then **Review cleanup**. Compaction returns a database's unused pages to the disk |
+| VRAM almost full | A chat model is pinned in memory, sometimes next to the vision model | Storage tab → GPU and loaded models shows who holds it; **Unload** frees it until the next question |
+| Storage tab shows "Backend disconnected" | The backend is not running, or it predates the storage endpoints | Start or restart the backend, then **Refresh** |
 | Uploaded documents disappear after a restart | `DOCUMENT_LIBRARY_MODE=session` | Use the default `persistent`, and keep `APP_STORAGE_DIR` on a stable path |
 | Answers are vague or over-abstaining | Grounding too strict, or retrieval too narrow | Try `GROUNDING_STRICTNESS=balanced`, raise `SIMILARITY_TOP_K`, or turn the reranker on with `ENABLE_RERANKER=true` |
 | A question about "the handbook" finds nothing | Named document is not in the library | Upload it, or ask without naming it — `SCOPE_UNBOUND_REFERENCE_MODE=strict` rejects all evidence in that case |
