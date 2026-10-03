@@ -133,6 +133,8 @@ jobs:
         run: python -c "from huggingface_hub import snapshot_download; snapshot_download('BAAI/bge-small-en-v1.5')"
 
       # Production retrieval + context assembly (no LLM) on the labelled handbook
-      # fixture; fails when context hit, rank, or coverage drops below baseline.
+      # fixture; keep the baseline's downloaded BGE embedder for this offline gate.
       - name: Backend retrieval smoke gate
+        env:
+          OLLAMA_EMBED_MODEL: BAAI/bge-small-en-v1.5
         run: python scripts/ci_retrieval_smoke.py
