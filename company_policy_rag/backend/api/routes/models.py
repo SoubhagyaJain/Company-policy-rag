@@ -14,7 +14,7 @@ import os
 router = APIRouter(tags=["Models"])
 
 # Default active model state
-_current_active_model = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:7b")
+_current_active_model = os.getenv("OLLAMA_LLM_MODEL", "qwen3.5:9b")
 
 
 class ModelSelectRequest(BaseModel):
@@ -26,7 +26,7 @@ def get_available_models() -> ModelListResponse:
     """List the LLM, embedding and reranker models installed on this machine."""
     global _current_active_model
     ok, names, err = probe_ollama_tags(local_only=True)
-    fallback_default = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:7b")
+    fallback_default = os.getenv("OLLAMA_LLM_MODEL", "qwen3.5:9b")
     model_names = names if ok else [fallback_default]
     chat_models = filter_chat_models(model_names)
 
@@ -71,10 +71,10 @@ def select_active_model(
     global _current_active_model
 
     ok, names, err = probe_ollama_tags(local_only=True)
-    model_names = names if ok else ["qwen2.5:7b"]
+    model_names = names if ok else ["qwen3.5:9b"]
     valid_ids = set(filter_chat_models(model_names))
     valid_ids.add("qwen2.5-coder-7b-policy")
-    valid_ids.add("qwen2.5:7b")
+    valid_ids.add("qwen3.5:9b")
 
     if req.model not in valid_ids:
         raise HTTPException(

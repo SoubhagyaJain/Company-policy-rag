@@ -5,6 +5,11 @@ import math
 from typing import Any
 
 from backend.utils.logging import logger
+from src.config import settings
+
+
+# The 0.6B embedder is fast on CPU; reserving GPU memory evicts the 9B answer model.
+OLLAMA_EMBED_NUM_CTX = 4096
 
 
 def normalize_vector(vector: list[float]) -> list[float]:
@@ -101,12 +106,12 @@ def _default_query_instruction(model_name: str) -> str:
 class EmbeddingService:
     """
     Service wrapper for dense vector embeddings with caching, batching, and normalization.
-    Uses sentence-transformers / FastEmbed if available, with deterministic fallback.
+    Uses Ollama for local models and sentence-transformers for explicit Hugging Face models.
     """
 
     def __init__(
         self,
-        model_name: str = "BAAI/bge-small-en-v1.5",
+        model_name: str = settings.embed_model,
         cache_enabled: bool = True,
         dimension: int = 384,
         query_instruction: str | None = None,
@@ -139,6 +144,12 @@ class EmbeddingService:
     def _init_model(self) -> None:
         global _shared_embedding_model, _shared_embedding_model_loaded, _shared_embedding_model_loaded_at
         if self._model_loaded:
+            return
+        if "/" not in self.model_name:
+            from ollama import Client
+
+            self._model = Client(host=settings.ollama_base_url)
+            self._model_loaded = True
             return
         if _shared_embedding_model_loaded:
             self._model = _shared_embedding_model
@@ -205,12 +216,22 @@ class EmbeddingService:
 
         self._init_model()
         if self._model is not None:
-            try:
-                raw_emb = self._model.encode(text, convert_to_numpy=True)
-                vector = normalize_vector(raw_emb.tolist())
-            except Exception as exc:
-                logger.warning("Embedding failed for text: %s. Using fallback.", exc)
-                vector = self._fallback_embed(text)
+            if "/" not in self.model_name:
+                response = self._model.embed(
+                    model=self.model_name,
+                    input=text,
+                    options={"num_ctx": OLLAMA_EMBED_NUM_CTX, "num_gpu": 0},
+                    keep_alive=-1,
+                )
+                vector = normalize_vector(list(response.embeddings[0]))
+                self.dimension = len(vector)
+            else:
+                try:
+                    raw_emb = self._model.encode(text, convert_to_numpy=True)
+                    vector = normalize_vector(raw_emb.tolist())
+                except Exception as exc:
+                    logger.warning("Embedding failed for text: %s. Using fallback.", exc)
+                    vector = self._fallback_embed(text)
         else:
             vector = self._fallback_embed(text)
 
@@ -255,12 +276,23 @@ class EmbeddingService:
             self._init_model()
             computed_vectors: list[list[float]] = []
             if self._model is not None:
-                try:
-                    raw_embs = self._model.encode(missing_texts, convert_to_numpy=True)
-                    computed_vectors = [normalize_vector(emb.tolist()) for emb in raw_embs]
-                except Exception as exc:
-                    logger.warning("Batch embedding failed (%s). Using fallback.", exc)
-                    computed_vectors = [self._fallback_embed(t) for t in missing_texts]
+                if "/" not in self.model_name:
+                    response = self._model.embed(
+                        model=self.model_name,
+                        input=missing_texts,
+                        options={"num_ctx": OLLAMA_EMBED_NUM_CTX, "num_gpu": 0},
+                        keep_alive=-1,
+                    )
+                    computed_vectors = [normalize_vector(list(emb)) for emb in response.embeddings]
+                    if computed_vectors:
+                        self.dimension = len(computed_vectors[0])
+                else:
+                    try:
+                        raw_embs = self._model.encode(missing_texts, convert_to_numpy=True)
+                        computed_vectors = [normalize_vector(emb.tolist()) for emb in raw_embs]
+                    except Exception as exc:
+                        logger.warning("Batch embedding failed (%s). Using fallback.", exc)
+                        computed_vectors = [self._fallback_embed(t) for t in missing_texts]
             else:
                 computed_vectors = [self._fallback_embed(t) for t in missing_texts]
 

@@ -293,6 +293,58 @@ def test_memory_section_lists_caches_and_loaded_models(env, monkeypatch):
     assert after["value"] == 0
 
 
+def test_ollama_embedder_is_counted_once_with_its_actual_runtime(env, monkeypatch):
+    env.docs.embedding_service.model_name = "qwen3-embedding:0.6b"
+    assert "embedding_model" not in env.service._default_model_dirs()
+    monkeypatch.setattr(
+        module,
+        "list_installed_models",
+        lambda **_: [
+            {"name": "qwen3.5:9b", "size": 6_000, "details": {}},
+            {"name": "qwen3-embedding:0.6b", "size": 600, "details": {}},
+        ],
+    )
+
+    models = {m["name"]: m for m in env.service.summary()["models"]}
+    assert models["qwen3.5:9b"]["purpose"] == "Chat"
+    assert models["qwen3-embedding:0.6b"]["purpose"] == "Embedding"
+    assert models["qwen3-embedding:0.6b"]["runtime"] == "Ollama"
+    assert models["qwen3-embedding:0.6b"]["size_bytes"] == 600
+    assert not any(m["id"] == "embedding_model" for m in models.values())
+
+
+def test_ollama_embedding_reload_uses_embedding_endpoint(env, monkeypatch):
+    import ollama
+
+    monkeypatch.setattr(
+        module, "list_installed_models", lambda **_: [{"name": "qwen3-embedding:0.6b"}, {"name": "qwen3.5:9b"}]
+    )
+    embed_calls = []
+    monkeypatch.setattr(ollama.Client, "embed", lambda self, **kw: embed_calls.append(kw))
+    chat_calls = []
+    monkeypatch.setattr(module, "preload_model", lambda name, **kw: chat_calls.append(name) or True)
+
+    env.service._reload_ollama(None, "qwen3-embedding:0.6b")
+    env.service._reload_ollama(None, "qwen3.5:9b")
+
+    assert embed_calls == [
+        {
+            "model": "qwen3-embedding:0.6b",
+            "input": [],
+            "options": {"num_ctx": 4096, "num_gpu": 0},
+            "keep_alive": -1,
+        }
+    ]
+    assert chat_calls == ["qwen3.5:9b"]
+
+
+def test_vector_width_refreshes_after_collection_replacement(env, monkeypatch):
+    widths = iter([384, None, 1024])
+    monkeypatch.setattr(env.service, "_collection_dim", lambda name: next(widths))
+
+    assert [env.service._vector_dim() for _ in range(3)] == [384, None, 1024]
+
+
 def test_storage_api(env):
     from backend.api.dependencies import get_storage_service
     from backend.api.main import create_app

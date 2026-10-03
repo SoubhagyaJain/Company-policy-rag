@@ -14,7 +14,7 @@ from backend.rag.response_modes import ResponseMode
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=8000, description="User chat query (1-8000 chars)")
     session_id: str | None = Field(default=None, min_length=1, max_length=128, description="Session ID for conversation history")
-    model: str | None = Field(default="qwen2.5:7b", max_length=128, description="Selected LLM model; omitted, 'default', or blank uses the active model")
+    model: str | None = Field(default="qwen3.5:9b", max_length=128, description="Selected LLM model; omitted, 'default', or blank uses the active model")
     grounding_mode: str | None = Field(default="balanced", description="balanced | strict")
     corpus_scope: str | None = Field(default="all", description="all | policy | guidebook")
     chat_mode: str | None = Field(default="direct", description="direct | agent")
@@ -46,7 +46,7 @@ class ChatResponse(BaseModel):
     trace: RAGTrace | None = None
     low_confidence: bool = False
     grounding_mode: str = "balanced"
-    model: str = "qwen2.5:7b"
+    model: str = "qwen3.5:9b"
     document_scope: str | None = None
     active_document_id: str | None = None
     active_document_name: str | None = None
@@ -284,7 +284,7 @@ class ModelInfo(BaseModel):
 
 
 class ModelListResponse(BaseModel):
-    active_model: str = "qwen2.5:7b"
+    active_model: str = "qwen3.5:9b"
     vision_model: str = "Qwen3-VL-2B-Instruct"
     vision_enabled: bool = True
     models: list[ModelInfo] = Field(default_factory=list)

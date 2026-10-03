@@ -53,7 +53,7 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const MODEL_OPTIONS = [
-  { id: 'qwen2.5:7b', label: 'Qwen 2.5 7B', desc: 'Fast & balanced (Recommended)' },
+  { id: 'qwen3.5:9b', label: 'Qwen 3.5 9B', desc: 'Fast & balanced (Recommended)' },
   { id: 'llama3.2:3b', label: 'Llama 3.2 3B', desc: 'Ultra-fast compact model' },
   { id: 'gemma4-policy-fast:latest', label: 'Gemma 4 Policy Fast', desc: 'Policy specialized model' },
   { id: 'gemma4:12b', label: 'Gemma 4 12B', desc: 'High capability model' },
@@ -114,7 +114,7 @@ export function ChatWindow({
   const [filterTab, setFilterTab] = useState<'documents' | 'categories'>('documents');
   const [filterSearch, setFilterSearch] = useState('');
   const [modelsList, setModelsList] = useState<ModelOption[]>(MODEL_OPTIONS);
-  const [selectedModel, setSelectedModel] = useState('qwen2.5:7b');
+  const [selectedModel, setSelectedModel] = useState('qwen3.5:9b');
   const [pendingModel, setPendingModel] = useState<string | null>(null);
   const [modelSwitchError, setModelSwitchError] = useState<string | null>(null);
   const [responseMode, setResponseMode] = useState<ResponseMode>('standard');

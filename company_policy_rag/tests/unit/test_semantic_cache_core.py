@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
-import pytest
 
 from backend.models.rag import Citation
 from backend.rag.semantic_cache import (
@@ -86,6 +85,39 @@ def test_put_and_get_exact_hit(tmp_path):
     assert len(result.citations) == 1
     assert result.citations[0].source_file == "remote_work.pdf"
     assert result.similarity_score >= 0.90
+
+
+def test_embedding_dimension_change_recreates_only_semantic_cache(tmp_path):
+    embedder = MagicMock()
+    embedder.embed_text.return_value = [0.01] * 384
+    cache = SemanticCacheManager(
+        collection_name="test_dimension_change",
+        persist_dir=tmp_path / "chroma",
+        embedding_service=embedder,
+    )
+    citation = Citation(
+        source_index=1,
+        chunk_id="c1",
+        document_id="d1",
+        source_file="policy.pdf",
+        snippet="Policy evidence",
+    )
+
+    assert cache.put("old question", "old answer", [citation])
+    embedder.embed_text.return_value = [0.01] * 1024
+
+    assert cache.get("new question") is None
+    assert cache._collection.count() == 0
+    assert cache.put("new question", "new answer", [citation])
+    assert cache._collection.count() == 1
+    assert cache.get("new question").answer == "new answer"
+
+    # Chroma retains the old dimension after deleting all entries. A later
+    # embedding model change must also recover on the write path.
+    cache.clear()
+    embedder.embed_text.return_value = [0.01] * 384
+    assert cache.put("third question", "third answer", [citation])
+    assert cache.get("third question").answer == "third answer"
 
 
 def test_similarity_hit_above_threshold(tmp_path):

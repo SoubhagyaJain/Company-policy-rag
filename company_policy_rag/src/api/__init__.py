@@ -1,1 +1,0 @@
-"""FastAPI application for the Aether frontend."""

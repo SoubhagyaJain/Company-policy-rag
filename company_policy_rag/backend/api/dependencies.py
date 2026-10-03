@@ -155,6 +155,7 @@ def get_rag_pipeline() -> RAGPipeline:
                             request_timeout=request_timeout,
                             context_window=context_window,
                             keep_alive=-1,
+                            thinking=False if ollama_model == "qwen3.5:9b" else None,
                         )
                     except Exception:
                         llm = None

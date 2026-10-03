@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from backend.embeddings.embeddings import OLLAMA_EMBED_NUM_CTX
 from backend.embeddings.vector_store import get_shared_chroma_client
 from backend.retrieval.retrieval_cache import get_retrieval_cache
 from backend.services import storage_catalog as catalog
@@ -69,7 +70,7 @@ _LABELS: dict[str, str] = {
     "session_libraries": "Old session libraries",
     "uploads": "Uploaded documents",
     "bm25_index": "Keyword index (BM25)",
-    "ollama_models": "Chat models in memory",
+    "ollama_models": "Ollama models in memory",
     "vision_model": "Vision model",
     "kv_cache": "Application KV cache",
     "retrieval_cache": "Retrieval cache",
@@ -289,7 +290,6 @@ class StorageService:
         self._last_snapshot = 0.0
         self._last_models_bytes: int | None = None
         self._history_lines: int | None = None
-        self._vector_dim_value: int | None = None
         self._vector_orphans: dict[str, Any] | None = None
         # One cleanup at a time; a second request is refused instead of queued.
         self._op_lock = threading.Lock()
@@ -321,6 +321,8 @@ class StorageService:
         hub = Path(os.getenv("HF_HOME") or Path.home() / ".cache" / "huggingface") / "hub"
         dirs = {"vision_model": (f"Vision model ({settings.vision_model})", Path(settings.vision_model_path))}
         embedding_name = getattr(self.doc_service.embedding_service, "model_name", "")
+        if embedding_name and "/" not in embedding_name:
+            embedding_name = ""
         for key, label, name in (
             ("embedding_model", "Embedding model", embedding_name),
             ("reranker_model", "Reranker model", settings.reranker_model),
@@ -422,9 +424,7 @@ class StorageService:
             return None
 
     def _vector_dim(self) -> int | None:
-        if self._vector_dim_value is None:
-            self._vector_dim_value = self._collection_dim(self._document_collection_name())
-        return self._vector_dim_value
+        return self._collection_dim(self._document_collection_name())
 
     def _vision_cache_index(self) -> dict[str, Any]:
         """Entries and bytes of the vision cache per owning document, in one directory pass."""
@@ -859,7 +859,7 @@ class StorageService:
         items = [
             item(
                 "ollama_models",
-                description="Models the Ollama server keeps loaded. Each one's VRAM includes its attention KV buffers.",
+                description="Chat and embedding models the Ollama server keeps loaded, including their working memory.",
                 value=len(rt["loaded_models"]),
                 unit="loaded",
                 models=[
@@ -1886,13 +1886,13 @@ class StorageService:
                 ActionSpec(
                     "unload",
                     "Unload",
-                    "Removes the model from memory and frees its VRAM. It reloads on the next question, which takes about 10 seconds.",
+                    "Removes the model from memory and frees its VRAM. It reloads on the next request for that model.",
                     self._unload_ollama,
                     needs_target=True,
                     safety=REBUILDABLE,
                     deletes="The model's weights and working buffers from memory. The model file stays on disk.",
-                    rebuild="Reloaded from disk on the next question.",
-                    performance="The next question waits about 10 seconds for the model to load.",
+                    rebuild="Reloaded from disk on the next request for that model.",
+                    performance="The next request waits for the model to load.",
                     cleanup=False,
                 ),
                 ActionSpec(
@@ -2379,7 +2379,19 @@ class StorageService:
         installed = {m["name"] for m in list_installed_models(timeout=2.0)}
         if target not in installed:
             raise ValueError(f"Model '{target}' is not installed in Ollama.")
-        if not preload_model(str(target), timeout=120.0):
+        if runtime.model_purpose(str(target)) == "Embedding":
+            try:
+                from ollama import Client
+
+                Client(host=settings.ollama_base_url, timeout=120.0).embed(
+                    model=str(target),
+                    input=[],
+                    options={"num_ctx": OLLAMA_EMBED_NUM_CTX, "num_gpu": 0},
+                    keep_alive=-1,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"Ollama did not load '{target}'.") from exc
+        elif not preload_model(str(target), timeout=120.0):
             raise RuntimeError(f"Ollama did not load '{target}'.")
         return ActionResult(0, 1, f"Loaded {target} into memory.")
 

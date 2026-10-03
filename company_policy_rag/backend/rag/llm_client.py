@@ -43,10 +43,13 @@ class LLMUsage:
     prompt_ms: float | None = None
     generation_ms: float | None = None
     done_reason: str | None = None
+    _prompt_overflow: bool | None = None
 
     @property
     def prompt_overflow(self) -> bool:
         """True when the prompt alone reached the context window (Ollama truncates it)."""
+        if self._prompt_overflow is not None:
+            return self._prompt_overflow
         if self.num_ctx is None:
             return False
         prompt = self.prompt_tokens if self.prompt_tokens is not None else self.estimated_prompt_tokens
@@ -54,6 +57,7 @@ class LLMUsage:
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
+        data.pop("_prompt_overflow")
         data["prompt_overflow"] = self.prompt_overflow
         return data
 
@@ -108,27 +112,122 @@ def _model_name(llm: Any) -> str:
     return str(getattr(llm, "model", "") or getattr(getattr(llm, "_target_llm", None), "model", ""))
 
 
+def _sum_optional(first: int | float | None, second: int | float | None) -> int | float | None:
+    if first is None and second is None:
+        return None
+    return (first or 0) + (second or 0)
+
+
+def _combined_usage(first: LLMUsage, second: LLMUsage, max_tokens: int) -> LLMUsage:
+    return LLMUsage(
+        prompt_tokens=_sum_optional(first.prompt_tokens, second.prompt_tokens),
+        completion_tokens=_sum_optional(first.completion_tokens, second.completion_tokens),
+        num_ctx=second.num_ctx,
+        num_predict=max_tokens,
+        estimated_prompt_tokens=_sum_optional(first.estimated_prompt_tokens, second.estimated_prompt_tokens),
+        prompt_ms=_sum_optional(first.prompt_ms, second.prompt_ms),
+        generation_ms=_sum_optional(first.generation_ms, second.generation_ms),
+        done_reason=second.done_reason,
+        _prompt_overflow=first.prompt_overflow or second.prompt_overflow,
+    )
+
+
+def _thinking_options(options: dict[str, Any], thinking_budget: int) -> dict[str, Any]:
+    max_tokens = int(options["num_predict"])
+    return {**options, "num_predict": min(thinking_budget, max(1, max_tokens // 3))}
+
+
+def _bounded_thinking_followup(
+    prompt: str,
+    options: dict[str, Any],
+    first_content: str,
+    thought: str,
+    first_usage: LLMUsage,
+) -> tuple[str | None, list[dict[str, str]], dict[str, Any]]:
+    """Prepare a final-answer turn when a bounded thinking turn ran out."""
+    max_tokens = int(options["num_predict"])
+    if first_content and first_usage.done_reason != "length":
+        return first_content, [], options
+
+    messages = [
+        {"role": "user", "content": prompt},
+        {"role": "assistant", "content": first_content, "thinking": thought},
+        {
+            "role": "user",
+            "content": "Provide the final answer to the original request now, using the supplied evidence. Do not describe private reasoning.",
+        },
+    ]
+    # The second prompt includes the first turn's thinking and a short follow-up.
+    # Reserve some context for those additions as well as the visible answer.
+    final_options = {
+        **options,
+        "num_predict": max(1, max_tokens - (first_usage.completion_tokens or max_tokens // 3) - 48),
+    }
+    return None, messages, final_options
+
+
+def _bounded_thinking_start(
+    llm: Any,
+    prompt: str,
+    options: dict[str, Any],
+    thinking_budget: int,
+) -> tuple[str | None, LLMUsage, list[dict[str, str]], dict[str, Any]]:
+    """Give Qwen a short thinking turn, then prepare a final-answer turn if needed."""
+    target = getattr(llm, "_target_llm", llm)
+    first_options = _thinking_options(options, thinking_budget)
+    first = target.client.chat(
+        model=_model_name(llm),
+        messages=[{"role": "user", "content": prompt}],
+        stream=False,
+        think=True,
+        options=first_options,
+        keep_alive=getattr(target, "keep_alive", None),
+    )
+    first_usage = _usage_from(first, first_options, estimate_tokens(prompt))
+    first_content = str(first.message.content or "").strip()
+    thought = str(getattr(first.message, "thinking", "") or "")
+    ready, messages, final_options = _bounded_thinking_followup(
+        prompt, options, first_content, thought, first_usage
+    )
+    return ready, first_usage, messages, final_options
+
+
 def complete_text(
     llm: Any,
     prompt: str,
     *,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    think: bool | None = None,
+    thinking_budget: int | None = None,
 ) -> tuple[str, LLMUsage]:
     """Run one non-streaming completion with the options actually applied."""
     estimated = estimate_tokens(prompt)
     if _is_ollama_llm(llm):
         target = getattr(llm, "_target_llm", llm)
         options = _options(llm, temperature, max_tokens)
+        first_usage: LLMUsage | None = None
+        messages = [{"role": "user", "content": prompt}]
+        if think is True and thinking_budget is not None and max_tokens is not None and max_tokens > 64:
+            ready, first_usage, messages, options = _bounded_thinking_start(
+                llm, prompt, options, thinking_budget
+            )
+            if ready is not None:
+                first_usage.num_predict = max_tokens
+                return ready, first_usage
         response = target.client.chat(
             model=_model_name(llm),
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             stream=False,
+            think=False if first_usage is not None else (think if think is not None else getattr(target, "thinking", None)),
             options=options,
             keep_alive=getattr(target, "keep_alive", None),
         )
         text = str(response.message.content or "").strip()
-        return text, _usage_from(response, options, estimated)
+        usage = _usage_from(response, options, estimate_tokens(str(messages)) if first_usage is not None else estimated)
+        if first_usage is not None:
+            usage = _combined_usage(first_usage, usage, max_tokens)
+        return text, usage
 
     try:
         raw = llm.complete(prompt, temperature=temperature, max_new_tokens=max_tokens)
@@ -151,12 +250,16 @@ class StreamingCompletion:
         *,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        think: bool | None = None,
+        thinking_budget: int | None = None,
         cancel_event: threading.Event | None = None,
     ) -> None:
         self._llm = llm
         self._prompt = prompt
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._think = think
+        self._thinking_budget = thinking_budget
         self._cancel_event = cancel_event
         self._stream: Any = None
         self.cancelled = False
@@ -177,10 +280,53 @@ class StreamingCompletion:
     def _iter_ollama(self) -> Iterator[str]:
         target = getattr(self._llm, "_target_llm", self._llm)
         options = _options(self._llm, self._temperature, self._max_tokens)
+        first_usage: LLMUsage | None = None
+        messages = [{"role": "user", "content": self._prompt}]
+        if self._cancelled():
+            return
+        if self._think is True and self._thinking_budget is not None and self._max_tokens is not None and self._max_tokens > 64:
+            first_options = _thinking_options(options, self._thinking_budget)
+            first_content_parts: list[str] = []
+            thought_parts: list[str] = []
+            self._stream = target.client.chat(
+                model=_model_name(self._llm),
+                messages=messages,
+                stream=True,
+                think=True,
+                options=first_options,
+                keep_alive=getattr(target, "keep_alive", None),
+            )
+            try:
+                for part in self._stream:
+                    if self._cancelled():
+                        return
+                    first_content_parts.append(str(getattr(part.message, "content", "") or ""))
+                    thought_parts.append(str(getattr(part.message, "thinking", "") or ""))
+                    if getattr(part, "done", False):
+                        first_usage = _usage_from(part, first_options, estimate_tokens(self._prompt))
+            finally:
+                self.close()
+            if self._cancelled():
+                return
+            if first_usage is None:
+                return
+            ready, messages, options = _bounded_thinking_followup(
+                self._prompt,
+                options,
+                "".join(first_content_parts).strip(),
+                "".join(thought_parts),
+                first_usage,
+            )
+            if ready is not None:
+                first_usage.num_predict = self._max_tokens
+                self.usage = first_usage
+                yield ready
+                return
         self._stream = target.client.chat(
             model=_model_name(self._llm),
-            messages=[{"role": "user", "content": self._prompt}],
+            messages=messages,
             stream=True,
+            think=False if first_usage is not None else (self._think if self._think is not None else getattr(target, "thinking", None)),
             options=options,
             keep_alive=getattr(target, "keep_alive", None),
         )
@@ -190,7 +336,12 @@ class StreamingCompletion:
                     return
                 delta = str(getattr(getattr(part, "message", None), "content", "") or "")
                 if getattr(part, "done", False):
-                    self.usage = _usage_from(part, options, self.usage.estimated_prompt_tokens or 0)
+                    usage = _usage_from(
+                        part,
+                        options,
+                        estimate_tokens(str(messages)) if first_usage is not None else self.usage.estimated_prompt_tokens or 0,
+                    )
+                    self.usage = _combined_usage(first_usage, usage, self._max_tokens) if first_usage is not None else usage
                 if delta:
                     yield delta
         finally:

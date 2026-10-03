@@ -544,7 +544,7 @@ class TelemetryService:
         emb_status = SubsystemStatus.HEALTHY
 
         # 6. Text Model Probe
-        text_model = getattr(settings, "llm_model", "qwen2.5:7b")
+        text_model = getattr(settings, "llm_model", "qwen3.5:9b")
         text_status = SubsystemStatus.UNAVAILABLE if not ollama_ok else SubsystemStatus.HEALTHY
         if not ollama_ok:
             details["text_model"] = "Ollama is unavailable; text model readiness could not be verified"

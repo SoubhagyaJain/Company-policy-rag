@@ -7,8 +7,8 @@ Usage:
     python scripts/evaluate.py --max-samples 5
     python scripts/evaluate.py --no-judge          # skip judge; still runs generation
     python scripts/evaluate.py --retrieval-only    # retrieval metrics only (CI smoke)
-    python scripts/evaluate.py --corpus guidebook  # uses golden_dataset_guidebook.json (project root)
-    python scripts/evaluate.py --dataset golden_dataset_guidebook.json
+    python scripts/evaluate.py --corpus guidebook  # uses data/eval/golden_dataset_guidebook.json
+    python scripts/evaluate.py --dataset data/eval/golden_dataset_guidebook.json
     python scripts/evaluate.py --dataset data/eval/golden_dataset.json
 
 Prerequisites:

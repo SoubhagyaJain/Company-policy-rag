@@ -93,9 +93,9 @@ class TestGoldenDataset:
         cases = load_golden_dataset(smoke)
         assert len(cases) == 8
 
-    def test_guidebook_dataset_top_level(self) -> None:
+    def test_guidebook_dataset_canonical_path(self) -> None:
         root = Path(__file__).resolve().parent.parent
-        path = root / "golden_dataset_guidebook.json"
+        path = root / "data" / "eval" / "golden_dataset_guidebook.json"
         assert path.exists()
         cases = load_golden_dataset(path)
         assert len(cases) == 35

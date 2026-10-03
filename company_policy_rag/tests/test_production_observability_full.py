@@ -40,6 +40,7 @@ from backend.models.telemetry_models import (
 )
 from backend.services.telemetry_db import TelemetryDB
 from backend.services.telemetry_service import TelemetryService
+from src.config import settings
 
 
 @pytest.fixture
@@ -224,7 +225,7 @@ def test_conversational_bypass_telemetry(temp_telemetry_db):
 
 
 def test_multi_model_monitoring_separation(temp_telemetry_db):
-    """Verify that Text (qwen2.5:7b) and Vision (Qwen3-VL-2B-Instruct) metrics are kept separated."""
+    """Verify that text and vision metrics are kept separated."""
     db = temp_telemetry_db
     service = TelemetryService(db_path=str(db.db_path))
 
@@ -259,7 +260,8 @@ def test_multi_model_monitoring_separation(temp_telemetry_db):
     time.sleep(0.3)
     summary = service.get_observability_summary(time_range="1h")
 
-    assert summary.models.text_model.model_name == "qwen2.5:7b"
+    assert summary.models.text_model.model_name == settings.llm_model
+    assert summary.models.text_model.requests_count == 1
     assert summary.models.vision_model.model_name == "Qwen3-VL-2B-Instruct"
     assert summary.models.vision_model.requests_count == 1
     assert summary.models.vision_model.visual_pages_detected == 1

@@ -305,8 +305,8 @@ git status --short --branch
 If you use Ollama locally:
 
 ```bash
-ollama pull qwen2.5:7b
-ollama pull nomic-embed-text
+ollama pull qwen3.5:9b
+ollama pull qwen3-embedding:0.6b
 ```
 
 ### Install PostHog-compatible telemetry dependency

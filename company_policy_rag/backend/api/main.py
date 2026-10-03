@@ -61,9 +61,9 @@ def _install_access_log_filter() -> None:
 def warmup_rag_system() -> None:
     """
     Synchronously preloads and warms up all RAG models and components on server startup:
-    1. Dense embedding model (BAAI/bge-small-en-v1.5)
-    2. Cross-Encoder reranker (BAAI/bge-reranker-large)
-    3. Ollama LLM model weights pinned in VRAM (keep_alive=-1)
+    1. Cross-Encoder reranker (BAAI/bge-reranker-large)
+    2. Ollama LLM model weights pinned in VRAM (keep_alive=-1)
+    3. Dense embedding model on CPU (qwen3-embedding:0.6b)
     4. ChromaDB vector stores and BM25 index
     Ensures zero cold-start delay when the user sends their first query.
     """
@@ -86,32 +86,22 @@ def warmup_rag_system() -> None:
     get_chat_service()
     get_semantic_cache_manager()
 
-    # 2. Embedding Model Preloading & Warm-up
-    t0 = time.perf_counter()
-    try:
-        if hasattr(doc_service.embedding_service, "_init_model"):
-            doc_service.embedding_service._init_model()
-        doc_service.embedding_service.embed_text("warmup initialization query")
-        logger.info("[1/4] Embedding model loaded & warmed up in %.2fs", time.perf_counter() - t0)
-    except Exception as exc:
-        logger.warning("[1/4] Embedding model warm-up notice: %s", exc)
-
-    # 3. Reranker Model Preloading & Warm-up (skipped when the reranker is off)
+    # 2. Reranker Model Preloading & Warm-up (skipped when the reranker is off)
     t0 = time.perf_counter()
     try:
         from src.config import settings
 
         if not settings.enable_reranker:
-            logger.info("[2/4] CrossEncoder reranker disabled (ENABLE_RERANKER=false); not loading it.")
+            logger.info("[1/5] CrossEncoder reranker disabled (ENABLE_RERANKER=false); not loading it.")
         elif hasattr(pipeline.reranker, "_init_model"):
             pipeline.reranker._init_model()
         if settings.enable_reranker and getattr(pipeline.reranker, "_model", None) is not None:
             pipeline.reranker._model.predict([["warmup query", "warmup chunk context"]])
-            logger.info("[2/4] CrossEncoder reranker loaded & warmed up in %.2fs", time.perf_counter() - t0)
+            logger.info("[1/5] CrossEncoder reranker loaded & warmed up in %.2fs", time.perf_counter() - t0)
     except Exception as exc:
-        logger.warning("[2/4] CrossEncoder reranker warm-up notice: %s", exc)
+        logger.warning("[1/5] CrossEncoder reranker warm-up notice: %s", exc)
 
-    # 4. Ollama LLM Preloading & Warm-up (pin in VRAM)
+    # 3. Ollama LLM Preloading & Warm-up (pin in VRAM)
     t0 = time.perf_counter()
     try:
         active_model = pipeline.get_active_model()
@@ -122,9 +112,19 @@ def warmup_rag_system() -> None:
             # One token is enough to load the weights; an uncapped warm-up
             # generated a full reply on every start.
             complete_text(pipeline.llm, "warmup", max_tokens=1)
-        logger.info("[3/4] Ollama LLM '%s' preloaded & warmed up in %.2fs", active_model, time.perf_counter() - t0)
+        logger.info("[2/5] Ollama LLM '%s' preloaded & warmed up in %.2fs", active_model, time.perf_counter() - t0)
     except Exception as exc:
-        logger.warning("[3/4] Ollama LLM warm-up notice: %s", exc)
+        logger.warning("[2/5] Ollama LLM warm-up notice: %s", exc)
+
+    # 4. Warm the CPU embedder after the LLM so Ollama keeps both runners loaded.
+    t0 = time.perf_counter()
+    try:
+        if hasattr(doc_service.embedding_service, "_init_model"):
+            doc_service.embedding_service._init_model()
+        doc_service.embedding_service.embed_text("warmup initialization query")
+        logger.info("[3/5] Embedding model loaded & warmed up in %.2fs", time.perf_counter() - t0)
+    except Exception as exc:
+        logger.warning("[3/5] Embedding model warm-up notice: %s", exc)
 
     # 5. ChromaDB & BM25 verification
     t0 = time.perf_counter()

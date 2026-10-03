@@ -36,7 +36,6 @@ COPY frontend/app/ ./app/
 COPY frontend/components/ ./components/
 COPY frontend/hooks/ ./hooks/
 COPY frontend/lib/ ./lib/
-COPY frontend/preview/ ./preview/
 COPY frontend/public/ ./public/
 
 # Next.js global styles
