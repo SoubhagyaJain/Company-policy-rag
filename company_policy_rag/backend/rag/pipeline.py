@@ -90,6 +90,17 @@ from src.config import settings
 from src.ollama_client import preload_model
 
 
+def _answer_thinking(model: str, response_mode: ResponseMode) -> bool | None:
+    if model.lower() != "qwen3.5:9b":
+        return None
+    return response_mode != "compact"
+
+
+def _answer_thinking_budget(model: str, response_mode: ResponseMode) -> int | None:
+    if _answer_thinking(model, response_mode) is not True:
+        return None
+    return 128 if response_mode == "standard" else 256
+
 
 class ModelManager:
     """
@@ -557,7 +568,7 @@ def _log_rag_trace(trace: RAGTrace) -> None:
         f"VISION_STATUS:            {trace.vision_status or 'READY'}",
         f"EVIDENCE_STATUS:          {trace.evidence_status or ('SUFFICIENT' if trace.evidence_sufficiency_passed else 'INSUFFICIENT')}",
         f"GROUNDING:                {trace.grounding_status or ('PASS' if trace.grounding_validation_passed else 'FAIL')}",
-        f"GENERATION_MODEL:         {trace.generation_model or 'qwen2.5:7b'}",
+        f"GENERATION_MODEL:         {trace.generation_model or 'qwen3.5:9b'}",
         f"TOTAL LATENCY:            {trace.execution_time_ms:.2f} ms",
         f"{sep}\n",
     ]
@@ -629,7 +640,7 @@ class RAGPipeline:
         if isinstance(raw_llm_name, str) and raw_llm_name.strip():
             default_llm_name = raw_llm_name.strip()
         else:
-            default_llm_name = getattr(settings, "llm_model", "qwen2.5:7b")
+            default_llm_name = getattr(settings, "llm_model", "qwen3.5:9b")
         self.model_manager = ModelManager(initial_model=str(default_llm_name))
         self._llm_instance_cache: dict[str, Any] = {}
         self._llm_cache_lock = threading.RLock()
@@ -1317,7 +1328,7 @@ class RAGPipeline:
 
     def _get_effective_llm(self, model: str | None) -> tuple[Any | None, str]:
         """Return a per-request thread-safe LLM instance and model name."""
-        fallback_model = str(getattr(settings, "llm_model", "qwen2.5:7b"))
+        fallback_model = str(getattr(settings, "llm_model", "qwen3.5:9b"))
         curr = self.model_manager.current_model
         base_model = curr if isinstance(curr, str) and curr else fallback_model
         raw_model = (model or "").strip() if isinstance(model, str) else ""
@@ -2541,6 +2552,8 @@ class RAGPipeline:
                         prompt,
                         temperature=current_strategy.temperature,
                         max_tokens=max_tokens,
+                        think=_answer_thinking(ctx.selected_model, ctx.response_mode),
+                        thinking_budget=_answer_thinking_budget(ctx.selected_model, ctx.response_mode),
                         cancel_event=ctx.cancel_event,
                     )
                     answer_parts: list[str] = []
@@ -2555,6 +2568,8 @@ class RAGPipeline:
                         prompt,
                         temperature=current_strategy.temperature,
                         max_tokens=max_tokens,
+                        think=_answer_thinking(ctx.selected_model, ctx.response_mode),
+                        thinking_budget=_answer_thinking_budget(ctx.selected_model, ctx.response_mode),
                     )
                     ctx.llm_usage = usage.to_dict()
                 answer_text = raw_answer
@@ -2908,6 +2923,8 @@ class RAGPipeline:
                     max_tokens=fit_output_budget(
                         ctx.req_llm, prompt, ctx.response_mode_config.max_output_tokens
                     ),
+                    think=_answer_thinking(ctx.selected_model, ctx.response_mode),
+                    thinking_budget=_answer_thinking_budget(ctx.selected_model, ctx.response_mode),
                 )
             except Exception as exc:
                 logger.warning("General chat generation failed: %s", exc)
@@ -3774,6 +3791,8 @@ class RAGPipeline:
                     max_tokens=fit_output_budget(
                         req_llm, prompt, response_mode_config.max_output_tokens
                     ),
+                    think=_answer_thinking(selected_model, response_mode),
+                    thinking_budget=_answer_thinking_budget(selected_model, response_mode),
                     cancel_event=cancel_token,
                 )
                 for delta in completion_stream:
@@ -3795,6 +3814,8 @@ class RAGPipeline:
                         max_tokens=fit_output_budget(
                             req_llm, prompt, response_mode_config.max_output_tokens
                         ),
+                        think=_answer_thinking(selected_model, response_mode),
+                        thinking_budget=_answer_thinking_budget(selected_model, response_mode),
                     )
                 except Exception as exc:
                     logger.warning("General chat generation failed: %s", exc)

@@ -11,8 +11,8 @@ until curl -sf "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; do
   if [ "$elapsed" -ge "$WAIT_SECONDS" ]; then
     echo "ERROR: Ollama not reachable at ${OLLAMA_URL}" >&2
     echo "Start Ollama on the host and pull models:" >&2
-    echo "  ollama pull qwen2.5-coder-7b-policy" >&2
-    echo "  ollama pull nomic-embed-text" >&2
+    echo "  ollama pull qwen3.5:9b" >&2
+    echo "  ollama pull qwen3-embedding:0.6b" >&2
     exit 1
   fi
   sleep 2

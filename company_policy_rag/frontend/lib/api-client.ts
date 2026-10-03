@@ -960,11 +960,11 @@ export class ApiClient {
     try {
       const res = await fetch(`${this.baseUrl}/api/models`);
       if (!res.ok) {
-        return { active_model: 'qwen2.5:7b', models: [] };
+        return { active_model: 'qwen3.5:9b', models: [] };
       }
       return await res.json();
     } catch {
-      return { active_model: 'qwen2.5:7b', models: [] };
+      return { active_model: 'qwen3.5:9b', models: [] };
     }
   }
 

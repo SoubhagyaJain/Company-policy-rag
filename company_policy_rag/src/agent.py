@@ -65,6 +65,7 @@ def configure_llm() -> Ollama:
         temperature=settings.llm_temperature,
         request_timeout=settings.llm_request_timeout,
         context_window=settings.llm_context_window,
+        thinking=False if settings.llm_model == "qwen3.5:9b" else None,
     )
 
 

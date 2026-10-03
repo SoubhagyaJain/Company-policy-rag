@@ -477,6 +477,7 @@ def run_evaluation(
             base_url=settings.ollama_base_url,
             temperature=settings.llm_temperature,
             request_timeout=settings.llm_request_timeout,
+            thinking=False if settings.llm_model == "qwen3.5:9b" else None,
         )
 
     index = load_index()

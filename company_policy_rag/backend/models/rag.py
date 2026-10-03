@@ -311,5 +311,5 @@ class RAGResponse(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     context_chunks: list[ScoredChunk] = Field(default_factory=list)
     trace: RAGTrace
-    model: str = Field(default="qwen2.5:7b")
+    model: str = Field(default="qwen3.5:9b")
     token_usage: dict[str, int] = Field(default_factory=dict)

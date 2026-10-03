@@ -16,8 +16,8 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen2.5:7b}
-      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen3.5:9b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-qwen3-embedding:0.6b}
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
@@ -49,8 +49,8 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen2.5:7b}
-      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen3.5:9b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-qwen3-embedding:0.6b}
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
@@ -113,7 +113,7 @@ services:
 
   # Local model runtime. The setup job below pulls both required models once.
   ollama:
-    image: ollama/ollama:0.11.10
+    image: ollama/ollama:0.35.0
     container_name: rag-ollama
     environment:
       OLLAMA_KEEP_ALIVE: 10m
@@ -130,12 +130,12 @@ services:
     restart: unless-stopped
 
   ollama_setup:
-    image: ollama/ollama:0.11.10
+    image: ollama/ollama:0.35.0
     container_name: rag-ollama-setup
     environment:
       OLLAMA_HOST: http://ollama:11434
-      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen2.5:7b}
-      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      OLLAMA_LLM_MODEL: ${OLLAMA_LLM_MODEL:-qwen3.5:9b}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-qwen3-embedding:0.6b}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-

@@ -28,7 +28,7 @@ class SubsystemHealth(BaseModel):
     memory: SubsystemStatus = SubsystemStatus.HEALTHY
     uptime_seconds: float = 0.0
     error_rate: float = 0.0
-    active_model_text: str = "qwen2.5:7b"
+    active_model_text: str = "qwen3.5:9b"
     active_model_vision: str = "Qwen3-VL-2B-Instruct"
     details: dict[str, str] = Field(default_factory=dict)
 
@@ -159,7 +159,7 @@ class VisionTelemetry(BaseModel):
 
 
 class TextModelTelemetry(BaseModel):
-    model_name: str = "qwen2.5:7b"
+    model_name: str = "qwen3.5:9b"
     requests_count: int = 0
     p50_latency_ms: float | None = None
     p95_latency_ms: float | None = None
@@ -406,7 +406,7 @@ class QueryTraceRecord(BaseModel):
     token_breakdown: dict[str, int] = Field(default_factory=dict)
 
     # Models & Scopes
-    generation_model: str = "qwen2.5:7b"
+    generation_model: str = "qwen3.5:9b"
     query_scope: str = "global"
     active_document_name: str | None = None
     sources_used: list[str] = Field(default_factory=list)

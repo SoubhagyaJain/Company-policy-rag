@@ -11,22 +11,25 @@ from __future__ import annotations
 
 import json
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 import pytest
-from pydantic import ValidationError
 
 from backend.models.api_dto import ChatRequest, ChatResponse, ModelInfo, ModelListResponse
 from backend.models.rag import RAGResponse, RAGTrace
-from src.config import Settings, settings
+from src.config import Settings
 
 
 class TestConfigSystemModelDefaults:
     """Tests for centralized system configuration model defaults and env overrides."""
 
     def test_settings_default_llm_model(self) -> None:
-        """Settings defaults llm_model to qwen2.5:7b."""
+        """Settings defaults llm_model to qwen3.5:9b."""
         cfg = Settings(_env_file=None)
-        assert cfg.llm_model == "qwen2.5:7b"
+        assert cfg.llm_model == "qwen3.5:9b"
+
+    def test_settings_default_embedding_model(self) -> None:
+        cfg = Settings(_env_file=None)
+        assert cfg.embed_model == "qwen3-embedding:0.6b"
 
     def test_settings_default_metadata_extractor_model(self) -> None:
         """Settings defaults metadata_extractor_model to qwen2.5:7b."""
@@ -71,19 +74,49 @@ class TestConfigSystemModelDefaults:
             cfg = Settings(_env_file=None)
             assert cfg.eval_llm_model == custom_model
 
-    def test_llm_context_and_temperature_defaults(self) -> None:
-        """Context window is 8192 and temperature is 0.1 for high precision."""
-        assert settings.llm_context_window == 8192
-        assert settings.llm_temperature == 0.1
+    def test_llm_context_and_temperature_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The local defaults use a 4096-token context and temperature 0.1."""
+        monkeypatch.delenv("LLM_CONTEXT_WINDOW", raising=False)
+        monkeypatch.delenv("LLM_TEMPERATURE", raising=False)
+        cfg = Settings(_env_file=None)
+        assert cfg.llm_context_window == 4096
+        assert cfg.llm_temperature == 0.1
+
+
+def test_default_embedding_service_calls_ollama_embed() -> None:
+    from backend.embeddings.embeddings import EmbeddingService
+
+    with patch("ollama.Client") as client_type:
+        client = client_type.return_value
+        client.embed.side_effect = [
+            MagicMock(embeddings=[[3.0, 4.0]]),
+            MagicMock(embeddings=[[3.0, 4.0], [4.0, 3.0]]),
+        ]
+        service = EmbeddingService(cache_enabled=False)
+        assert service.embed_query("policy") == [0.6, 0.8]
+        assert service.embed_chunks(["policy A", "policy B"]) == [[0.6, 0.8], [0.8, 0.6]]
+        assert service.is_using_fallback is False
+        assert client.embed.call_args_list[0].kwargs == {
+            "model": "qwen3-embedding:0.6b",
+            "input": "policy",
+            "options": {"num_ctx": 4096, "num_gpu": 0},
+            "keep_alive": -1,
+        }
+        assert client.embed.call_args_list[1].kwargs == {
+            "model": "qwen3-embedding:0.6b",
+            "input": ["policy A", "policy B"],
+            "options": {"num_ctx": 4096, "num_gpu": 0},
+            "keep_alive": -1,
+        }
 
 
 class TestAPIDTOModelDefaults:
     """Tests for API DTO models, default model fields, and request/response serialization."""
 
     def test_chat_request_default_model(self) -> None:
-        """ChatRequest defaults model to qwen2.5:7b."""
+        """ChatRequest defaults model to qwen3.5:9b."""
         req_default = ChatRequest(message="What is the remote work policy?")
-        assert req_default.model == "qwen2.5:7b"
+        assert req_default.model == "qwen3.5:9b"
 
     def test_chat_request_custom_model(self) -> None:
         """ChatRequest accepts explicit model override."""
@@ -91,24 +124,24 @@ class TestAPIDTOModelDefaults:
         assert req_custom.model == "llama3.2:3b"
 
     def test_chat_response_default_model(self) -> None:
-        """ChatResponse default model is qwen2.5:7b."""
+        """ChatResponse default model is qwen3.5:9b."""
         resp = ChatResponse(
             query="What is the travel meal cap?",
             answer="The travel meal cap is $75/day.",
         )
-        assert resp.model == "qwen2.5:7b"
+        assert resp.model == "qwen3.5:9b"
         assert resp.query == "What is the travel meal cap?"
         assert resp.answer == "The travel meal cap is $75/day."
 
     def test_rag_response_default_model(self) -> None:
-        """RAGResponse default model is qwen2.5:7b."""
+        """RAGResponse default model is qwen3.5:9b."""
         trace = RAGTrace(query="What is the bereavement policy?")
         rag_resp = RAGResponse(
             query="What is the bereavement policy?",
             answer="Employees receive up to 5 days bereavement leave.",
             trace=trace,
         )
-        assert rag_resp.model == "qwen2.5:7b"
+        assert rag_resp.model == "qwen3.5:9b"
 
     def test_model_list_response_dto(self) -> None:
         """ModelListResponse structure with active model and available models list."""
@@ -129,13 +162,13 @@ class TestModelRoutesIntegration:
         """GET /api/models returns available models including default active LLM."""
         from backend.api.routes.models import get_available_models
 
-        mock_probe.return_value = (True, ["qwen2.5:7b", "nomic-embed-text"], None)
+        mock_probe.return_value = (True, ["qwen3.5:9b", "qwen3-embedding:0.6b"], None)
         res = get_available_models()
 
-        assert res.active_model == "qwen2.5:7b"
+        assert res.active_model == "qwen3.5:9b"
         assert len(res.models) >= 1
         model_ids = [m.id for m in res.models]
-        assert "qwen2.5:7b" in model_ids
+        assert "qwen3.5:9b" in model_ids
 
     @patch("backend.api.routes.models.probe_ollama_tags")
     def test_get_available_models_fallback_when_ollama_offline(self, mock_probe: MagicMock) -> None:
@@ -145,9 +178,9 @@ class TestModelRoutesIntegration:
         mock_probe.return_value = (False, [], "Connection refused")
         res = get_available_models()
 
-        assert res.active_model == "qwen2.5:7b"
+        assert res.active_model == "qwen3.5:9b"
         model_ids = [m.id for m in res.models]
-        assert "qwen2.5:7b" in model_ids
+        assert "qwen3.5:9b" in model_ids
 
     @patch("backend.api.routes.models.probe_ollama_tags")
     def test_select_active_model_valid(self, mock_probe: MagicMock) -> None:
@@ -240,7 +273,7 @@ class TestPipelineAndServiceDefaults:
     """Tests for default model handling in RAGPipeline and ChatService."""
 
     def test_rag_pipeline_default_model(self) -> None:
-        """RAGPipeline defaults to qwen2.5:7b when llm model is unspecified."""
+        """RAGPipeline defaults to qwen3.5:9b when llm model is unspecified."""
         from backend.rag.pipeline import RAGPipeline
 
         retriever = MagicMock()
@@ -250,7 +283,7 @@ class TestPipelineAndServiceDefaults:
             reranker=reranker,
             llm=None,
         )
-        assert pipeline.get_active_model() == "qwen2.5:7b"
+        assert pipeline.get_active_model() == "qwen3.5:9b"
 
     def test_chat_service_execute_query_default_model(self) -> None:
         """ChatService execute_query returns qwen2.5:7b default."""

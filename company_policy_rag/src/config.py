@@ -186,9 +186,9 @@ class Settings(BaseSettings):
 
     # ── Ollama / Models ────────────────────────────────────────────────────
     ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
-    text_model: str = Field(default="qwen2.5:7b", alias="TEXT_MODEL")
-    llm_model: str = Field(default="qwen2.5:7b", alias="OLLAMA_LLM_MODEL")
-    embed_model: str = Field(default="nomic-embed-text", alias="OLLAMA_EMBED_MODEL")
+    text_model: str = Field(default="qwen3.5:9b", alias="TEXT_MODEL")
+    llm_model: str = Field(default="qwen3.5:9b", alias="OLLAMA_LLM_MODEL")
+    embed_model: str = Field(default="qwen3-embedding:0.6b", alias="OLLAMA_EMBED_MODEL")
 
     # ── Vision Model & Document Understanding ──────────────────────────────
     vision_model: str = Field(default="Qwen3-VL-2B-Instruct", alias="VISION_MODEL")
@@ -493,7 +493,7 @@ class Settings(BaseSettings):
     # Golden-set eval is the quality gate before chunking / retrieval changes.
     eval_dataset_path: Path = Field(default=PROJECT_ROOT / "data" / "eval" / "golden_dataset.json")
     eval_guidebook_dataset_path: Path = Field(
-        default=PROJECT_ROOT / "golden_dataset_guidebook.json",
+        default=PROJECT_ROOT / "data" / "eval" / "golden_dataset_guidebook.json",
         alias="EVAL_GUIDEBOOK_DATASET_PATH",
     )
     eval_corpus: Literal["all", "policy", "guidebook"] = Field(

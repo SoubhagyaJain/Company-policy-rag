@@ -461,7 +461,7 @@ class ChatService:
         chat_mode = self._request_chat_mode(request)
         raw_req_model = (request.model or "").strip()
         if not raw_req_model or raw_req_model.lower() in ("default", "fastapi rag", "none"):
-            model_name = self.get_active_model() or "qwen2.5:7b"
+            model_name = self.get_active_model() or "qwen3.5:9b"
         else:
             model_name = raw_req_model
 

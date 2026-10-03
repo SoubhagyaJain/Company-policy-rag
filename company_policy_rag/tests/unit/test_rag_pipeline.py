@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+from types import SimpleNamespace
+
+import ollama
 import pytest
 
 from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole
@@ -40,7 +43,7 @@ def sample_chunks() -> list[Chunk]:
         id="chunk_001",
         text="Employees giving notice of resignation must submit two weeks notice in writing to HR. Employment is at-will termination.",
         metadata=meta1,
-        embedding=normalize_vector([0.1] * 384),
+        embedding=normalize_vector([0.1] * 1024),
         token_count=20,
     )
 
@@ -63,7 +66,7 @@ def sample_chunks() -> list[Chunk]:
         id="chunk_002",
         text="Full-time employees are eligible for medical, dental, and vision health insurance benefits after 30 days of employment.",
         metadata=meta2,
-        embedding=normalize_vector([0.8] * 384),
+        embedding=normalize_vector([0.8] * 1024),
         token_count=18,
     )
 
@@ -85,21 +88,29 @@ def sample_chunks() -> list[Chunk]:
         id="chunk_003",
         text="The six building blocks of AI agents are Role-playing, Focus Tasks, Tools, Cooperation, Guardrails, and Planning and Memory.",
         metadata=meta3,
-        embedding=normalize_vector([0.5] * 384),
+        embedding=normalize_vector([0.5] * 1024),
         token_count=24,
     )
 
     return [c1, c2, c3]
 
 
-def test_embedding_service_and_normalization():
+def test_embedding_service_and_normalization(monkeypatch):
     vec = [3.0, 4.0]
     norm = normalize_vector(vec)
     assert norm == [0.6, 0.8]
 
+    embed_calls = []
+
+    def fake_embed(self, **kwargs):
+        embed_calls.append(kwargs)
+        inputs = kwargs["input"]
+        return SimpleNamespace(embeddings=[[1.0] * 1024 for _ in ([inputs] if isinstance(inputs, str) else inputs)])
+
+    monkeypatch.setattr(ollama.Client, "embed", fake_embed)
     service = EmbeddingService(cache_enabled=True, dimension=384)
     emb1 = service.embed_text("Employee resignation notice policy")
-    assert len(emb1) == 384
+    assert len(emb1) == 1024
 
     # Test cache hit
     emb2 = service.embed_text("Employee resignation notice policy")
@@ -108,7 +119,12 @@ def test_embedding_service_and_normalization():
 
     batch_embs = service.embed_chunks(["Text A", "Text B"])
     assert len(batch_embs) == 2
-    assert len(batch_embs[0]) == 384
+    assert len(batch_embs[0]) == 1024
+    assert [call["options"] for call in embed_calls] == [
+        {"num_ctx": 4096, "num_gpu": 0},
+        {"num_ctx": 4096, "num_gpu": 0},
+    ]
+    assert [call["keep_alive"] for call in embed_calls] == [-1, -1]
 
 
 def test_vector_store(sample_chunks: list[Chunk]):
@@ -120,7 +136,7 @@ def test_vector_store(sample_chunks: list[Chunk]):
         assert vstore.count() == 3
 
         # Search
-        query_emb = sample_chunks[0].embedding or normalize_vector([0.1] * 384)
+        query_emb = sample_chunks[0].embedding or normalize_vector([0.1] * 1024)
         results = vstore.search(query_emb, top_k=2)
         assert len(results) >= 1
         assert results[0].chunk.id == "chunk_001"

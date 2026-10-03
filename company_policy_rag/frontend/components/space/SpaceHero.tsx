@@ -3,7 +3,7 @@
 /**
  * SpaceHero — WebGL gravitational-lensing hero, ported from the Claude Design
  * "Space Hero.dc.html" Component class into a React effect. Behaviour preserved:
- * two-pass shader (scene + 5,200 particles), pointer parallax, scroll-linked
+ * two-pass shader (scene + 5,200 particles), ambient parallax, scroll-linked
  * intensification, in-shader light/dark cross-fade (uLight), adaptive DPR
  * degradation, prefers-reduced-motion, mobile tier, and the CSS heroBreathe
  * fallback when WebGL / shader compilation is unavailable.
@@ -249,7 +249,6 @@ export function SpaceHero({
     const small = window.matchMedia('(max-width: 820px)').matches;
     const dpr = Math.min(window.devicePixelRatio || 1, small ? 1.5 : 2);
 
-    const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
     let scroll = 0;
     let scrollT = 0;
     let t = 0;
@@ -327,12 +326,6 @@ export function SpaceHero({
       scrollT = Math.min(Math.max(-rect.top / len, 0), 1);
     };
 
-    const onMove = (e: PointerEvent) => {
-      if (reduced) return;
-      mouse.tx = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.ty = -((e.clientY / window.innerHeight) * 2 - 1);
-    };
-
     const onResize = () => { resize(); onScroll(); };
 
     const frame = (now: number) => {
@@ -353,8 +346,6 @@ export function SpaceHero({
       fade = smoothDamp(fade, fadeTarget, 0.32, dt);
       if (fadeTarget - fade < 0.002) fade = 1;
       if (!reduced) t += dt;
-      mouse.x = smoothDamp(mouse.x, mouse.tx, 0.12, dt);
-      mouse.y = smoothDamp(mouse.y, mouse.ty, 0.12, dt);
       scroll = smoothDamp(scroll, scrollT, 0.18, dt);
       const lt = lightRef.current ? 1 : 0;
       lightMix = smoothDamp(lightMix, lt, 0.22, dt);
@@ -374,7 +365,7 @@ export function SpaceHero({
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.uniform1i(uS.uTex, 0);
       gl.uniform2f(uS.uRes, cv.width, cv.height);
-      gl.uniform2f(uS.uMouse, mouse.x, mouse.y);
+      gl.uniform2f(uS.uMouse, 0, 0);
       gl.uniform1f(uS.uImgA, imgA);
       gl.uniform1f(uS.uTime, t);
       gl.uniform1f(uS.uScroll, scroll);
@@ -393,7 +384,7 @@ export function SpaceHero({
       gl.enableVertexAttribArray(aKind);
       gl.vertexAttribPointer(aKind, 1, gl.FLOAT, false, 16, 12);
       gl.uniform2f(uP.uRes, cv.width, cv.height);
-      gl.uniform2f(uP.uMouse, mouse.x, mouse.y);
+      gl.uniform2f(uP.uMouse, 0, 0);
       gl.uniform1f(uP.uTime, t);
       gl.uniform1f(uP.uScroll, scroll);
       gl.uniform1f(uP.uPar, par);
@@ -466,14 +457,12 @@ export function SpaceHero({
     img.onerror = () => fallback();
     img.src = imageSrc;
 
-    window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize);
     onScroll();
 
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener('pointermove', onMove);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
       if (gl) {

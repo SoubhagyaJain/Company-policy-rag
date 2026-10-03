@@ -30,7 +30,7 @@ def test_omitted_request_model_uses_dynamic_active_model() -> None:
 
     client, selected = pipeline._get_effective_llm(None)
 
-    assert request.model == "qwen2.5:7b"
+    assert request.model == "qwen3.5:9b"
     assert selected == "llama3.2:3b"
     assert client.complete("test") == "llama3.2:3b"
 
