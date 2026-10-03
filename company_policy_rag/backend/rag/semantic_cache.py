@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from chromadb.errors import InvalidDimensionException
 from pydantic import BaseModel, Field
 
 from backend.embeddings.embeddings import EmbeddingService
@@ -144,6 +145,30 @@ class SemanticCacheManager:
             )
             self._collection = None
 
+    def _reset_incompatible_collection_locked(self, embedding_dimension: int) -> None:
+        """Replace only the rebuildable answer cache after an embedding model change."""
+        document_collection = getattr(self.vector_store, "collection_name", None)
+        if self.collection_name in {
+            document_collection,
+            getattr(self.settings, "chroma_collection_name", None),
+        }:
+            raise RuntimeError("Semantic cache collection must differ from the document collection.")
+
+        from backend.embeddings.vector_store import get_shared_chroma_client
+
+        client = get_shared_chroma_client(self.persist_dir)
+        client.delete_collection(self.collection_name)
+        self._collection = client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
+        self._memory_cache.clear()
+        logger.warning(
+            "Recreated incompatible semantic cache collection '%s' for %d-dimensional embeddings.",
+            self.collection_name,
+            embedding_dimension,
+        )
+
     def _resolve_kb_version(self, explicit_version: Optional[str]) -> Optional[str]:
         if explicit_version is not None:
             return explicit_version
@@ -275,12 +300,15 @@ class SemanticCacheManager:
                         if len(where_conditions) == 1
                         else {"$and": where_conditions}
                     )
-                    results = self._collection.query(
-                        query_embeddings=[query_embedding],
-                        n_results=1,
-                        include=["documents", "metadatas", "distances"],
-                        where=where_clause,
-                    )
+                    try:
+                        results = self._collection.query(
+                            query_embeddings=[query_embedding],
+                            n_results=1,
+                            include=["documents", "metadatas", "distances"],
+                            where=where_clause,
+                        )
+                    except InvalidDimensionException:
+                        self._reset_incompatible_collection_locked(len(query_embedding))
 
                 if (
                     results
@@ -514,12 +542,21 @@ class SemanticCacheManager:
 
             with self._lock:
                 if self._collection is not None:
-                    self._collection.upsert(
-                        ids=[entry_id],
-                        documents=[query_clean],
-                        embeddings=[query_embedding],
-                        metadatas=[meta_dict],
-                    )
+                    try:
+                        self._collection.upsert(
+                            ids=[entry_id],
+                            documents=[query_clean],
+                            embeddings=[query_embedding],
+                            metadatas=[meta_dict],
+                        )
+                    except InvalidDimensionException:
+                        self._reset_incompatible_collection_locked(len(query_embedding))
+                        self._collection.upsert(
+                            ids=[entry_id],
+                            documents=[query_clean],
+                            embeddings=[query_embedding],
+                            metadatas=[meta_dict],
+                        )
 
                 self._memory_cache[entry_id] = {
                     "query": query_clean,
