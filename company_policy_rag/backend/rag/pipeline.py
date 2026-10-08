@@ -9,6 +9,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Generator
+from itertools import groupby
 from pathlib import Path
 from typing import Any, Callable
 
@@ -431,20 +432,19 @@ def _extract_requested_numbered_list(
             sc.chunk.id,
         ),
     )
-    combined = "\n".join(sc.chunk.text for sc in ordered)
-    found: dict[int, str] = {}
-    for raw_index, raw_label in re.findall(
-        r"(?m)^\s*(\d{1,2})\s*[.)]\s*([^\r\n]+)",
-        combined,
-    ):
-        index = int(raw_index)
-        label = raw_label.strip().strip(" -*:.;")
-        if 1 <= index <= expected and label:
-            found.setdefault(index, label)
-
-    if not all(index in found for index in range(1, expected + 1)):
-        return None
-    return [found[index] for index in range(1, expected + 1)]
+    # Continuation chunks may complete one document's list. Combining unrelated
+    # documents can fabricate a complete list that no source actually contains.
+    for _, document_chunks in groupby(ordered, key=lambda sc: sc.chunk.metadata.document_id):
+        found: dict[int, str] = {}
+        for sc in document_chunks:
+            for match in re.finditer(r"(?m)^\s*(\d{1,2})\s*[.)]\s*([^\r\n]+)", sc.chunk.text):
+                index = int(match.group(1))
+                label = match.group(2).strip().strip(" -*:.;")
+                if 1 <= index <= expected and label:
+                    found.setdefault(index, label)
+            if len(found) == expected:
+                return [found[index] for index in range(1, expected + 1)]
+    return None
 
 
 def _enumeration_preamble(query: str, count: int) -> str:
@@ -507,7 +507,7 @@ def _format_history_for_prompt(
     max_turns: int = 6,
     max_chars: int = 12000,
 ) -> str:
-    if not history:
+    if not history or max_turns <= 0 or max_chars <= 0:
         return ""
     recent = history[-(max_turns * 2) :]
     formatted: list[tuple[str, str]] = []
@@ -534,7 +534,7 @@ def _format_history_for_prompt(
         if remaining <= 0:
             break
         if len(line) > remaining:
-            line = line[:remaining].rstrip() + "…"
+            line = line[: remaining - 1].rstrip() + "…"
         kept.append(line)
         used += len(line) + 1
     kept.reverse()
@@ -1395,13 +1395,16 @@ class RAGPipeline:
         Giving each part its own pass and round-robin merging the results keeps
         evidence for every part in the final context.
         """
-        if not candidates:
+        if not candidates or top_n <= 0:
             return []
+        parts = list(dict.fromkeys(parts))
+        if not parts:
+            return candidates[:top_n]
         if len(parts) < 2:
             return self._call_reranker(parts[0], candidates, top_n, min_ratio, trace_sink)
 
         # Each part must be able to win seats, but no part may crowd out the rest.
-        per_part_quota = max(2, top_n // len(parts))
+        per_part_quota = max(2, (top_n + len(parts) - 1) // len(parts))
         ranked_per_part: list[list[ScoredChunk]] = []
         for part in parts:
             try:
@@ -1421,8 +1424,10 @@ class RAGPipeline:
                 if chunk.chunk.id not in seen:
                     seen.add(chunk.chunk.id)
                     merged.append(chunk)
+                    if len(merged) == top_n:
+                        return merged
         if not merged:
-            return self.reranker.rerank(parts[0], candidates, top_n=top_n, min_ratio=min_ratio)
+            return self._call_reranker(parts[0], candidates, top_n, min_ratio, trace_sink)
         return merged[:top_n]
 
     def _retrieve_hybrid_hits(
@@ -1485,13 +1490,14 @@ class RAGPipeline:
             return requested_page
 
         matched_physical_pages: set[int] = set()
+        allowed_ids = set(allowed_document_ids or [])
         for chunk in self.docstore.values():
             meta = chunk.metadata
             if active_document_id and meta.document_id != active_document_id:
                 continue
             if active_document_name and meta.source_file != active_document_name:
                 continue
-            if allowed_document_ids and meta.document_id not in allowed_document_ids:
+            if allowed_ids and meta.document_id not in allowed_ids:
                 continue
             page_id = meta.get_page_identity()
             if page_id.matches_display(requested_page) or (
@@ -1761,6 +1767,7 @@ class RAGPipeline:
 
         if not sub_queries:
             return [], False
+        sub_queries = list(dict.fromkeys(sub_queries))
 
         # Warm heavy models on THIS (main) thread before fanning sub-queries out
         # to workers — a first `import sentence_transformers` inside a worker can
@@ -1768,7 +1775,10 @@ class RAGPipeline:
         # retrievers that don't implement the warm hook.
         warm = getattr(self.hybrid_retriever, "_warm_dense_model", None)
         if callable(warm):
-            warm()
+            try:
+                warm()
+            except Exception as exc:
+                logger.warning("Dense model warm-up failed; continuing with retrieval fallback: %s", exc)
 
         max_workers = min(len(sub_queries), max(1, int(getattr(settings, "retrieval_max_workers", 4))))
         if max_workers > 1:
@@ -1894,7 +1904,7 @@ class RAGPipeline:
         ):
             sub_queries = list(ctx.question_parts)
         elif not ctx.is_fast_path and scope_decision.is_structural_query:
-            sub_queries = scope_decision.structural_subqueries
+            sub_queries = list(scope_decision.structural_subqueries)
         elif not ctx.is_fast_path and (current_strategy.enable_multi_query or rewrite_res.is_comprehensive_list):
             sub_queries = self.multi_query_gen.generate_subqueries(rewrite_res.rewritten_query)
         else:
@@ -1904,7 +1914,7 @@ class RAGPipeline:
         for part in ctx.question_parts:
             if part not in sub_queries:
                 sub_queries.append(part)
-        sub_queries = sub_queries[:8]
+        sub_queries = list(dict.fromkeys(sub_queries))[:8]
         ctx.sub_queries = sub_queries
         ctx.stage_timings[f"multi_query{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
@@ -1959,14 +1969,15 @@ class RAGPipeline:
                     if key in hard_filter_keys
                 }
                 relaxed_filters = relaxed_filters or None
-                ctx.filter_relaxed = relaxed_filters != search_filters
-                ctx.applied_filters = relaxed_filters or {}
+                ctx.filter_relaxed = ctx.filter_relaxed or relaxed_filters != search_filters
                 # Relaxation retries the same sub-queries; on a per-query error it
                 # drops that query (no BM25 fallback), matching the original.
-                candidate_chunks, _ = self._gather_hybrid_candidates(
-                    sub_queries, relaxed_filters, current_strategy,
-                    bm25_fallback_on_error=False,
-                )
+                if relaxed_filters != search_filters:
+                    ctx.applied_filters = relaxed_filters or {}
+                    candidate_chunks, _ = self._gather_hybrid_candidates(
+                        sub_queries, relaxed_filters, current_strategy,
+                        bm25_fallback_on_error=False,
+                    )
 
             # Enforce hard document scope validation
             if scope_decision.scope == DocumentRetrievalScope.CURRENT_DOCUMENT:
@@ -1986,9 +1997,10 @@ class RAGPipeline:
                 candidate_chunks = valid_cands
             elif scope_decision.scope == DocumentRetrievalScope.SELECTED_DOCUMENTS and scope_decision.allowed_document_ids:
                 valid_cands = []
+                allowed_ids = set(scope_decision.allowed_document_ids)
                 for sc in candidate_chunks:
                     d_id = sc.chunk.metadata.document_id
-                    if d_id in scope_decision.allowed_document_ids:
+                    if d_id in allowed_ids:
                         valid_cands.append(sc)
                     else:
                         ctx.cross_document_count += 1
@@ -2030,6 +2042,8 @@ class RAGPipeline:
                 getattr(settings, "retrieval_cache_enabled", True)
                 and len(sub_queries) == 1
                 and candidate_chunks
+                and not dense_degraded
+                and not ctx.filter_relaxed
                 and not (conv_res and conv_res.is_followup)
             ):
                 retrieval_cache.set(
@@ -3720,23 +3734,30 @@ class RAGPipeline:
         """Streaming RAG pipeline yielding SSE token events and telemetry."""
         from starlette.concurrency import iterate_in_threadpool
 
-        async for chunk in iterate_in_threadpool(
-            self._stream_query_internal(
-                user_query=user_query,
-                filters=filters,
-                history=history,
-                model=model,
-                active_document_id=active_document_id,
-                active_document_name=active_document_name,
-                selected_document_ids=selected_document_ids,
-                document_scope=document_scope,
-                conversation_state=conversation_state,
-                response_mode=response_mode,
-                thinking_detail_level=thinking_detail_level,
-                cancel_token=cancel_token,
-            )
-        ):
-            yield chunk
+        cancel_token = cancel_token if cancel_token is not None else threading.Event()
+        stream = self._stream_query_internal(
+            user_query=user_query,
+            filters=filters,
+            history=history,
+            model=model,
+            active_document_id=active_document_id,
+            active_document_name=active_document_name,
+            selected_document_ids=selected_document_ids,
+            document_scope=document_scope,
+            conversation_state=conversation_state,
+            response_mode=response_mode,
+            thinking_detail_level=thinking_detail_level,
+            cancel_token=cancel_token,
+        )
+        completed = False
+        try:
+            async for chunk in iterate_in_threadpool(stream):
+                yield chunk
+            completed = True
+        finally:
+            if not completed:
+                cancel_token.set()
+            stream.close()
 
     def _stream_general_chat_response(
         self,
@@ -3914,6 +3935,9 @@ class RAGPipeline:
         thinking_detail_level: ThinkingDetailLevel | str = ThinkingDetailLevel.STANDARD,
         cancel_token: Any = None,
     ) -> Generator[dict[str, Any], None, None]:
+        cancel_token = cancel_token if cancel_token is not None else threading.Event()
+        if cancel_token.is_set():
+            return
         thinking_sm = ThinkingStateMachine(
             query_id=f"qry_{uuid.uuid4().hex[:8]}",
             detail_level=thinking_detail_level,
@@ -3947,9 +3971,19 @@ class RAGPipeline:
             )
             return
 
-        token_queue: queue.Queue[str] = queue.Queue()
+        # Apply backpressure when the client consumes tokens slowly. Timed puts
+        # let a cancelled or closed consumer release the producer promptly.
+        token_queue: queue.Queue[str] = queue.Queue(maxsize=64)
         result_box: dict[str, Any] = {}
         worker_done = threading.Event()
+
+        def emit_token(token: str) -> None:
+            while not cancel_token.is_set():
+                try:
+                    token_queue.put(token, timeout=0.1)
+                    return
+                except queue.Full:
+                    continue
 
         def run_query() -> None:
             try:
@@ -3966,7 +4000,7 @@ class RAGPipeline:
                     response_mode=response_mode,
                     thinking_detail_level=thinking_detail_level,
                     thinking_sm=thinking_sm,
-                    stream_callback=token_queue.put,
+                    stream_callback=emit_token,
                     cancel_event=cancel_token,
                 )
             except BaseException as exc:
@@ -3976,94 +4010,97 @@ class RAGPipeline:
 
         worker = threading.Thread(target=run_query, daemon=True, name="rag-stream-worker")
         worker.start()
-
-        streamed_answer = False
-        retrieval_event_sent = False
-        while not worker_done.is_set() or not token_queue.empty():
-            if cancel_token and cancel_token.is_set():
-                return
-            try:
-                token_text = token_queue.get(timeout=0.1)
-            except queue.Empty:
-                continue
-            if not retrieval_event_sent:
-                # The first model delta proves retrieval and context building
-                # have completed, even though final timings are not known yet.
-                yield {
-                    "type": "retrieval_done",
-                    "stage_timings": {},
-                    "candidate_count": 0,
-                    "reranked_count": 0,
-                    "context_count": 0,
-                    "cache_hit": False,
-                }
-                retrieval_event_sent = True
-            streamed_answer = True
-            yield {"type": "token", "content": token_text}
-
-        if "error" in result_box:
-            raise result_box["error"]
-        resp = result_box["response"]
-
-        # 1. Progressive Pre-generation Thinking Events (before generation)
-        for ev in thinking_sm.get_visible_events():
-            if ev.stage in (ThinkingStage.ANSWER_GENERATION, ThinkingStage.CITATION_BUILDING, ThinkingStage.COMPLETED):
-                continue
-            if cancel_token and cancel_token.is_set():
-                return
-            yield {"type": "thinking", "event": ev}
-
-        # 2. Retrieval Done Event (for backward compatibility)
-        if not retrieval_event_sent:
-            yield {
-                "type": "retrieval_done",
-                "stage_timings": resp.trace.stage_timings_ms,
-                "candidate_count": resp.trace.retrieved_candidate_count,
-                "reranked_count": resp.trace.post_rerank_count,
-                "context_count": resp.trace.final_context_count,
-                "cache_hit": resp.trace.cache_hit,
-            }
-
-        # 3. Answer Generation Thinking Start Event
-        gen_events = [e for e in thinking_sm.get_visible_events() if e.stage == ThinkingStage.ANSWER_GENERATION]
-        if gen_events:
-            yield {"type": "thinking", "event": gen_events[0]}
-
-        # 4. Stream words/tokens smoothly (starts only after answer planning)
-        if not streamed_answer:
-            words = resp.answer.split(" ")
-            for i, word in enumerate(words):
+        try:
+            streamed_answer = False
+            retrieval_event_sent = False
+            while not worker_done.is_set() or not token_queue.empty():
                 if cancel_token and cancel_token.is_set():
                     return
-                chunk_text = word + (" " if i < len(words) - 1 else "")
-                yield {"type": "token", "content": chunk_text}
+                try:
+                    token_text = token_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+                if not retrieval_event_sent:
+                    # The first model delta proves retrieval and context building
+                    # have completed, even though final timings are not known yet.
+                    yield {
+                        "type": "retrieval_done",
+                        "stage_timings": {},
+                        "candidate_count": 0,
+                        "reranked_count": 0,
+                        "context_count": 0,
+                        "cache_hit": False,
+                    }
+                    retrieval_event_sent = True
+                streamed_answer = True
+                yield {"type": "token", "content": token_text}
 
-        # 5. Post-generation Thinking Events (Citation Building & Completed)
-        for ev in thinking_sm.get_visible_events():
-            if ev.stage in (ThinkingStage.CITATION_BUILDING, ThinkingStage.COMPLETED):
+            if "error" in result_box:
+                raise result_box["error"]
+            resp = result_box["response"]
+
+            # 1. Progressive Pre-generation Thinking Events (before generation)
+            for ev in thinking_sm.get_visible_events():
+                if ev.stage in (ThinkingStage.ANSWER_GENERATION, ThinkingStage.CITATION_BUILDING, ThinkingStage.COMPLETED):
+                    continue
                 if cancel_token and cancel_token.is_set():
                     return
                 yield {"type": "thinking", "event": ev}
 
-        # 6. Final Citations and Done Events
-        yield {
-            "type": "done",
-            "answer": resp.answer,
-            "citations": resp.citations,
-            "context_chunks": resp.context_chunks,
-            "trace": resp.trace,
-            "model": resp.model,
-            "token_usage": resp.token_usage,
-            "total_elapsed_ms": resp.trace.execution_time_ms,
-            "cache_hit": resp.trace.cache_hit,
-            "reasoning_summary": (
-                resp.trace.reasoning_summary.model_dump()
-                if (resp.trace.reasoning_summary and hasattr(resp.trace.reasoning_summary, "model_dump"))
-                else resp.trace.reasoning_summary
-            ),
-            "thinking_events": (
-                [e.model_dump() if hasattr(e, "model_dump") else e for e in resp.trace.thinking_events]
-                if resp.trace.thinking_events
-                else []
-            ),
-        }
+            # 2. Retrieval Done Event (for backward compatibility)
+            if not retrieval_event_sent:
+                yield {
+                    "type": "retrieval_done",
+                    "stage_timings": resp.trace.stage_timings_ms,
+                    "candidate_count": resp.trace.retrieved_candidate_count,
+                    "reranked_count": resp.trace.post_rerank_count,
+                    "context_count": resp.trace.final_context_count,
+                    "cache_hit": resp.trace.cache_hit,
+                }
+
+            # 3. Answer Generation Thinking Start Event
+            gen_events = [e for e in thinking_sm.get_visible_events() if e.stage == ThinkingStage.ANSWER_GENERATION]
+            if gen_events:
+                yield {"type": "thinking", "event": gen_events[0]}
+
+            # 4. Stream words/tokens smoothly (starts only after answer planning)
+            if not streamed_answer:
+                words = resp.answer.split(" ")
+                for i, word in enumerate(words):
+                    if cancel_token and cancel_token.is_set():
+                        return
+                    chunk_text = word + (" " if i < len(words) - 1 else "")
+                    yield {"type": "token", "content": chunk_text}
+
+            # 5. Post-generation Thinking Events (Citation Building & Completed)
+            for ev in thinking_sm.get_visible_events():
+                if ev.stage in (ThinkingStage.CITATION_BUILDING, ThinkingStage.COMPLETED):
+                    if cancel_token and cancel_token.is_set():
+                        return
+                    yield {"type": "thinking", "event": ev}
+
+            # 6. Final Citations and Done Events
+            yield {
+                "type": "done",
+                "answer": resp.answer,
+                "citations": resp.citations,
+                "context_chunks": resp.context_chunks,
+                "trace": resp.trace,
+                "model": resp.model,
+                "token_usage": resp.token_usage,
+                "total_elapsed_ms": resp.trace.execution_time_ms,
+                "cache_hit": resp.trace.cache_hit,
+                "reasoning_summary": (
+                    resp.trace.reasoning_summary.model_dump()
+                    if (resp.trace.reasoning_summary and hasattr(resp.trace.reasoning_summary, "model_dump"))
+                    else resp.trace.reasoning_summary
+                ),
+                "thinking_events": (
+                    [e.model_dump() if hasattr(e, "model_dump") else e for e in resp.trace.thinking_events]
+                    if resp.trace.thinking_events
+                    else []
+                ),
+            }
+        finally:
+            if not worker_done.is_set():
+                cancel_token.set()
