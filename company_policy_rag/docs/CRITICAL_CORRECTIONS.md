@@ -65,3 +65,22 @@ Validation: 31 backend tests passed (canonical delivery, cancellation, model
 switching, conversation scenarios); 220 frontend tests passed; TypeScript passed.
 Two old frontend expectations were updated: server errors now reject the stream,
 and an empty final answer clears draft text.
+
+## Embedding and persistence correction
+
+Provider results must have exact cardinality, finite numeric values, nonzero
+norms, and consistent dimensions before caching or indexing. Synthetic hash
+vectors now require the explicit test-only constructor option. The offline smoke
+uses that option; ordinary serving does not. HF instances are keyed by model and
+device. API-created vector stores require persistence and fail startup clearly
+on initialization failure. New API indexes acquire a small embedding-identity
+manifest; known incompatible models are rejected.
+
+Existing nonempty indexes without provenance are preserved unchanged. Dense
+queries and additional indexing into them require verified provenance; lexical
+retrieval remains available. No model identity is guessed, no index is replaced,
+and no automatic reindex occurs. Model revision/digest pinning and a verified
+legacy adoption tool remain follow-up work.
+
+Validation: 69 targeted tests passed across embedding integrity, persistent
+startup, ingestion, deletion, retrieval quality, and the offline retrieval smoke.

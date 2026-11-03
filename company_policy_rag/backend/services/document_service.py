@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from backend.embeddings.embeddings import EmbeddingService
+from backend.embeddings.embeddings import EmbeddingService, validate_embedding
 from backend.embeddings.vector_store import ChromaVectorStore, unpack_chroma_metadata
 from backend.ingestion.chunkers.adaptive_chunker import AdaptiveChunker
 from backend.ingestion.loaders.loader_factory import get_loader_for_file, load_document
@@ -90,6 +90,7 @@ class DocumentService:
         self.vector_store = vector_store or ChromaVectorStore(
             collection_name=settings.chroma_collection_name,
             persist_dir=str(library_root / "chroma"),
+            require_persistence=True,
         )
         bm25_options = {
             "k1": settings.bm25_k1,
@@ -702,6 +703,7 @@ class DocumentService:
                 if len(batch_embs) != len(batch_texts):
                     raise RuntimeError("Embedding provider returned an incomplete batch.")
                 for embedding in batch_embs:
+                    validate_embedding(embedding, len(all_embeddings[0]) if all_embeddings else None)
                     if not embedding or not all(math.isfinite(value) for value in embedding):
                         raise RuntimeError("Embedding provider returned an empty or non-finite vector.")
                     if all_embeddings and len(embedding) != len(all_embeddings[0]):
@@ -758,6 +760,8 @@ class DocumentService:
                 message="Indexing chunks in ChromaDB vector store...",
             )
 
+            if isinstance(self.embedding_service, EmbeddingService) and isinstance(self.vector_store, ChromaVectorStore):
+                self.vector_store.bind_embedding_model(self.embedding_service.model_name, self.embedding_service.query_instruction)
             index_started = True
             self.vector_store.add_chunks(chunks)
             t_vec = round((time.perf_counter() - t_stage) * 1000, 2)
@@ -1170,6 +1174,8 @@ class DocumentService:
             existing_job = self._ingestion_jobs.get(document_id)
             if existing_job and existing_job.status != "FAILED":
                 return existing_job.model_copy(deep=True)
+            if not existing_job and self._documents.get(document_id, {}).get("status") == "READY":
+                return self.get_ingestion_status(document_id)
             file_path = self._stored_files.get(document_id)
             if not file_path or not file_path.is_file():
                 # Search disk for stored file matching document_id

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from numbers import Real
 from typing import Any
 
 from backend.utils.logging import logger
@@ -10,6 +11,20 @@ from src.config import settings
 
 # The 0.6B embedder is fast on CPU; reserving GPU memory evicts the 9B answer model.
 OLLAMA_EMBED_NUM_CTX = 4096
+
+
+def validate_embedding(vector: Any, dimension: int | None = None) -> list[float]:
+    if not isinstance(vector, (list, tuple)) or not vector:
+        raise ValueError("Embedding must be a nonempty numeric vector.")
+    if any(isinstance(v, bool) or not isinstance(v, Real) or not math.isfinite(v) for v in vector):
+        raise ValueError("Embedding contains malformed or non-finite values.")
+    result = [float(v) for v in vector]
+    squared_norm = sum(v * v for v in result)
+    if not math.isfinite(squared_norm) or squared_norm <= 0:
+        raise ValueError("Embedding has a zero or invalid norm.")
+    if dimension is not None and len(result) != dimension:
+        raise ValueError("Embedding dimensions are incompatible.")
+    return result
 
 
 def normalize_vector(vector: list[float]) -> list[float]:
@@ -87,6 +102,7 @@ class EmbeddingCache:
 _shared_embedding_model: Any | None = None
 _shared_embedding_model_loaded: bool = False
 _shared_embedding_model_loaded_at: float | None = None
+_shared_embedding_models: dict[tuple[str, str], Any] = {}
 
 
 def _default_query_instruction(model_name: str) -> str:
@@ -115,10 +131,13 @@ class EmbeddingService:
         cache_enabled: bool = True,
         dimension: int = 384,
         query_instruction: str | None = None,
+        allow_test_fallback: bool = False,
     ) -> None:
         self.model_name = model_name
         self.cache_enabled = cache_enabled
         self.dimension = dimension
+        self.allow_test_fallback = allow_test_fallback
+        self._observed_dimension: int | None = None
         self.cache = EmbeddingCache() if cache_enabled else None
         self._model: Any | None = None
         self._model_loaded: bool = False
@@ -151,8 +170,11 @@ class EmbeddingService:
             self._model = Client(host=settings.ollama_base_url)
             self._model_loaded = True
             return
-        if _shared_embedding_model_loaded:
-            self._model = _shared_embedding_model
+        import os
+        embedding_device = os.getenv("EMBEDDING_DEVICE", "cpu")
+        key = (self.model_name, embedding_device)
+        if key in _shared_embedding_models:
+            self._model = _shared_embedding_models[key]
             self._model_loaded = True
             return
 
@@ -190,11 +212,15 @@ class EmbeddingService:
             self._model = None
 
         _shared_embedding_model = self._model
+        if self._model is not None:
+            _shared_embedding_models[key] = self._model
         _shared_embedding_model_loaded = True
         _shared_embedding_model_loaded_at = time.time() if self._model is not None else None
 
     def _fallback_embed(self, text: str) -> list[float]:
         """Deterministic pseudo-embedding for testing when ML packages are unavailable."""
+        if not self.allow_test_fallback:
+            raise RuntimeError("Embedding model is unavailable; synthetic vectors are disabled.")
         tokens = text.lower().split()
         vector = [0.0] * self.dimension
         for token in tokens:
@@ -204,15 +230,29 @@ class EmbeddingService:
             vector[idx] += val
         return normalize_vector(vector)
 
+    def _checked_batch(self, vectors: list[Any], expected: int) -> list[list[float]]:
+        if len(vectors) != expected:
+            raise ValueError("Embedding provider returned an incomplete batch.")
+        dimension = self._observed_dimension
+        checked = []
+        for vector in vectors:
+            values = validate_embedding(vector, dimension)
+            dimension = len(values)
+            checked.append(values if abs(sum(v * v for v in values) - 1.0) < 1e-12 else normalize_vector(values))
+        self._observed_dimension = dimension
+        if dimension is not None:
+            self.dimension = dimension
+        return checked
+
     def embed_text(self, text: str) -> list[float]:
         """Embed a single query or text string."""
         if not text:
-            return [0.0] * self.dimension
+            raise ValueError("Cannot embed empty text.")
 
         if self.cache is not None:
             cached = self.cache.get(text)
             if cached is not None:
-                return cached
+                return self._checked_batch([cached], 1)[0]
 
         self._init_model()
         if self._model is not None:
@@ -223,18 +263,18 @@ class EmbeddingService:
                     options={"num_ctx": OLLAMA_EMBED_NUM_CTX, "num_gpu": 0},
                     keep_alive=-1,
                 )
-                vector = normalize_vector(list(response.embeddings[0]))
-                self.dimension = len(vector)
+                vector = self._checked_batch([list(v) for v in response.embeddings], 1)[0]
             else:
                 try:
                     raw_emb = self._model.encode(text, convert_to_numpy=True)
-                    vector = normalize_vector(raw_emb.tolist())
+                    vector = self._checked_batch([raw_emb.tolist()], 1)[0]
                 except Exception as exc:
                     logger.warning("Embedding failed for text: %s. Using fallback.", exc)
                     vector = self._fallback_embed(text)
         else:
             vector = self._fallback_embed(text)
 
+        vector = self._checked_batch([vector], 1)[0]
         if self.cache is not None:
             self.cache.set(text, vector)
         return vector
@@ -249,7 +289,7 @@ class EmbeddingService:
         configured this is identical to ``embed_text``.
         """
         if not text:
-            return [0.0] * self.dimension
+            raise ValueError("Cannot embed empty text.")
         if self.query_instruction:
             return self.embed_text(f"{self.query_instruction}{text}")
         return self.embed_text(text)
@@ -283,22 +323,21 @@ class EmbeddingService:
                         options={"num_ctx": OLLAMA_EMBED_NUM_CTX, "num_gpu": 0},
                         keep_alive=-1,
                     )
-                    computed_vectors = [normalize_vector(list(emb)) for emb in response.embeddings]
-                    if computed_vectors:
-                        self.dimension = len(computed_vectors[0])
+                    computed_vectors = [list(emb) for emb in response.embeddings]
                 else:
                     try:
                         raw_embs = self._model.encode(missing_texts, convert_to_numpy=True)
-                        computed_vectors = [normalize_vector(emb.tolist()) for emb in raw_embs]
+                        computed_vectors = [emb.tolist() for emb in raw_embs]
                     except Exception as exc:
                         logger.warning("Batch embedding failed (%s). Using fallback.", exc)
                         computed_vectors = [self._fallback_embed(t) for t in missing_texts]
             else:
                 computed_vectors = [self._fallback_embed(t) for t in missing_texts]
 
-            for idx, text, vec in zip(missing_indices, missing_texts, computed_vectors):
+            computed_vectors = self._checked_batch(computed_vectors, len(missing_texts))
+            for idx, text, vec in zip(missing_indices, missing_texts, computed_vectors, strict=True):
                 results[idx] = vec
                 if self.cache is not None:
                     self.cache.set(text, vec)
 
-        return [vec if vec is not None else [0.0] * self.dimension for vec in results]
+        return self._checked_batch(results, len(texts))

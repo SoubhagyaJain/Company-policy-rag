@@ -35,6 +35,8 @@ class DenseVectorRetriever:
         # without one at index time. Falls back to plain embedding for models
         # that define no instruction.
         query_emb = self.embedding_service.embed_query(query)
+        if getattr(self.vector_store, "require_persistence", False) is True:
+            self.vector_store.bind_embedding_model(self.embedding_service.model_name, self.embedding_service.query_instruction)
         logger.info("Dense retrieve: embedding computed, querying vector store")
         res = self.vector_store.search(query_emb, top_k=top_k, filters=filters)
         logger.info("Dense retrieve: vector store query complete")

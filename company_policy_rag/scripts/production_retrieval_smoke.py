@@ -88,7 +88,7 @@ def run_smoke(dataset_path: Path = DEFAULT_DATASET) -> dict[str, Any]:
     # Exercise the production fallback that keeps retrieval available when a
     # local embedding model is absent. Marking initialization complete avoids
     # a network-dependent model lookup in CI.
-    embedding_service = EmbeddingService(model_name="deterministic-ci", cache_enabled=False)
+    embedding_service = EmbeddingService(model_name="deterministic-ci", cache_enabled=False, allow_test_fallback=True)
     embedding_service._model_loaded = True
     embedding_service._model = None
     for chunk, embedding in zip(
