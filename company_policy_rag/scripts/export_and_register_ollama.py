@@ -200,6 +200,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             logger.info("==> [Stage 2/4] Skipping GGUF conversion (using existing %s)", gguf_path)
 
         # Stage 3: Modelfile Generation
+        if not validate_gguf_file(gguf_path)["is_valid"]:
+            raise RuntimeError("A valid GGUF artifact is required before registration.")
+        if modelfile_path.exists():
+            raise FileExistsError(f"Refusing to replace existing Modelfile: {modelfile_path}")
         logger.info("==> [Stage 3/4] Generating Ollama Modelfile...")
         t0 = time.time()
         generate_modelfile(
@@ -224,8 +228,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             if registered:
                 logger.info("Stage 4 completed in %.2fs -> Successfully registered '%s' in Ollama.", time.time() - t0, args.model_name)
             else:
-                logger.warning("Stage 4 warning: Registration could not connect to Ollama service at %s. Modelfile ready for manual import: `ollama create %s -f %s`",
-                               args.ollama_url, args.model_name, modelfile_path)
+                raise RuntimeError("Ollama registration failed. Artifacts remain available for manual recovery.")
+            if not verify_model_registered(args.model_name, ollama_url=args.ollama_url):
+                raise RuntimeError("Ollama did not verify the registered model.")
         else:
             logger.info("==> [Stage 4/4] Skipping Ollama registration as requested.")
 

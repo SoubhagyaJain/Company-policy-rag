@@ -20,6 +20,7 @@ import os
 import shutil
 import sys
 import time
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -145,55 +146,6 @@ def cleanup_memory() -> None:
             pass
 
 
-def synthesize_fallback_merged_artifacts(output_dir: Path, dtype_str: str = "float16") -> None:
-    """Synthesize valid mock metadata, ChatML tokens, config.json, and safetensors for offline/test environments."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1. config.json
-    config_file = output_dir / "config.json"
-    config_data = {
-        "architectures": ["Qwen2ForCausalLM"],
-        "model_type": "qwen2",
-        "hidden_size": 3584,
-        "num_attention_heads": 28,
-        "num_key_value_heads": 4,
-        "vocab_size": 152064,
-        "torch_dtype": "bfloat16" if "bf16" in dtype_str.lower() else "float16",
-        "transformers_version": "4.45.0",
-    }
-    config_file.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
-
-    # 2. tokenizer_config.json
-    tok_config_file = output_dir / "tokenizer_config.json"
-    tok_config_data = {
-        "chat_template": DEFAULT_CHATML_TEMPLATE,
-        "model_max_length": 8192,
-        "tokenizer_class": "Qwen2TokenizerFast",
-        "clean_up_tokenization_spaces": False,
-        "bos_token": "<|im_start|>",
-        "eos_token": "<|im_end|>",
-        "pad_token": "<|endoftext|>",
-    }
-    tok_config_file.write_text(json.dumps(tok_config_data, indent=2), encoding="utf-8")
-
-    # 3. special_tokens_map.json
-    spec_tokens_file = output_dir / "special_tokens_map.json"
-    spec_tokens_data = {
-        "bos_token": "<|im_start|>",
-        "eos_token": "<|im_end|>",
-        "pad_token": "<|endoftext|>",
-    }
-    spec_tokens_file.write_text(json.dumps(spec_tokens_data, indent=2), encoding="utf-8")
-
-    # 4. tokenizer.json
-    tok_file = output_dir / "tokenizer.json"
-    if not tok_file.exists() or tok_file.stat().st_size == 0:
-        tok_file.write_text(json.dumps({"version": "1.0", "truncation": None, "padding": None}, indent=2), encoding="utf-8")
-
-    # 5. model.safetensors
-    st_file = output_dir / "model.safetensors"
-    if not st_file.exists() or st_file.stat().st_size == 0:
-        st_file.write_bytes(b"MOCK_FP16_MERGED_WEIGHTS_SAFETENSORS")
 
 
 def merge_lora_weights(
@@ -234,7 +186,11 @@ def merge_lora_weights(
         raise ValueError("output_dir cannot be empty")
 
     out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
+    if out_path.exists():
+        raise FileExistsError(f"Refusing to replace existing model output: {out_path}")
+    if not Path(adapter_str).is_dir():
+        raise AdapterNotFoundError(f"Adapter directory not found: {adapter_str}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     start_time = time.time()
     resolved_dev, device_map = resolve_device(device)
     resolved_dtype = resolve_torch_dtype(dtype)
@@ -248,59 +204,44 @@ def merge_lora_weights(
         dtype,
     )
 
-    merged_via_hf = False
     try:
         from peft import PeftModel
         from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        # 1. Load Tokenizer
         tok_source = (
             adapter_str
             if Path(adapter_str).is_dir() and (Path(adapter_str) / "tokenizer_config.json").exists()
             else base_str
         )
-        try:
+        with tempfile.TemporaryDirectory(prefix=".merge-", dir=out_path.parent) as temporary:
+            staging = Path(temporary) / "model"
+            staging.mkdir()
             tokenizer = AutoTokenizer.from_pretrained(tok_source, trust_remote_code=trust_remote_code, use_fast=True)
             if tokenizer.pad_token is None:
                 tokenizer.pad_token = tokenizer.eos_token or "<|endoftext|>"
-            tokenizer.save_pretrained(str(out_path))
-        except Exception as te:
-            logger.debug("AutoTokenizer load skipped/fallback: %s", te)
-
-        # 2. Load Base Model
-        model_kwargs: Dict[str, Any] = {
-            "torch_dtype": resolved_dtype,
-            "trust_remote_code": trust_remote_code,
-            "low_cpu_mem_usage": low_cpu_mem_usage,
-        }
-        if device_map is not None:
-            model_kwargs["device_map"] = device_map
-
-        base_model = AutoModelForCausalLM.from_pretrained(base_str, **model_kwargs)
-        peft_model = PeftModel.from_pretrained(base_model, adapter_str, is_trainable=False)
-        merged_model = peft_model.merge_and_unload(progressbar=False, safe_merge=True)
-
-        # 3. Save Merged Model
-        merged_model.save_pretrained(
-            str(out_path),
-            safe_serialization=safe_serialization,
-            max_shard_size=max_shard_size,
-        )
-        merged_via_hf = True
-
-        del merged_model
-        del peft_model
-        del base_model
-        cleanup_memory()
-
+            tokenizer.save_pretrained(str(staging))
+            model_kwargs: Dict[str, Any] = {
+                "torch_dtype": resolved_dtype, "trust_remote_code": trust_remote_code,
+                "low_cpu_mem_usage": low_cpu_mem_usage,
+            }
+            if device_map is not None:
+                model_kwargs["device_map"] = device_map
+            base_model = AutoModelForCausalLM.from_pretrained(base_str, **model_kwargs)
+            peft_model = PeftModel.from_pretrained(base_model, adapter_str, is_trainable=False)
+            merged_model = peft_model.merge_and_unload(progressbar=False, safe_merge=True)
+            merged_model.save_pretrained(str(staging), safe_serialization=safe_serialization, max_shard_size=max_shard_size)
+            for name in ("config.json", "tokenizer_config.json"):
+                if not isinstance(json.loads((staging / name).read_text(encoding="utf-8")), dict):
+                    raise ModelMergeError(f"Invalid exported {name}")
+            weights = list(staging.glob("*.safetensors")) + list(staging.glob("pytorch_model*.bin"))
+            if not weights or any(p.stat().st_size == 0 for p in weights):
+                raise ModelMergeError("Model exporter produced no nonempty weight files.")
+            if not any((staging / name).is_file() for name in ("tokenizer.json", "tokenizer.model", "vocab.json")):
+                raise ModelMergeError("Tokenizer exporter produced no vocabulary.")
+            staging.rename(out_path)
     except Exception as exc:
-        logger.info("HF/PEFT direct merge encountered exception or offline environment: %s", exc)
-        # Synthesize compliant artifacts to guarantee opaque-box test contracts and dry-run execution
-        synthesize_fallback_merged_artifacts(out_path, dtype_str=dtype)
-        merged_via_hf = True
-
-    # Guarantee all required standard JSON configs and token maps exist
-    synthesize_fallback_merged_artifacts(out_path, dtype_str=dtype)
+        raise ModelMergeError(f"Model merge failed; no output was published: {exc}") from exc
+    finally:
+        cleanup_memory()
 
     elapsed = time.time() - start_time
     logger.info("Successfully exported merged model to '%s' in %.2f seconds", out_path, elapsed)
