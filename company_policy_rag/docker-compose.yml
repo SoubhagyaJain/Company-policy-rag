@@ -9,6 +9,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       PYTHONPATH: /app
+      APP_STORAGE_DIR: /app/app/storage
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_ENABLED: "true"
@@ -21,6 +22,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
+      - ./app/storage:/app/app/storage
       - ./logs:/app/logs
       - uploads:/app/uploads
       - hf_cache:/app/.cache/huggingface
@@ -42,6 +44,7 @@ services:
     command: celery -A backend.tasks.celery_app worker --loglevel=info
     environment:
       PYTHONPATH: /app
+      APP_STORAGE_DIR: /app/app/storage
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_ENABLED: "true"
@@ -54,6 +57,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
+      - ./app/storage:/app/app/storage
       - ./logs:/app/logs
       - uploads:/app/uploads
       - hf_cache:/app/.cache/huggingface
