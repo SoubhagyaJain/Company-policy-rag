@@ -22,3 +22,10 @@ def test_compose_mounts_the_configured_library_without_changing_host_location():
 def test_backend_image_prepares_the_non_root_library_directory():
     dockerfile = (ROOT / "docker" / "Dockerfile.backend").read_text(encoding="utf-8")
     assert "mkdir -p app/storage" in dockerfile
+
+
+def test_default_network_bindings_are_local_and_redis_is_internal():
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    for name in ("backend", "frontend"):
+        assert all(port.startswith("127.0.0.1:") for port in compose["services"][name]["ports"])
+    assert "ports" not in compose["services"]["redis"]

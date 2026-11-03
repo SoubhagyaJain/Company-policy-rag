@@ -88,7 +88,7 @@ def test_api_reports_incomplete_delete_and_allows_cleanup_retry(service, monkeyp
     monkeypatch.setitem(app.dependency_overrides, get_document_service, lambda: service)
     monkeypatch.setitem(app.dependency_overrides, get_semantic_cache_manager, lambda: MagicMock())
     monkeypatch.setitem(app.dependency_overrides, get_conversation_state_manager, lambda: MagicMock())
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     url = f"/api/documents/{uploaded.document_id}"
     response = client.delete(url)
     assert response.status_code == 503

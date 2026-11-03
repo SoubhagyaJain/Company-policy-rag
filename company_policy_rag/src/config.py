@@ -67,6 +67,16 @@ class Settings(BaseSettings):
     pdf_images_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
     logs_dir: Path = Field(default=PROJECT_ROOT / "logs")
 
+    # Local-first ingress. JSON arrays allow explicit LAN/proxy configuration.
+    api_allowed_origins: list[str] = Field(default=[
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:8000", "http://127.0.0.1:8000",
+    ], alias="API_ALLOWED_ORIGINS")
+    api_allowed_hosts: list[str] = Field(default=["localhost", "127.0.0.1", "[::1]", "backend", "testserver"], alias="API_ALLOWED_HOSTS")
+    admin_trusted_networks: list[str] = Field(default=["127.0.0.0/8", "::1/128"], alias="ADMIN_TRUSTED_NETWORKS")
+    admin_token: str = Field(default="", alias="ADMIN_TOKEN", repr=False)
+
     # ── ChromaDB vector store ──────────────────────────────────────────────
     # Chroma replaces SimpleVectorStore: persistent storage, metadata filtering,
     # and incremental indexing without full rebuilds.

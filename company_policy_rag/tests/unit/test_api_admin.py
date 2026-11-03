@@ -17,7 +17,7 @@ def cleanup_deps():
 
 
 def test_get_admin_observability():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     response = client.get("/api/admin/observability")
     assert response.status_code == 200
     data = response.json()
@@ -47,7 +47,7 @@ def test_successful_observability_poll_access_logs_are_quiet_but_errors_remain()
 
 
 def test_get_admin_traces():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     # Execute a query first to generate a trace
     client.post("/api/chat", json={"message": "What is the parental leave policy?"})
 
@@ -60,7 +60,7 @@ def test_get_admin_traces():
 
 
 def test_get_admin_trace_detail_success_and_404():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     # 1. Execute query to record trace
     chat_resp = client.post("/api/chat", json={"message": "What is the code of conduct?"})

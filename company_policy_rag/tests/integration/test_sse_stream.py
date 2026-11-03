@@ -44,7 +44,7 @@ def parse_sse_events(raw_text: str):
 
 
 def test_sse_chat_stream_events_and_sub1s_ttft():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "What is the employee travel reimbursement process?",
         "session_id": "sse_integration_test_sess",

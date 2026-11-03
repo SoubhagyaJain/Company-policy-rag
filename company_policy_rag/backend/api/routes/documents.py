@@ -22,6 +22,7 @@ from backend.models.conversation import ConversationStateManager
 from backend.rag.semantic_cache import SemanticCacheManager
 from backend.services.document_service import MAX_FILE_SIZE_BYTES, DocumentBusyError, DocumentService, DuplicateDocumentError
 from backend.utils.logging import logger
+from backend.api.security import require_admin
 
 router = APIRouter(tags=["Documents"])
 _UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
@@ -120,7 +121,7 @@ def list_duplicate_documents(
     return doc_service.deduplicate_documents(dry_run=True)
 
 
-@router.post("/api/documents/deduplicate")
+@router.post("/api/documents/deduplicate", dependencies=[Depends(require_admin)])
 def deduplicate_documents(
     dry_run: bool = True,
     doc_service: DocumentService = Depends(get_document_service),

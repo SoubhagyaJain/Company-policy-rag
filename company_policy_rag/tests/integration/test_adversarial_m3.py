@@ -37,7 +37,7 @@ def setup_ephemeral_chroma(monkeypatch, tmp_path):
 # ============================================================================
 
 def test_chat_empty_and_whitespace_payload():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     # Synchronous endpoint empty string
     res = client.post("/api/chat", json={"message": ""})
     assert res.status_code == 400
@@ -60,7 +60,7 @@ def test_chat_empty_and_whitespace_payload():
 
 
 def test_chat_huge_payload():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     huge_message = "What is the policy for " + "travel " * 1000
     res = client.post("/api/chat", json={"message": huge_message})
     assert res.status_code == 200
@@ -70,7 +70,7 @@ def test_chat_huge_payload():
 
 
 def test_chat_invalid_filters_and_fields():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     # Filter with dict
     res = client.post(
         "/api/chat",
@@ -91,7 +91,7 @@ def test_chat_invalid_filters_and_fields():
 # ============================================================================
 
 def test_sse_stream_chunk_sequence_and_reassembly():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {"message": "How do I claim expense reimbursement?", "session_id": "adversarial_stream_sess"}
 
     t0 = time.perf_counter()
@@ -143,7 +143,7 @@ def test_sse_stream_chunk_sequence_and_reassembly():
 
 def test_sse_stream_abrupt_client_disconnect():
     """Simulate client dropping connection after start event without breaking server."""
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {"message": "Tell me about parental leave benefits"}
 
     with client.stream("POST", "/api/chat/stream", json=payload) as response:
@@ -164,7 +164,7 @@ def test_sse_stream_abrupt_client_disconnect():
 # ============================================================================
 
 def test_document_upload_exceeds_max_size(monkeypatch):
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     monkeypatch.setattr("backend.api.routes.documents.MAX_FILE_SIZE_BYTES", 100)
     monkeypatch.setattr("backend.services.document_service.MAX_FILE_SIZE_BYTES", 100)
 
@@ -177,7 +177,7 @@ def test_document_upload_exceeds_max_size(monkeypatch):
 
 
 def test_document_upload_path_traversal_and_unicode_filename():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     content = b"Policy Document Content for Path Traversal Test."
     file_obj = ("../../etc/passwd_policy.txt", io.BytesIO(content), "text/plain")
 
@@ -197,7 +197,7 @@ def test_document_upload_path_traversal_and_unicode_filename():
 
 
 def test_delete_non_existent_document():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     res = client.delete("/api/documents/doc_nonexistent_999999")
     assert res.status_code == 404
     assert "not found" in res.json()["detail"].lower()
@@ -205,7 +205,7 @@ def test_delete_non_existent_document():
 
 def test_concurrent_document_uploads_and_deletions():
     """Stress test concurrent upload and deletion requests."""
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     def upload_doc(index: int):
         filename = f"concurrent_doc_{index}.txt"

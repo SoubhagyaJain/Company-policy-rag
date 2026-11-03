@@ -69,7 +69,7 @@ class TestTelemetryRingBufferStress:
 
     def test_admin_trace_detail_endpoint_evicted_vs_valid(self):
         """API test for GET /api/admin/traces/{trace_id} on evicted vs valid trace."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         telemetry = get_telemetry_service()
         telemetry.clear()
 
@@ -96,7 +96,7 @@ class TestTelemetryRingBufferStress:
 
     def test_admin_traces_list_endpoint(self):
         """API test for GET /api/admin/traces endpoint."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         res = client.get("/api/admin/traces?limit=10&offset=0")
         assert res.status_code == 200
         body = res.json()
@@ -109,14 +109,14 @@ class TestDocumentDeletionEdgeCases:
 
     def test_delete_non_existent_document_id(self):
         """Deleting a document ID that does not exist returns 404."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         res = client.delete("/api/documents/doc_nonexistent_999999")
         assert res.status_code == 404
         assert "not found" in res.json()["detail"].lower()
 
     def test_double_deletion_same_document(self):
         """Deleting an existing document twice returns 200 then 404."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         # Upload a document first
         upload_res = client.post(
             "/api/documents/upload",
@@ -143,7 +143,7 @@ class TestDocumentDeletionEdgeCases:
 
     def test_delete_document_with_special_characters(self):
         """Deleting a document with special characters in filename."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         special_filename = "policy #1 (draft & final) [v2.0].txt"
         upload_res = client.post(
             "/api/documents/upload",
@@ -203,7 +203,7 @@ class TestDocumentUploadEdgeCases:
 
     def test_upload_empty_file(self):
         """Uploading empty file (0 bytes) returns 400 Bad Request."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         res = client.post(
             "/api/documents/upload",
             files={"file": ("empty.txt", b"", "text/plain")},
@@ -213,7 +213,7 @@ class TestDocumentUploadEdgeCases:
 
     def test_upload_corrupt_pdf_file(self):
         """Uploading corrupt PDF bytes."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         corrupt_pdf_bytes = b"%PDF-1.4 corrupt junk noise \x00\xff\xfe\xfd data"
         res = client.post(
             "/api/documents/upload",
@@ -224,7 +224,7 @@ class TestDocumentUploadEdgeCases:
 
     def test_upload_corrupt_json_file(self):
         """Uploading malformed JSON file."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         res = client.post(
             "/api/documents/upload",
             files={"file": ("corrupt.json", b"{ invalid json content: [", "application/json")},
@@ -233,7 +233,7 @@ class TestDocumentUploadEdgeCases:
 
     def test_upload_unsupported_extension(self):
         """Uploading file with unsupported extension."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         res = client.post(
             "/api/documents/upload",
             files={"file": ("test.xyz", b"Some random text data inside xyz file", "application/octet-stream")},
@@ -247,7 +247,7 @@ class TestCORSAndMiddlewareBehavior:
 
     def test_cors_options_preflight_allowed_origin(self):
         """Preflight OPTIONS request from http://localhost:3000."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         headers = {
             "Origin": "http://localhost:3000",
             "Access-Control-Request-Method": "POST",
@@ -260,7 +260,7 @@ class TestCORSAndMiddlewareBehavior:
 
     def test_non_standard_request_headers(self):
         """API endpoint handles non-standard and custom headers gracefully."""
-        client = TestClient(app)
+        client = TestClient(app, client=("127.0.0.1", 50000))
         custom_headers = {
             "Origin": "http://localhost:3000",
             "X-Forwarded-For": "203.0.113.195",

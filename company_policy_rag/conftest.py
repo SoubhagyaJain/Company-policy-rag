@@ -82,7 +82,7 @@ def isolated_document_client(tmp_path: Path):
     )
     app.dependency_overrides[get_document_service] = lambda: service
     try:
-        yield TestClient(app)
+        yield TestClient(app, client=("127.0.0.1", 50000))
     finally:
         app.dependency_overrides.pop(get_document_service, None)
         reset_dependencies()

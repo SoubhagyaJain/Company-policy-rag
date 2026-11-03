@@ -84,3 +84,25 @@ legacy adoption tool remain follow-up work.
 
 Validation: 69 targeted tests passed across embedding integrity, persistent
 startup, ingestion, deletion, retrieval quality, and the offline retrieval smoke.
+
+## Local security containment
+
+Compose publishes the frontend and API only on 127.0.0.1; Redis is internal.
+Explicit API_ALLOWED_ORIGINS and API_ALLOWED_HOSTS replace wildcard ingress.
+Untrusted browser origins are rejected before routing, including simple requests.
+Administrative routes, model switching, bulk deduplication, and bulk session
+deletion require a trusted socket peer, or ADMIN_TOKEN when configured. Source
+runs trust loopback only. Compose explicitly trusts private container peers
+behind its loopback-only published ports. This is a single-host boundary, not
+multi-user authentication. Do not expose these containers through a public proxy
+without an operator key and an appropriate authenticated ingress.
+
+ADMIN_TOKEN is optional for the default host-only setup. API clients can send an
+Authorization: Bearer header. The browser client supports setAdminToken(), or the
+operator can set sessionStorage key rag_admin_token for the current browser tab.
+Tokens are never embedded in NEXT_PUBLIC build settings or sent to ordinary chat
+or document requests. Tests now use an explicit loopback socket peer.
+
+Validation: 44 security, deployment, administrative, storage, and model API tests
+passed; all 221 frontend tests and TypeScript passed. A model-selection test
+that assumed an installed Ollama model now injects its model inventory.

@@ -19,6 +19,18 @@ export async function runCanonicalDeliveryTests(): Promise<TestResult[]> {
     } }), { headers: { 'Content-Type': 'text/event-stream' } });
   };
   try {
+    await test('operator keys are sent only to administrative endpoints', async () => {
+      const requests: Array<{ url: string; authorization: string | null }> = [];
+      global.fetch = async (url, init) => {
+        requests.push({ url: String(url), authorization: new Headers(init?.headers).get('Authorization') });
+        return new Response(JSON.stringify({ status: 'ok', models: [] }));
+      };
+      const client = new ApiClient();
+      client.setAdminToken('operator-key');
+      await client.getStorageLive();
+      await client.getModels();
+      if (requests[0].authorization !== 'Bearer operator-key' || requests[1].authorization !== null) throw new Error('Incorrect credential scope');
+    });
     await test('transport and completion replace draft text and obsolete source cards', async () => {
       let message: ChatMessageData = { id: 'answer', role: 'assistant', content: '', timestamp: '', citations: [], isStreaming: true };
       global.fetch = async () => response(

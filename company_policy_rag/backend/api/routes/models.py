@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.api.dependencies import get_chat_service
+from backend.api.security import require_admin
 from backend.models.api_dto import ModelInfo, ModelListResponse
 from backend.services.chat_service import ChatService
 from src.config import settings
@@ -61,8 +62,8 @@ def get_available_models() -> ModelListResponse:
     )
 
 
-@router.post("/api/models/select")
-@router.put("/api/models/active")
+@router.post("/api/models/select", dependencies=[Depends(require_admin)])
+@router.put("/api/models/active", dependencies=[Depends(require_admin)])
 def select_active_model(
     req: ModelSelectRequest,
     chat_service: ChatService = Depends(get_chat_service),

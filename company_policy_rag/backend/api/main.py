@@ -4,8 +4,9 @@ import logging
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.api.routes import (
@@ -17,6 +18,8 @@ from backend.api.routes import (
     storage_router,
 )
 from backend.utils.logging import logger
+from backend.api.security import require_admin
+from src.config import settings
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -182,10 +185,13 @@ def create_app() -> FastAPI:
     )
 
     # Configure CORS Middleware
+    if "*" in settings.api_allowed_origins or "*" in settings.api_allowed_hosts:
+        raise ValueError("Use explicit API origins and hosts for the local deployment.")
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.api_allowed_hosts)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=settings.api_allowed_origins,
+        allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
@@ -193,15 +199,18 @@ def create_app() -> FastAPI:
     # Register API Routers
     app.include_router(chat_router)
     app.include_router(documents_router)
-    app.include_router(admin_router)
+    app.include_router(admin_router, dependencies=[Depends(require_admin)])
     app.include_router(health_router)
     app.include_router(models_router)
-    app.include_router(storage_router)
+    app.include_router(storage_router, dependencies=[Depends(require_admin)])
 
     # Clean Request Logging Middleware (Filters out spammy polling endpoints)
     @app.middleware("http")
     async def filter_polling_logs_middleware(request: Request, call_next):
         path = request.url.path
+        origin = request.headers.get("origin")
+        if origin and origin not in settings.api_allowed_origins:
+            return JSONResponse(status_code=403, content={"detail": "Origin is not allowed."})
         request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:12]}"
         request.state.request_id = request_id
         is_polling = path in ("/api/health", "/api/admin/observability") or (path.startswith("/api/documents/") and path.endswith("/status"))

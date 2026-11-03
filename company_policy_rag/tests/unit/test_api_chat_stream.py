@@ -17,7 +17,7 @@ def cleanup_deps():
 
 
 def test_post_chat_stream_success():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "What is the employee resignation notice policy?",
         "session_id": "stream_test_session_1",
@@ -69,7 +69,7 @@ def test_post_chat_stream_success():
 
 
 def test_post_chat_stream_empty_message():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {"message": "   "}
     response = client.post("/api/chat/stream", json=payload)
     assert response.status_code == 400
@@ -78,7 +78,7 @@ def test_post_chat_stream_empty_message():
 
 
 def test_post_chat_stream_auto_generates_session_id():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {"message": "Tell me about remote work policies."}
 
     with client.stream("POST", "/api/chat/stream", json=payload) as response:
@@ -108,7 +108,7 @@ def test_post_chat_stream_auto_generates_session_id():
 
 
 def test_post_chat_stream_model_parameter():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "Tell me about security policies.",
         "model": "llama3.1:8b",
@@ -141,7 +141,7 @@ def test_post_chat_stream_model_parameter():
 
 
 def test_post_chat_stream_semantic_cache_hit_and_miss():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "What is the policy for remote equipment allowance?",
         "session_id": "stream_cache_sess_1",
