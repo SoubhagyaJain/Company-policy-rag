@@ -1833,6 +1833,15 @@ class RAGPipeline:
             default=str,
         )
 
+    def _document_revoked(self, document_id: str | None, source_file: str | None = None) -> bool:
+        store = getattr(getattr(self.hybrid_retriever, "dense_retriever", None), "vector_store", None)
+        check = getattr(store, "is_document_deleted", None)
+        return callable(check) and check(document_id, source_file) is True
+
+    def _visible_chunks(self, chunks: list[ScoredChunk]) -> list[ScoredChunk]:
+        return [sc for sc in chunks if not self._document_revoked(
+            sc.chunk.metadata.document_id, sc.chunk.metadata.source_file)]
+
     def _stage_retrieve(self, ctx: QueryContext, prefix: str) -> None:
         """Build sub-queries and run one attempt's hybrid retrieval onto ``ctx``.
 
@@ -1871,7 +1880,7 @@ class RAGPipeline:
                 ctx.reuse_turn_id,
             )
             if trusted_turn is not None:
-                trusted_chunks = list(trusted_turn.retrieved_chunks)
+                trusted_chunks = self._visible_chunks(list(trusted_turn.retrieved_chunks))
                 ctx.reused_evidence_status = str(
                     getattr(
                         trusted_turn.evidence_status,
@@ -2055,6 +2064,7 @@ class RAGPipeline:
                     version=cache_version,
                 )
 
+        candidate_chunks = self._visible_chunks(candidate_chunks)
         ctx.raw_new_chunk_count = len(candidate_chunks)
         ctx.candidate_chunks = candidate_chunks
         ctx.stage_timings[f"hybrid_retrieval{prefix}"] = 0.1 if cache_hit_retrieval else round((time.perf_counter() - t0) * 1000, 2)
@@ -3097,7 +3107,8 @@ class RAGPipeline:
         )
         ctx.stage_timings["cache_lookup"] = round((time.perf_counter() - t0) * 1000, 2)
         if cached_res is not None and (
-            _is_degraded_or_abstention_answer(cached_res.answer)
+            any(self._document_revoked(c.document_id, c.source_file) for c in cached_res.citations)
+            or _is_degraded_or_abstention_answer(cached_res.answer)
             or not _answer_matches_requested_enumeration(ctx.user_query, cached_res.answer)
         ):
             logger.info("Ignoring incomplete semantic-cache answer and continuing with fresh retrieval.")

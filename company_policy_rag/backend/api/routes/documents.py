@@ -20,11 +20,16 @@ from backend.models.api_dto import (
 )
 from backend.models.conversation import ConversationStateManager
 from backend.rag.semantic_cache import SemanticCacheManager
-from backend.services.document_service import MAX_FILE_SIZE_BYTES, DocumentService, DuplicateDocumentError
+from backend.services.document_service import MAX_FILE_SIZE_BYTES, DocumentBusyError, DocumentService, DuplicateDocumentError
 from backend.utils.logging import logger
 
 router = APIRouter(tags=["Documents"])
 _UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
+
+
+def _require_visible_assets(doc_service: DocumentService, doc_id: str) -> None:
+    if doc_service._is_deleted(doc_id) is True:
+        raise HTTPException(status_code=404, detail="Document is unavailable.")
 
 
 async def _read_upload_with_limit(file: UploadFile) -> bytes:
@@ -162,6 +167,7 @@ def list_document_image_assets(
     doc_service: DocumentService = Depends(get_document_service),
 ):
     """List all extracted standalone original visual assets for a document."""
+    _require_visible_assets(doc_service, doc_id)
     assets = doc_service.image_asset_manager.list_assets(doc_id)
     return {
         "document_id": doc_id,
@@ -195,6 +201,7 @@ def get_document_visual_asset_file(
     doc_service: DocumentService = Depends(get_document_service),
 ):
     """Serve standalone original high-resolution visual asset file by asset_id or image_hash."""
+    _require_visible_assets(doc_service, doc_id)
     asset = doc_service.image_asset_manager.get_asset(doc_id, asset_id)
     if not asset or not Path(asset.file_path).is_file():
         raise HTTPException(
@@ -212,6 +219,7 @@ def get_document_image_file(
     doc_service: DocumentService = Depends(get_document_service),
 ):
     """Serve standalone original high-resolution visual asset file."""
+    _require_visible_assets(doc_service, doc_id)
     asset = doc_service.image_asset_manager.get_asset(doc_id, image_hash)
     if not asset or not Path(asset.file_path).is_file():
         raise HTTPException(
@@ -229,6 +237,7 @@ def get_document_page_image_file(
     doc_service: DocumentService = Depends(get_document_service),
 ):
     """Serve standalone original image for a specific page (supports physical page, internal index, or printed label)."""
+    _require_visible_assets(doc_service, doc_id)
     parsed_id: int | str = int(page_identifier) if page_identifier.isdigit() else page_identifier
     asset = doc_service.image_asset_manager.get_page_asset(doc_id, parsed_id)
     if not asset or not Path(asset.file_path).is_file():
@@ -268,7 +277,14 @@ def delete_document_by_id(
     answers (the semantic cache) and follow-up conversation context can cite a
     document, so both are invalidated; they cannot be scoped to a single document,
     so they are cleared wholesale (they simply rebuild on the next query)."""
-    res = doc_service.delete_document(doc_id)
+    try:
+        res = doc_service.delete_document(doc_id)
+    except DocumentBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Document cleanup failed for %s", doc_id)
+        raise HTTPException(status_code=503, detail={"code": "DOCUMENT_DELETE_INCOMPLETE",
+                            "message": "Deletion could not finish. Retry deletion; source files are retained where possible."}) from exc
     if not res:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

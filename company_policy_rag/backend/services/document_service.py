@@ -50,6 +50,10 @@ class DuplicateDocumentError(ValueError):
         super().__init__(f"This file is already indexed as '{filename}' ({document_id}).")
 
 
+class DocumentBusyError(RuntimeError):
+    """Deletion conflicts with an active indexing operation."""
+
+
 _IN_FLIGHT_STATUSES = {
     IngestionStatus.UPLOADING.value,
     IngestionStatus.TEXT_INDEXING.value,
@@ -198,6 +202,8 @@ class DocumentService:
                     document_id, legacy_source_file = self._restored_document_identity(meta)
                     if not document_id:
                         continue
+                    if self._is_deleted(document_id, str(meta.get("source_file") or "")):
+                        continue
                     restored_chunk = Chunk(
                         id=str(chunk_id),
                         text=str(document_text or ""),
@@ -301,6 +307,9 @@ class DocumentService:
                     text_ready=False,
                     error="Stored file has no searchable index. Retry indexing.",
                 )
+            if self._is_deleted(document_id, filename):
+                record.update(status="DELETING", text_ready=False, current_stage="DELETING",
+                              error="Document is hidden; retry deletion to finish cleanup.")
             self._stored_files[document_id] = file_path
 
         self._documents.update(aggregated)
@@ -953,7 +962,9 @@ class DocumentService:
             if index_started:
                 # Compensate partial writes; retain the source file for retry.
                 for cleanup in (
-                    lambda: self.vector_store.delete_by_document_id(document_id),
+                    lambda: self.vector_store.delete_by_document_id(document_id, revoke=False)
+                    if isinstance(self.vector_store, ChromaVectorStore)
+                    else self.vector_store.delete_by_document_id(document_id),
                     lambda: self.bm25_index.remove_by_document_id(document_id),
                     lambda: self.bm25_index.save(),
                 ):
@@ -1153,6 +1164,8 @@ class DocumentService:
         """Retry indexing for a previously uploaded document without re-uploading the file."""
         if not re.fullmatch(r"doc_[0-9a-f]{12}", document_id):
             raise ValueError("Invalid document ID.")
+        if self._is_deleted(document_id):
+            raise ValueError("Document is pending deletion; retry deletion instead of indexing.")
         with self._lock:
             existing_job = self._ingestion_jobs.get(document_id)
             if existing_job and existing_job.status != "FAILED":
@@ -1355,9 +1368,16 @@ class DocumentService:
             chunks=r.get("chunks", []),
         )
 
+    def _is_deleted(self, document_id: str, source_file: str | None = None) -> bool:
+        check = getattr(self.vector_store, "is_document_deleted", None)
+        return callable(check) and check(document_id, source_file) is True
+
     def delete_document(self, document_id: str) -> dict[str, Any] | None:
         """Remove document and purge all associated vector embeddings and BM25 postings."""
         with self._lock:
+            job = self._ingestion_jobs.get(document_id)
+            if (job and job.status in _IN_FLIGHT_STATUSES) or document_id in self._pending_hashes.values():
+                raise DocumentBusyError("Document is being indexed; retry deletion after indexing finishes.")
             doc_record = self._documents.get(document_id)
             if not doc_record:
                 stored_path = self._stored_files.get(document_id)
@@ -1369,6 +1389,19 @@ class DocumentService:
                 )
                 doc_record = {"filename": filename}
             filename = doc_record["filename"]
+
+            marker = getattr(self.vector_store, "mark_document_deleted", None)
+            if callable(marker):
+                marker(document_id=document_id, source_file=doc_record.get("_legacy_source_file"))
+            # Revoke all in-process evidence even when persistent cleanup fails.
+            for cid, chunk in list(self.docstore.items()):
+                if chunk.metadata.document_id == document_id:
+                    self.docstore.pop(cid, None)
+            self.bm25_index.remove_by_document_id(document_id)
+            get_retrieval_cache().clear()
+            doc_record.update(status="DELETING", text_ready=False, current_stage="DELETING")
+            if job:
+                job.status, job.text_ready, job.can_retry = "DELETING", False, False
 
         # 1. Purge from Vector Store. Legacy chunks without a usable document_id
         # can only be scoped reliably by their persisted source filename.

@@ -38,3 +38,16 @@ python -m pytest tests/integration/test_container_library_recreation.py -q
 The integration test creates two separate containers with networking disabled.
 It ingests using deterministic test embeddings in the first and checks original
 bytes, document IDs, vector rows, and restored BM25 chunks in the second.
+
+## Deletion correction
+
+Persistent deletion errors now return an incomplete-cleanup error. A small atomic,
+fsynced deletion journal revokes dense, lexical, cached-candidate, reused-evidence,
+and asset access while keeping source files for cleanup retry. Restart preserves
+revocation. Active indexing returns a conflict rather than racing deletion.
+Compensating cleanup after failed ingestion does not revoke indexing retries.
+This journal is single-process containment, not the proposed versioned catalog.
+Requests already generating when deletion starts may still complete.
+
+Validation: 55 tests passed across deletion integrity, legacy deletion, ingestion
+hardening, document APIs, retrieval invalidation, and deduplication.
