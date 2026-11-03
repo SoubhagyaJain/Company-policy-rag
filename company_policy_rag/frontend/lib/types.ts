@@ -142,6 +142,8 @@ export interface ChatMessageData {
   response_mode?: ResponseMode;
   model?: string;
   isStreaming?: boolean;
+  content_status?: 'provisional' | 'final' | 'interrupted';
+  low_confidence?: boolean;
   error?: string;
 }
 

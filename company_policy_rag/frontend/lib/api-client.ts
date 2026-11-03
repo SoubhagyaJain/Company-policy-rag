@@ -65,6 +65,8 @@ export interface DonePayload {
   thinking_detail_level?: ThinkingDetailLevel;
   response_mode?: ResponseMode;
   model?: string;
+  low_confidence?: boolean;
+  provisional?: boolean;
 }
 
 export interface StreamCallbacks {
@@ -382,6 +384,20 @@ export class ApiClient {
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
       let currentEvent = 'chunk';
+      let receivedFinal = false;
+      const dispatch = (dataStr: string) => {
+        let data: unknown;
+        try { data = JSON.parse(dataStr); }
+        catch {
+          if (currentEvent === 'chunk') callbacks?.onChunk?.(dataStr);
+          return;
+        }
+        if (currentEvent === 'error') {
+          throw new Error((data as any)?.detail || 'Error from RAG backend');
+        }
+        this.handleStreamEvent(currentEvent, data, callbacks);
+        if (currentEvent === 'done') receivedFinal = true;
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -399,15 +415,7 @@ export class ApiClient {
             currentEvent = trimmed.substring(6).trim();
           } else if (trimmed.startsWith('data:')) {
             const dataStr = trimmed.substring(5).trim();
-            try {
-              const data = JSON.parse(dataStr);
-              this.handleStreamEvent(currentEvent, data, callbacks);
-            } catch {
-              // If data is raw text string instead of JSON
-              if (currentEvent === 'chunk' && callbacks?.onChunk) {
-                callbacks.onChunk(dataStr);
-              }
-            }
+            dispatch(dataStr);
           }
         }
       }
@@ -416,16 +424,10 @@ export class ApiClient {
       if (buffer.trim()) {
         if (buffer.startsWith('data:')) {
           const dataStr = buffer.substring(5).trim();
-          try {
-            const data = JSON.parse(dataStr);
-            this.handleStreamEvent(currentEvent, data, callbacks);
-          } catch {
-            if (currentEvent === 'chunk' && callbacks?.onChunk) {
-              callbacks.onChunk(dataStr);
-            }
-          }
+          dispatch(dataStr);
         }
       }
+      if (!receivedFinal) throw new Error('The response ended before a final answer was received.');
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         return;
@@ -483,6 +485,7 @@ export class ApiClient {
         if (data && typeof data === 'object') {
           const doneData = data as any;
           if (Array.isArray(doneData.citations)) {
+            doneData.citations = doneData.citations.map(mapCitation);
             doneData.citations.forEach((c: any, i: number) => {
               callbacks.onCitation?.(mapCitation(c, i));
             });

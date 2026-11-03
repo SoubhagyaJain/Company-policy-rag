@@ -51,3 +51,17 @@ Requests already generating when deletion starts may still complete.
 
 Validation: 55 tests passed across deletion integrity, legacy deletion, ingestion
 hardening, document APIs, retrieval invalidation, and deduplication.
+
+## Canonical answer correction
+
+Pipeline completion text and citations now replace provisional deltas in the SSE
+completion, telemetry, server history, structured conversation state, and browser
+message. Empty final text is authoritative. Drafts are labeled in the active UI;
+truncated streams and SSE errors fail rather than silently completing, and a
+partially received answer is not automatically retried. Existing event names and
+chunk delivery remain. This does not change the verifier acceptance policy.
+
+Validation: 31 backend tests passed (canonical delivery, cancellation, model
+switching, conversation scenarios); 220 frontend tests passed; TypeScript passed.
+Two old frontend expectations were updated: server errors now reject the stream,
+and an empty final answer clears draft text.

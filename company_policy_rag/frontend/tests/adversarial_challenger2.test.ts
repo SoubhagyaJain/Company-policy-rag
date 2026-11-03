@@ -20,6 +20,7 @@ import {
   mapVerificationReport,
   ApiClient,
 } from '../lib/api-client';
+import { completeMessage } from '../lib/chat-completion';
 
 export interface TestResult {
   suite: string;
@@ -904,11 +905,13 @@ export async function runAdversarialPipelineAsyncTests(): Promise<TestResult[]> 
       const client = new ApiClient('http://mock-rag');
       let errorMsg = '';
 
-      await client.streamChat('Error event test', 's1', {}, 'default', {
+      let rejected = false;
+      try { await client.streamChat('Error event test', 's1', {}, 'default', {
         onError: (err) => { errorMsg = err.message; },
-      });
+      }); } catch { rejected = true; }
 
       assert(errorMsg === 'Vector database connection timeout', 'onError received error detail');
+      assert(rejected, 'server failure must reject completion');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -1328,7 +1331,7 @@ export async function runAdversarialPipelineAsyncTests(): Promise<TestResult[]> 
     }
   });
 
-  await test('C2.6.3: useChatStream state properly preserves streaming content if onDone answer is empty', async () => {
+  await test('C2.6.3: canonical empty answer clears provisional content', async () => {
     let assistantMsg: ChatMessageData = {
       id: 'msg_asst_1',
       role: 'assistant',
@@ -1342,14 +1345,9 @@ export async function runAdversarialPipelineAsyncTests(): Promise<TestResult[]> 
 
     // onDone arrives with empty or null answer
     const doneData: any = { answer: '' };
-    const finalContent = assistantMsg.content || doneData?.answer || '';
-    assistantMsg = {
-      ...assistantMsg,
-      content: finalContent || 'Fallback default',
-      isStreaming: false,
-    };
+    assistantMsg = completeMessage(assistantMsg, doneData);
 
-    assert(assistantMsg.content === 'Streamed answer part', 'preserved streamed text over empty onDone answer');
+    assert(assistantMsg.content === '', 'authoritative empty answer clears draft');
     assert(assistantMsg.isStreaming === false, 'streaming flag is false');
   });
 

@@ -516,6 +516,7 @@ class ChatService:
             ttft_recorded = False
             ttft_ms = 0.0
             full_answer = ""
+            final_received = False
             token_index = 0
             final_rag_trace: Any = None
             final_citations: list[Any] = []
@@ -590,11 +591,17 @@ class ChatService:
                         "request_id": request_id,
                         "content": token_text,
                         "index": token_index,
+                        "provisional": True,
                     }
                     yield f"event: chunk\ndata: {json.dumps(chunk_payload)}\n\n"
                     token_index += 1
 
                 elif event["type"] == "done":
+                    # Tokens are a draft. Verification/source repair can replace
+                    # them, including with an empty answer, before completion.
+                    final_received = True
+                    full_answer = event.get("answer", full_answer)
+                    model_name = event.get("model") or model_name
                     total_latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
 
                     citations = event.get("citations", [])
@@ -670,6 +677,7 @@ class ChatService:
                         "request_id": request_id,
                         "turn_id": message_id,
                         "answer": full_answer,
+                        "provisional": False,
                         "status": "completed",
                         "total_latency_ms": total_latency_ms,
                         "ttft_ms": ttft_ms,
@@ -701,6 +709,9 @@ class ChatService:
 
                 elif event["type"] == "error":
                     yield f"event: error\ndata: {json.dumps({'detail': event.get('detail', 'Unknown error'), 'status': 500, 'request_id': request_id})}\n\n"
+
+            if not final_received:
+                return  # cancelled/incomplete drafts must not become conversation evidence
 
             # 4. Save turn to history and update conversation state
             with self._session_lock:
