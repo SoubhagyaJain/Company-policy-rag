@@ -1,4 +1,5 @@
 """Single-host administrative boundary, with an optional operator bearer key."""
+
 import hmac
 import ipaddress
 

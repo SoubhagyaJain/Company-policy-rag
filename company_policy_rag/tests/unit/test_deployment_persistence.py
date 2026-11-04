@@ -1,4 +1,5 @@
 """Deployment path contracts; no model downloads or live user storage."""
+
 from pathlib import Path, PurePosixPath
 
 import yaml

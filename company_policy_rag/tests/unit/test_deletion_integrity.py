@@ -9,9 +9,12 @@ from backend.services.document_service import DocumentService
 
 def test_persistent_delete_failure_is_reported_and_hidden_after_restart(tmp_path, monkeypatch):
     store = ChromaVectorStore(persist_dir=tmp_path / "chroma")
-    chunk = Chunk(id="chunk", text="Employees receive twenty days of annual leave.",
-                  metadata=ChunkMetadata(document_id="doc_123456789abc", source_file="policy.txt", chunk_index=0),
-                  embedding=[1.0, 0.5])
+    chunk = Chunk(
+        id="chunk",
+        text="Employees receive twenty days of annual leave.",
+        metadata=ChunkMetadata(document_id="doc_123456789abc", source_file="policy.txt", chunk_index=0),
+        embedding=[1.0, 0.5],
+    )
     store.add_chunks([chunk])
     original_delete = store._collection.delete
     monkeypatch.setattr(store._collection, "delete", MagicMock(side_effect=OSError("disk unavailable")))
@@ -58,8 +61,10 @@ def test_partial_delete_hides_lexical_and_parent_evidence_and_retains_source(ser
 
 def test_active_ingestion_cannot_be_deleted(service):
     from backend.models.api_dto import IngestionStatusResponse
+
     service._ingestion_jobs["doc_123456789abc"] = IngestionStatusResponse(
-        document_id="doc_123456789abc", filename="policy.txt", status="TEXT_INDEXING")
+        document_id="doc_123456789abc", filename="policy.txt", status="TEXT_INDEXING"
+    )
     with pytest.raises(RuntimeError, match="index"):
         service.delete_document("doc_123456789abc")
 
@@ -80,7 +85,12 @@ def test_failed_ingestion_cleanup_does_not_revoke_retry(service, monkeypatch):
 def test_api_reports_incomplete_delete_and_allows_cleanup_retry(service, monkeypatch):
     from fastapi.testclient import TestClient
     from backend.api.main import app
-    from backend.api.dependencies import get_document_service, get_semantic_cache_manager, get_conversation_state_manager
+    from backend.api.dependencies import (
+        get_document_service,
+        get_semantic_cache_manager,
+        get_conversation_state_manager,
+    )
+
     uploaded = service.upload_document("policy.txt", b"Employees receive twenty days of annual paid leave.")
     service._ingestion_executor.submit(lambda: None).result(timeout=15)
     original_delete = service.vector_store._collection.delete
@@ -102,9 +112,13 @@ def test_pipeline_filters_revoked_cached_and_reused_evidence(tmp_path):
     from types import SimpleNamespace
     from backend.models.rag import ScoredChunk
     from backend.rag.pipeline import RAGPipeline
+
     store = ChromaVectorStore(persist_dir=tmp_path / "chroma")
-    chunk = Chunk(id="old", text="Old policy", metadata=ChunkMetadata(
-        document_id="doc_123456789abc", source_file="policy.txt", chunk_index=0))
+    chunk = Chunk(
+        id="old",
+        text="Old policy",
+        metadata=ChunkMetadata(document_id="doc_123456789abc", source_file="policy.txt", chunk_index=0),
+    )
     pipeline = RAGPipeline.__new__(RAGPipeline)
     pipeline.hybrid_retriever = SimpleNamespace(dense_retriever=SimpleNamespace(vector_store=store))
     store.mark_document_deleted(chunk.metadata.document_id)

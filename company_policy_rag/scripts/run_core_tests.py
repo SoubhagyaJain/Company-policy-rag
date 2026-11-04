@@ -12,6 +12,16 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 CORE_TEST_PATHS = (
+    # Deterministic regressions for production-critical corrections.
+    "tests/unit/test_deployment_persistence.py",
+    "tests/unit/test_deletion_integrity.py",
+    "tests/unit/test_canonical_answer_delivery.py",
+    "tests/unit/test_embedding_integrity.py",
+    "tests/unit/test_security_containment.py",
+    "tests/unit/test_model_artifact_integrity.py",
+    "tests/unit/test_export_merge_modelfile.py",
+    "tests/unit/test_adversarial_merger_gguf.py",
+    "tests/unit/test_ollama_registration.py",
     "tests/test_conversation_interpreter.py",
     "tests/unit/test_conversation_quality_regression.py",
     "tests/test_adversarial_conversation_rag.py",

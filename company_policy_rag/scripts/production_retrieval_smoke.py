@@ -157,7 +157,7 @@ def run_smoke(dataset_path: Path = DEFAULT_DATASET) -> dict[str, Any]:
             "dataset": str(dataset_path.relative_to(PROJECT_ROOT)),
             "document": str(document_path.relative_to(PROJECT_ROOT)),
             "retrieval_path": "loader -> adaptive chunker -> Chroma + BM25 -> hybrid RRF",
-            "embedding_mode": "production deterministic fallback",
+            "embedding_mode": "explicit test-only deterministic hash embeddings",
             "case_count": len(cases),
             "chunk_count": len(chunks),
             "top_k": top_k,

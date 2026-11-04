@@ -1,10 +1,13 @@
 """Synthetic fixtures only. These are never production model artifacts."""
+
 import json
 import struct
 from pathlib import Path
 from company_policy_rag.src.finetuning.merger import DEFAULT_CHATML_TEMPLATE
+
 GGUF_MAGIC = b"GGUF"
 GGUF_VERSION = 3
+
 
 def synthesize_fallback_merged_artifacts(output_dir: Path, dtype_str: str = "float16") -> None:
     """Synthesize valid mock metadata, ChatML tokens, config.json, and safetensors for offline/test environments."""
@@ -49,12 +52,15 @@ def synthesize_fallback_merged_artifacts(output_dir: Path, dtype_str: str = "flo
     # 4. tokenizer.json
     tok_file = output_dir / "tokenizer.json"
     if not tok_file.exists() or tok_file.stat().st_size == 0:
-        tok_file.write_text(json.dumps({"version": "1.0", "truncation": None, "padding": None}, indent=2), encoding="utf-8")
+        tok_file.write_text(
+            json.dumps({"version": "1.0", "truncation": None, "padding": None}, indent=2), encoding="utf-8"
+        )
 
     # 5. model.safetensors
     st_file = output_dir / "model.safetensors"
     if not st_file.exists() or st_file.stat().st_size == 0:
         st_file.write_bytes(b"MOCK_FP16_MERGED_WEIGHTS_SAFETENSORS")
+
 
 def _write_simulated_gguf(
     output_path: Path,
@@ -68,7 +74,7 @@ def _write_simulated_gguf(
     magic = GGUF_MAGIC
     version = struct.pack("<I", GGUF_VERSION)
     tensor_count = struct.pack("<Q", 1)  # 1 tensor
-    kv_count = struct.pack("<Q", 2)      # 2 metadata KV pairs
+    kv_count = struct.pack("<Q", 2)  # 2 metadata KV pairs
 
     header = magic + version + tensor_count + kv_count
 
@@ -76,28 +82,33 @@ def _write_simulated_gguf(
     key1 = "general.architecture".encode("utf-8")
     val1 = architecture.encode("utf-8")
     kv1 = (
-        struct.pack("<Q", len(key1)) + key1 +
-        struct.pack("<I", 8) +  # GGUF_TYPE_STRING = 8
-        struct.pack("<Q", len(val1)) + val1
+        struct.pack("<Q", len(key1))
+        + key1
+        + struct.pack("<I", 8)  # GGUF_TYPE_STRING = 8
+        + struct.pack("<Q", len(val1))
+        + val1
     )
 
     # KV pair 2: "general.quantization_type" -> quantization format string (e.g. "Q4_K_M")
     key2 = "general.quantization_type".encode("utf-8")
     val2 = quantization.encode("utf-8")
     kv2 = (
-        struct.pack("<Q", len(key2)) + key2 +
-        struct.pack("<I", 8) +  # GGUF_TYPE_STRING = 8
-        struct.pack("<Q", len(val2)) + val2
+        struct.pack("<Q", len(key2))
+        + key2
+        + struct.pack("<I", 8)  # GGUF_TYPE_STRING = 8
+        + struct.pack("<Q", len(val2))
+        + val2
     )
 
     # Tensor Info 1: "token_embd.weight"
     t_name = "token_embd.weight".encode("utf-8")
     t_info = (
-        struct.pack("<Q", len(t_name)) + t_name +
-        struct.pack("<I", 1) +           # n_dims = 1
-        struct.pack("<Q", 128) +         # dim[0] = 128
-        struct.pack("<I", 1) +           # type = GGML_TYPE_F16 (1)
-        struct.pack("<Q", 0)             # offset = 0
+        struct.pack("<Q", len(t_name))
+        + t_name
+        + struct.pack("<I", 1)  # n_dims = 1
+        + struct.pack("<Q", 128)  # dim[0] = 128
+        + struct.pack("<I", 1)  # type = GGML_TYPE_F16 (1)
+        + struct.pack("<Q", 0)  # offset = 0
     )
 
     # 32-byte alignment padding + dummy tensor payload with explicit quantization marker

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import math
+import threading
+import time
+from collections import OrderedDict
 from numbers import Real
 from typing import Any
 
@@ -33,11 +36,6 @@ def normalize_vector(vector: list[float]) -> list[float]:
     if norm == 0:
         return vector
     return [x / norm for x in vector]
-
-
-import threading
-import time
-from collections import OrderedDict
 
 
 class EmbeddingCache:

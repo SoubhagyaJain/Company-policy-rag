@@ -3,6 +3,7 @@
 Build docker/Dockerfile.backend, then set RAG_CONTAINER_TEST_IMAGE to that image.
 No running application container, existing volume, or Ollama service is used.
 """
+
 import json
 import os
 import subprocess
@@ -13,7 +14,7 @@ import pytest
 IMAGE = os.environ.get("RAG_CONTAINER_TEST_IMAGE")
 pytestmark = pytest.mark.skipif(not IMAGE, reason="set RAG_CONTAINER_TEST_IMAGE to a built backend image")
 
-PROBE = r'''
+PROBE = r"""
 import json, os
 from pathlib import Path
 from backend.services.document_service import DocumentService
@@ -44,18 +45,37 @@ try:
     print("RECREATION_RESULT=" + json.dumps(expected))
 finally:
     service._ingestion_executor.shutdown(wait=True)
-'''
+"""
 
 
 def test_library_survives_two_distinct_containers(tmp_path):
     results = []
     for _ in range(2):
         completed = subprocess.run(
-            ["docker", "run", "--rm", "--network", "none", "--user", "0:0",
-             "--mount", f"type=bind,source={tmp_path},target=/app/app/storage",
-             "-e", "APP_STORAGE_DIR=/app/app/storage", "-e", "REDIS_ENABLED=false",
-             "--entrypoint", "python", IMAGE, "-c", PROBE],
-            capture_output=True, text=True, check=True, timeout=120,
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--user",
+                "0:0",
+                "--mount",
+                f"type=bind,source={tmp_path},target=/app/app/storage",
+                "-e",
+                "APP_STORAGE_DIR=/app/app/storage",
+                "-e",
+                "REDIS_ENABLED=false",
+                "--entrypoint",
+                "python",
+                IMAGE,
+                "-c",
+                PROBE,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=120,
         )
         result = next(line for line in completed.stdout.splitlines() if line.startswith("RECREATION_RESULT="))
         results.append(json.loads(result.split("=", 1)[1]))

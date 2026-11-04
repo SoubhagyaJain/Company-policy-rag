@@ -16,12 +16,9 @@ import argparse
 import gc
 import json
 import logging
-import os
-import shutil
-import sys
 import time
 import tempfile
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -122,7 +119,7 @@ def resolve_device(device_str: str) -> Tuple[str, Optional[Union[str, Dict[str, 
             try:
                 parts = dev.split(":")
                 idx = int(parts[1]) if len(parts) > 1 else 0
-                if idx >= torch.cuda.device_count():
+                if idx < 0 or idx >= torch.cuda.device_count():
                     logger.warning("CUDA device index %d exceeds available GPUs (%d); falling back to CPU.", idx, torch.cuda.device_count())
                     return "cpu", None
             except (ValueError, IndexError):

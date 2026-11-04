@@ -21,6 +21,7 @@ def test_operator_key_is_required_when_configured(monkeypatch):
     app = create_app()
     from backend.api.dependencies import get_storage_service
     from types import SimpleNamespace
+
     app.dependency_overrides[get_storage_service] = lambda: SimpleNamespace(live=lambda: {"status": "ok"})
     client = TestClient(app, client=("127.0.0.1", 50000))
     assert client.get("/api/admin/storage/live").status_code == 403

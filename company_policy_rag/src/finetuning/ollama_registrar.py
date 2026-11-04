@@ -156,14 +156,17 @@ def register_model_api(
             if response.status == 200:
                 raw_body = response.read().decode("utf-8")
                 if not raw_body.strip():
-                    return True
+                    return False
                 try:
-                    resp_data = json.loads(raw_body)
-                    if isinstance(resp_data, dict):
-                        return resp_data.get("status") == "success" or "error" not in resp_data
-                    return True
+                    records = [json.loads(raw_body)]
                 except json.JSONDecodeError:
-                    return "success" in raw_body.lower()
+                    if not stream:
+                        return False
+                    try:
+                        records = [json.loads(line) for line in raw_body.splitlines() if line.strip()]
+                    except json.JSONDecodeError:
+                        return False
+                return bool(records) and all(isinstance(item, dict) and "error" not in item for item in records) and records[-1].get("status") == "success"
             return False
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         logger.warning("Ollama API registration failed: %s", exc)
@@ -256,18 +259,14 @@ def verify_model_registered(
     if not is_online:
         return False
 
+    def canonical_tag(name: str) -> str:
+        cleaned = name.strip()
+        return cleaned if ":" in cleaned.rsplit("/", 1)[-1] else f"{cleaned}:latest"
+
     clean_target = model_name.strip()
-    target_base = clean_target.split(":")[0]
-
-    for m in models:
-        if m == clean_target:
-            return True
-        if m == f"{clean_target}:latest":
-            return True
-        if m.split(":")[0] == target_base:
-            return True
-
-    return False
+    if not clean_target:
+        return False
+    return canonical_tag(clean_target) in {canonical_tag(name) for name in models}
 
 
 def get_model_details(

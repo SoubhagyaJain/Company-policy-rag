@@ -30,11 +30,10 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional
 
 # Ensure project root and company_policy_rag root are in sys.path
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -54,7 +53,6 @@ try:
     from company_policy_rag.src.finetuning.merger import merge_lora_weights
     from company_policy_rag.src.finetuning.modelfile_generator import generate_modelfile
     from company_policy_rag.src.finetuning.ollama_registrar import (
-        probe_ollama_tags,
         register_model_in_ollama,
         verify_model_registered,
     )
@@ -67,7 +65,6 @@ except ImportError:
     from src.finetuning.merger import merge_lora_weights
     from src.finetuning.modelfile_generator import generate_modelfile
     from src.finetuning.ollama_registrar import (
-        probe_ollama_tags,
         register_model_in_ollama,
         verify_model_registered,
     )
