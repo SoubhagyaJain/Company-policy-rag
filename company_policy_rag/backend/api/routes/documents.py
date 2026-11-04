@@ -29,7 +29,7 @@ _UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
 
 
 def _require_visible_assets(doc_service: DocumentService, doc_id: str) -> None:
-    if doc_service._is_deleted(doc_id) is True:
+    if doc_service._is_deleted(doc_id) is True or doc_service.is_document_searchable(doc_id) is False:
         raise HTTPException(status_code=404, detail="Document is unavailable.")
 
 

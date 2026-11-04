@@ -1,6 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-
 import pytest
 
 from backend.models.api_dto import IngestionStatusResponse
@@ -12,8 +10,9 @@ DOC = "doc_123456789abc"
 def enqueue(catalog, tmp_path):
     source = tmp_path / f"{DOC}_policy.txt"
     source.write_text("Original policy")
-    status = IngestionStatusResponse(document_id=DOC, filename="policy.txt", status="TEXT_INDEXING",
-                                     current_stage="QUEUED", text_ready=False)
+    status = IngestionStatusResponse(
+        document_id=DOC, filename="policy.txt", status="TEXT_INDEXING", current_stage="QUEUED", text_ready=False
+    )
     record = {"document_id": DOC, "filename": "policy.txt", "file_hash": "hash", "chunk_count": 0}
     catalog.enqueue(record, source, {"category": "HR", "chunk_strategy": "recursive"}, status.model_dump())
     return status

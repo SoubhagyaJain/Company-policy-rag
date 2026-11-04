@@ -191,14 +191,15 @@ def test_partial_index_failure_is_cleaned(service):
     assert service.docstore == {}
 
 
-def test_queue_failure_clears_duplicate_reservation(service):
+def test_queue_failure_preserves_durable_upload_for_recovery(service):
     service._ingestion_executor.shutdown(wait=True)
-    with pytest.raises(RuntimeError):
-        service.upload_document("policy.txt", b"Annual leave policy")
-    assert service._pending_hashes == {}
-    assert service._ingestion_jobs == {}
-    assert service._stored_files == {}
-    assert not list(service.storage_dir.iterdir())
+    uploaded = service.upload_document("policy.txt", b"Annual leave policy")
+    assert uploaded.status == "TEXT_INDEXING"
+    assert service.catalog.get(uploaded.document_id)["state"] == "QUEUED"
+    assert service._stored_files[uploaded.document_id].read_bytes() == b"Annual leave policy"
+    from backend.services.document_service import DuplicateDocumentError
+    with pytest.raises(DuplicateDocumentError):
+        service.upload_document("renamed.txt", b"Annual leave policy")
 
 
 def test_ready_retry_is_idempotent(service):

@@ -249,7 +249,7 @@ class ChromaVectorStore(VectorStoreInterface):
         from backend.services.document_catalog import DocumentCatalog
         catalog = getattr(self, "document_catalog", None)
         return not self.is_document_deleted(document_id, source_file) and (
-            not isinstance(catalog, DocumentCatalog) or catalog.searchable(document_id))
+            not isinstance(catalog, DocumentCatalog) or catalog.searchable(document_id, source_file))
 
     def _catalog_revision(self) -> str:
         from backend.services.document_catalog import DocumentCatalog

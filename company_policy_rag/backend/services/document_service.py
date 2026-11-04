@@ -120,11 +120,17 @@ class DocumentService:
         self._hash_catalog = self._load_hash_catalog()
         self._lock = threading.RLock()
         enabled = settings.document_catalog_enabled if catalog_enabled is None else catalog_enabled
+        if not enabled and (library_root / "document_catalog.sqlite3").exists():
+            previous = DocumentCatalog(library_root / "document_catalog.sqlite3")
+            if any(row["state"] not in {"READY", "LEGACY", "DELETED"} for row in previous.documents()):
+                raise RuntimeError("Cannot disable the catalog while unpublished or failed documents remain. "
+                                   "Use a preserved pre-upgrade library for rollback.")
         self.catalog = DocumentCatalog(library_root / "document_catalog.sqlite3") if enabled else None
         self._catalog_owner = uuid.uuid4().hex
         self._catalog_scheduled: set[str] = set()
         self._catalog_claims: dict[str, str] = {}
         self._restored_counts: dict[str, int] = {}
+        self._source_candidates: dict[str, list[Path]] = {}
         if self.catalog is not None:
             self.vector_store.document_catalog = self.catalog
             self.bm25_index.document_catalog = self.catalog
@@ -150,17 +156,26 @@ class DocumentService:
         """Import once, then use committed lifecycle state rather than vector presence."""
         assert self.catalog is not None
         inventory = self.storage_dir.parent / "catalog_migration_inventory.json"
-        if not inventory.exists():
-            with inventory.open("x", encoding="utf-8") as handle:
-                json.dump({"documents": list(self._documents.values()),
-                           "sources": {key: str(value.resolve()) for key, value in self._stored_files.items()},
-                           "note": "Read-only inventory; original files and indexes retained."}, handle, indent=2)
-                handle.flush()
-                os.fsync(handle.fileno())
+        with self.catalog.transaction():
+            if not inventory.exists():
+                temporary = inventory.with_suffix(".tmp")
+                with temporary.open("w", encoding="utf-8") as handle:
+                    json.dump({"documents": list(self._documents.values()),
+                               "sources": {key: [{"path": str(path.resolve()), "sha256": self._source_digest(path)}
+                                                 for path in paths] for key, paths in self._source_candidates.items()},
+                               "note": "Read-only inventory; original files and indexes retained."}, handle, indent=2)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                temporary.replace(inventory)
         for document_id, record in self._documents.items():
             if self.catalog.get(document_id) is None:
+                options = dict(self._hash_catalog.get(document_id, {}))
+                if len(self._source_candidates.get(document_id, [])) > 1:
+                    record.update(status="FAILED", text_ready=False, catalog_review_required=True,
+                                  error="Multiple source files share this document ID; operator review required.")
+                    options["review_required"] = True
                 self.catalog.import_legacy(record, self._stored_files.get(document_id),
-                                           self._hash_catalog.get(document_id, {}))
+                                           options)
         for row in self.catalog.documents():
             document_id, state = row["document_id"], row["state"]
             if state == "DELETED":
@@ -173,7 +188,8 @@ class DocumentService:
                 self._stored_files[document_id] = source
             if state == "READY":
                 issue = None
-                if source is None or not source.is_file() or self._source_digest(source) != row["file_hash"]:
+                if (source is None or source.resolve().parent != self.storage_dir.resolve()
+                    or not source.is_file() or self._source_digest(source) != row["file_hash"]):
                     issue = "Original source is missing or its hash changed; recovery requires operator review."
                 elif self._restored_counts.get(document_id, 0) != row["expected_chunks"]:
                     issue = "Persistent vector count does not match the committed catalog; retry indexing."
@@ -263,15 +279,16 @@ class DocumentService:
                     raise ValueError("Embedding configuration changed since upload; automatic recovery refused.")
                 # Only this API job's derived rows may be compensated/replayed.
                 # Legacy documents have no job and are never automatically reindexed.
-                if isinstance(self.vector_store, ChromaVectorStore):
-                    self.vector_store.delete_by_document_id(document_id, revoke=False)
-                else:
-                    self.vector_store.delete_by_document_id(document_id)
-                self.bm25_index.remove_by_document_id(document_id)
-                self.bm25_index.save()
-                for chunk_id, chunk in list(self.docstore.items()):
-                    if chunk.metadata.document_id == document_id:
-                        self.docstore.pop(chunk_id, None)
+                if claimed["attempt"] > 1 or options.get("replay_cleanup"):
+                    if isinstance(self.vector_store, ChromaVectorStore):
+                        self.vector_store.delete_by_document_id(document_id, revoke=False)
+                    else:
+                        self.vector_store.delete_by_document_id(document_id)
+                    self.bm25_index.remove_by_document_id(document_id)
+                    self.bm25_index.save()
+                    for chunk_id, chunk in list(self.docstore.items()):
+                        if chunk.metadata.document_id == document_id:
+                            self.docstore.pop(chunk_id, None)
                 self._execute_ingestion_stages(document_id, row["record"]["filename"], source,
                                                category=options.get("category", "general"),
                                                chunk_strategy=options.get("chunk_strategy"))
@@ -444,6 +461,7 @@ class DocumentService:
             if not document_id.startswith("doc_") or file_path.name[16] != "_":
                 continue
             filename = file_path.name[17:]
+            self._source_candidates.setdefault(document_id, []).append(file_path)
             stat = file_path.stat()
             record = aggregated.setdefault(
                 document_id,
@@ -577,6 +595,10 @@ class DocumentService:
         """Return real-time structured ingestion status for a document."""
         self.recover_pending_ingestions()
         with self._lock:
+            if self.catalog is not None and document_id not in self._catalog_claims:
+                persisted = self.catalog.job(document_id)
+                if persisted and persisted["state"] not in {"DELETING", "DELETED"}:
+                    self._ingestion_jobs[document_id] = IngestionStatusResponse.model_validate(persisted["status"])
             if document_id in self._ingestion_jobs:
                 job = self._ingestion_jobs[document_id]
                 # Check for stuck job detection
@@ -1399,6 +1421,8 @@ class DocumentService:
                     raise ValueError("Document is not in the durable catalog.")
                 if saved["state"] == "LEGACY":
                     raise ValueError("Legacy index needs verified adoption before reindexing; existing evidence is retained.")
+                if saved["state"] == "REVIEW" or saved["options"].get("review_required"):
+                    raise ValueError("Ambiguous source identity requires operator review before retrying.")
                 if saved["state"] in {"DELETING", "DELETED"}:
                     raise ValueError("Document is pending deletion; retry deletion instead of indexing.")
             existing_job = self._ingestion_jobs.get(document_id)
@@ -1618,6 +1642,9 @@ class DocumentService:
     def _is_deleted(self, document_id: str, source_file: str | None = None) -> bool:
         check = getattr(self.vector_store, "is_document_deleted", None)
         return callable(check) and check(document_id, source_file) is True
+
+    def is_document_searchable(self, document_id: str) -> bool:
+        return not self._is_deleted(document_id) and (self.catalog is None or self.catalog.searchable(document_id))
 
     def delete_document(self, document_id: str) -> dict[str, Any] | None:
         """Remove document and purge all associated vector embeddings and BM25 postings."""

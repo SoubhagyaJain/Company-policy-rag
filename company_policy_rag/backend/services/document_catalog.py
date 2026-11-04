@@ -111,6 +111,7 @@ class DocumentCatalog:
             try:
                 if os.name == "nt":
                     import msvcrt
+
                     try:
                         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
                         acquired = True
@@ -118,6 +119,7 @@ class DocumentCatalog:
                         pass
                 else:
                     import fcntl
+
                     try:
                         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
                         acquired = True
@@ -133,8 +135,10 @@ class DocumentCatalog:
                         fcntl.flock(handle, fcntl.LOCK_UN)
 
     def _event(self, db, document_id, job_id, state, detail=""):
-        db.execute("INSERT INTO events(document_id,job_id,state,detail,created_at) VALUES(?,?,?,?,?)",
-                   (document_id, job_id, state, detail, self.clock()))
+        db.execute(
+            "INSERT INTO events(document_id,job_id,state,detail,created_at) VALUES(?,?,?,?,?)",
+            (document_id, job_id, state, detail, self.clock()),
+        )
 
     @staticmethod
     def _document(row) -> dict[str, Any]:
@@ -154,18 +158,25 @@ class DocumentCatalog:
 
     def job(self, document_id: str) -> dict[str, Any] | None:
         with self.connection() as db:
-            row = db.execute("SELECT j.* FROM jobs j JOIN documents d ON d.current_job_id=j.job_id "
-                             "WHERE d.document_id=?", (document_id,)).fetchone()
+            row = db.execute(
+                "SELECT j.* FROM jobs j JOIN documents d ON d.current_job_id=j.job_id WHERE d.document_id=?",
+                (document_id,),
+            ).fetchone()
             if not row:
                 return None
             result = dict(row)
             result["status"] = json.loads(result.pop("status_json"))
             return result
 
-    def searchable(self, document_id: str | None) -> bool:
+    def searchable(self, document_id: str | None, source_file: str | None = None) -> bool:
         # Unknown IDs can belong to preserved legacy CLI indexes. Migration marks
         # them explicitly; new API ingestion always registers before indexing.
         row = self.get(document_id) if document_id else None
+        if row is None and source_file:
+            # Older index rows have no canonical ID. Match their retained filename
+            # conservatively, just as the legacy deletion scope does.
+            matches = [item for item in self.documents() if item["record"].get("filename") == source_file]
+            return all(item["state"] in {"READY", "LEGACY"} for item in matches)
         return row is None or row["state"] in {"READY", "LEGACY"}
 
     def revision(self) -> str:
@@ -174,16 +185,35 @@ class DocumentCatalog:
 
     def import_legacy(self, record: dict, source: Path | None, options: dict) -> None:
         document_id = record["document_id"]
-        state = "DELETING" if record.get("status") == "DELETING" else (
-            "LEGACY" if record.get("chunk_count", 0) else "FAILED")
+        state = (
+            "DELETING"
+            if record.get("status") == "DELETING"
+            else (
+                "REVIEW" if options.get("review_required") else "LEGACY" if record.get("chunk_count", 0) else "FAILED"
+            )
+        )
         if state == "LEGACY":
-            record = {**record, "status": "PARTIALLY_INDEXED", "current_stage": "LEGACY_REVIEW",
-                      "error": "Legacy index completeness is unverified; existing evidence is retained."}
+            record = {
+                **record,
+                "status": "PARTIALLY_INDEXED",
+                "current_stage": "LEGACY_REVIEW",
+                "error": "Legacy index completeness is unverified; existing evidence is retained.",
+            }
         with self.transaction() as db:
-            cursor = db.execute("INSERT OR IGNORE INTO documents VALUES(?,?,?,?,?,?,?,?,?)",
-                                (document_id, str(source.resolve()) if source else None,
-                                 record.get("file_hash", ""), state, json.dumps(record),
-                                 json.dumps(options), None, None, self.clock()))
+            cursor = db.execute(
+                "INSERT OR IGNORE INTO documents VALUES(?,?,?,?,?,?,?,?,?)",
+                (
+                    document_id,
+                    str(source.resolve()) if source else None,
+                    record.get("file_hash", ""),
+                    state,
+                    json.dumps(record),
+                    json.dumps(options),
+                    None,
+                    None,
+                    self.clock(),
+                ),
+            )
             if cursor.rowcount:
                 self._event(db, document_id, None, state, "Imported without changing files or indexes")
 
@@ -193,67 +223,113 @@ class DocumentCatalog:
             prior = db.execute("SELECT state FROM documents WHERE document_id=?", (document_id,)).fetchone()
             if prior and prior[0] not in {"FAILED"}:
                 raise CatalogConflict("Document is not eligible for a new ingestion attempt.")
-            db.execute("INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(document_id) DO UPDATE SET "
-                       "state=excluded.state,record_json=excluded.record_json,options_json=excluded.options_json,"
-                       "expected_chunks=NULL,current_job_id=excluded.current_job_id,updated_at=excluded.updated_at",
-                       (document_id, str(source.resolve()), record["file_hash"], "QUEUED", json.dumps(record),
-                        json.dumps(options), None, job_id, self.clock()))
-            db.execute("INSERT INTO jobs(job_id,document_id,state,status_json,max_attempts,updated_at) "
-                       "VALUES(?,?,?,?,?,?)", (job_id, document_id, "QUEUED", json.dumps(status), max_attempts, self.clock()))
+            options = {**options, "replay_cleanup": prior is not None}
+            db.execute(
+                "INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(document_id) DO UPDATE SET "
+                "state=excluded.state,record_json=excluded.record_json,options_json=excluded.options_json,"
+                "expected_chunks=NULL,current_job_id=excluded.current_job_id,updated_at=excluded.updated_at",
+                (
+                    document_id,
+                    str(source.resolve()),
+                    record["file_hash"],
+                    "QUEUED",
+                    json.dumps(record),
+                    json.dumps(options),
+                    None,
+                    job_id,
+                    self.clock(),
+                ),
+            )
+            db.execute(
+                "INSERT INTO jobs(job_id,document_id,state,status_json,max_attempts,updated_at) VALUES(?,?,?,?,?,?)",
+                (job_id, document_id, "QUEUED", json.dumps(status), max_attempts, self.clock()),
+            )
             self._event(db, document_id, job_id, "QUEUED")
 
     def claim(self, document_id: str, owner: str, lease_seconds: float) -> dict | None:
         with self.transaction() as db:
-            row = db.execute("SELECT j.* FROM jobs j JOIN documents d ON d.current_job_id=j.job_id "
-                             "WHERE d.document_id=? AND d.state IN ('QUEUED','RUNNING')", (document_id,)).fetchone()
+            row = db.execute(
+                "SELECT j.* FROM jobs j JOIN documents d ON d.current_job_id=j.job_id "
+                "WHERE d.document_id=? AND d.state IN ('QUEUED','RUNNING')",
+                (document_id,),
+            ).fetchone()
             if not row or row["state"] not in {"QUEUED", "RUNNING"}:
                 return None
             if row["state"] == "RUNNING" and row["lease_until"] > self.clock():
                 return None
             if row["state"] == "RUNNING":
-                db.execute("UPDATE attempts SET state='INTERRUPTED',finished_at=?,error='Worker lease expired' "
-                           "WHERE job_id=? AND number=?", (self.clock(), row["job_id"], row["attempt_count"]))
+                db.execute(
+                    "UPDATE attempts SET state='INTERRUPTED',finished_at=?,error='Worker lease expired' "
+                    "WHERE job_id=? AND number=?",
+                    (self.clock(), row["job_id"], row["attempt_count"]),
+                )
             if row["attempt_count"] >= row["max_attempts"]:
                 status = json.loads(row["status_json"])
-                status.update(status="FAILED", text_ready=False, can_retry=True,
-                              error="Automatic recovery limit reached. Review and retry explicitly.")
+                status.update(
+                    status="FAILED",
+                    text_ready=False,
+                    can_retry=True,
+                    error="Automatic recovery limit reached. Review and retry explicitly.",
+                )
                 self._finish(db, document_id, row["job_id"], "FAILED", status)
                 return None
             number = row["attempt_count"] + 1
-            db.execute("UPDATE jobs SET state='RUNNING',attempt_count=?,lease_owner=?,lease_until=?,updated_at=? "
-                       "WHERE job_id=?", (number, owner, self.clock() + lease_seconds, self.clock(), row["job_id"]))
-            db.execute("UPDATE documents SET state='RUNNING',updated_at=? WHERE document_id=?", (self.clock(), document_id))
-            db.execute("INSERT INTO attempts VALUES(?,?,?,?,?,?,NULL,NULL)",
-                       (row["job_id"], number, owner, "RUNNING", "SOURCE_VALIDATION", self.clock()))
+            db.execute(
+                "UPDATE jobs SET state='RUNNING',attempt_count=?,lease_owner=?,lease_until=?,updated_at=? "
+                "WHERE job_id=?",
+                (number, owner, self.clock() + lease_seconds, self.clock(), row["job_id"]),
+            )
+            db.execute(
+                "UPDATE documents SET state='RUNNING',updated_at=? WHERE document_id=?", (self.clock(), document_id)
+            )
+            db.execute(
+                "INSERT INTO attempts VALUES(?,?,?,?,?,?,NULL,NULL)",
+                (row["job_id"], number, owner, "RUNNING", "SOURCE_VALIDATION", self.clock()),
+            )
             self._event(db, document_id, row["job_id"], "RUNNING", f"Attempt {number}")
             return {"job_id": row["job_id"], "attempt": number}
 
     def renew(self, job_id: str, owner: str, lease_seconds: float) -> None:
         with self.transaction() as db:
-            cursor = db.execute("UPDATE jobs SET lease_until=?,updated_at=? WHERE job_id=? AND lease_owner=? "
-                                "AND state='RUNNING' AND lease_until>?",
-                                (self.clock() + lease_seconds, self.clock(), job_id, owner, self.clock()))
+            cursor = db.execute(
+                "UPDATE jobs SET lease_until=?,updated_at=? WHERE job_id=? AND lease_owner=? "
+                "AND state='RUNNING' AND lease_until>?",
+                (self.clock() + lease_seconds, self.clock(), job_id, owner, self.clock()),
+            )
             if not cursor.rowcount:
                 raise CatalogConflict("Ingestion lease is no longer owned by this worker.")
 
     def checkpoint(self, document_id: str, owner: str, status: dict, expected_chunks: int | None = None) -> None:
         with self.transaction() as db:
             job = db.execute("SELECT * FROM jobs WHERE job_id=?", (status["job_id"],)).fetchone()
-            if not job or job["lease_owner"] != owner or job["state"] != "RUNNING" or job["lease_until"] <= self.clock():
+            if (
+                not job
+                or job["lease_owner"] != owner
+                or job["state"] != "RUNNING"
+                or job["lease_until"] <= self.clock()
+            ):
                 raise CatalogConflict("Cannot checkpoint an unowned ingestion job.")
-            db.execute("UPDATE jobs SET status_json=?,updated_at=? WHERE job_id=?",
-                       (json.dumps(status), self.clock(), status["job_id"]))
-            db.execute("UPDATE attempts SET stage=? WHERE job_id=? AND number=?",
-                       (status["current_stage"], status["job_id"], job["attempt_count"]))
+            db.execute(
+                "UPDATE jobs SET status_json=?,updated_at=? WHERE job_id=?",
+                (json.dumps(status), self.clock(), status["job_id"]),
+            )
+            db.execute(
+                "UPDATE attempts SET stage=? WHERE job_id=? AND number=?",
+                (status["current_stage"], status["job_id"], job["attempt_count"]),
+            )
             if expected_chunks is not None:
                 db.execute("UPDATE documents SET expected_chunks=? WHERE document_id=?", (expected_chunks, document_id))
 
     def _finish(self, db, document_id, job_id, state, status):
-        db.execute("UPDATE jobs SET state=?,status_json=?,lease_owner=NULL,lease_until=NULL,updated_at=? WHERE job_id=?",
-                   (state, json.dumps(status), self.clock(), job_id))
+        db.execute(
+            "UPDATE jobs SET state=?,status_json=?,lease_owner=NULL,lease_until=NULL,updated_at=? WHERE job_id=?",
+            (state, json.dumps(status), self.clock(), job_id),
+        )
         db.execute("UPDATE documents SET state=?,updated_at=? WHERE document_id=?", (state, self.clock(), document_id))
-        db.execute("UPDATE attempts SET state=?,finished_at=?,error=? WHERE job_id=? AND state='RUNNING'",
-                   (state, self.clock(), status.get("error"), job_id))
+        db.execute(
+            "UPDATE attempts SET state=?,finished_at=?,error=? WHERE job_id=? AND state='RUNNING'",
+            (state, self.clock(), status.get("error"), job_id),
+        )
         self._event(db, document_id, job_id, state, status.get("error") or "")
 
     def finish(self, document_id: str, owner: str, status: dict, record: dict | None = None) -> None:
@@ -270,8 +346,12 @@ class DocumentCatalog:
     def deletion(self, document_id: str, *, complete: bool = False) -> None:
         state = "DELETED" if complete else "DELETING"
         with self.transaction() as db:
-            db.execute("UPDATE documents SET state=?,updated_at=? WHERE document_id=?", (state, self.clock(), document_id))
-            db.execute("UPDATE jobs SET state=?,lease_owner=NULL,lease_until=NULL WHERE document_id=?", (state, document_id))
+            db.execute(
+                "UPDATE documents SET state=?,updated_at=? WHERE document_id=?", (state, self.clock(), document_id)
+            )
+            db.execute(
+                "UPDATE jobs SET state=?,lease_owner=NULL,lease_until=NULL WHERE document_id=?", (state, document_id)
+            )
             self._event(db, document_id, None, state)
 
     def invalidate(self, document_id: str, error: str) -> None:

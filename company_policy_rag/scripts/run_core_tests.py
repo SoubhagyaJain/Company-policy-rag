@@ -12,6 +12,10 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 CORE_TEST_PATHS = (
+    # SQLite catalog, durable recovery and process-death regressions (offline).
+    "tests/unit/test_document_catalog.py",
+    "tests/unit/test_ingestion_recovery.py",
+    "tests/integration/test_ingestion_process_recovery.py",
     # Deterministic regressions for production-critical corrections.
     "tests/unit/test_deployment_persistence.py",
     "tests/unit/test_deletion_integrity.py",
