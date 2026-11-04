@@ -1835,6 +1835,9 @@ class RAGPipeline:
 
     def _document_revoked(self, document_id: str | None, source_file: str | None = None) -> bool:
         store = getattr(getattr(self.hybrid_retriever, "dense_retriever", None), "vector_store", None)
+        searchable = getattr(store, "is_document_searchable", None)
+        if callable(searchable) and searchable(document_id, source_file) is False:
+            return True
         check = getattr(store, "is_document_deleted", None)
         return callable(check) and check(document_id, source_file) is True
 

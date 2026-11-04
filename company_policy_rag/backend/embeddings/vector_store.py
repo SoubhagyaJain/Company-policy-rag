@@ -245,6 +245,17 @@ class ChromaVectorStore(VectorStoreInterface):
         with self._lock:
             return document_id in self._deleted_ids or source_file in self._deleted_sources
 
+    def is_document_searchable(self, document_id: str | None, source_file: str | None = None) -> bool:
+        from backend.services.document_catalog import DocumentCatalog
+        catalog = getattr(self, "document_catalog", None)
+        return not self.is_document_deleted(document_id, source_file) and (
+            not isinstance(catalog, DocumentCatalog) or catalog.searchable(document_id))
+
+    def _catalog_revision(self) -> str:
+        from backend.services.document_catalog import DocumentCatalog
+        catalog = getattr(self, "document_catalog", None)
+        return f"_catalog_{catalog.revision()}" if isinstance(catalog, DocumentCatalog) else ""
+
     def mark_document_deleted(self, document_id: str | None = None, source_file: str | None = None) -> None:
         """Durably revoke retrieval before attempting physical cleanup. Never auto-clear."""
         with self._lock:
@@ -264,7 +275,7 @@ class ChromaVectorStore(VectorStoreInterface):
         """Return a stable fingerprint of the indexed corpus for cache isolation."""
         with self._lock:
             if self._corpus_version_cache is not None:
-                return self._corpus_version_cache
+                return self._corpus_version_cache + self._catalog_revision()
 
             digest = hashlib.sha256()
             digest.update(json.dumps([sorted(self._deleted_ids), sorted(self._deleted_sources)]).encode())
@@ -298,7 +309,7 @@ class ChromaVectorStore(VectorStoreInterface):
                     digest.update(b"\0")
 
             self._corpus_version_cache = f"kb_{digest.hexdigest()[:20]}"
-            return self._corpus_version_cache
+            return self._corpus_version_cache + self._catalog_revision()
 
     def _init_chroma(self) -> None:
         try:
@@ -464,7 +475,7 @@ class ChromaVectorStore(VectorStoreInterface):
                             meta_obj = unpack_chroma_metadata(meta_dict)
                             chunk = Chunk(id=str(cid), text=str(doc or ""), metadata=meta_obj)
 
-                        if self.is_document_deleted(chunk.metadata.document_id, chunk.metadata.source_file):
+                        if not self.is_document_searchable(chunk.metadata.document_id, chunk.metadata.source_file):
                             continue
 
                         scored_chunks.append(
@@ -486,7 +497,7 @@ class ChromaVectorStore(VectorStoreInterface):
         with self._lock:
             memory_chunks = list(self._memory_chunks.values())
         for chunk in memory_chunks:
-            if self.is_document_deleted(chunk.metadata.document_id, chunk.metadata.source_file):
+            if not self.is_document_searchable(chunk.metadata.document_id, chunk.metadata.source_file):
                 continue
             if not self._matches_filters(chunk, filters):
                 continue

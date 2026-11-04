@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import threading
 import time
@@ -31,6 +32,7 @@ from backend.models.chunk import Chunk
 from backend.models.telemetry_models import SeverityLevel
 from backend.retrieval.bm25 import BM25SearchIndex
 from backend.retrieval.retrieval_cache import get_retrieval_cache
+from backend.services.document_catalog import DocumentCatalog
 from backend.utils.logging import logger
 from backend.vision.image_asset_manager import ImageAssetManager
 from backend.vision.vision_cache import VisionCacheManager
@@ -78,6 +80,7 @@ class DocumentService:
         vision_cache_manager: VisionCacheManager | None = None,
         storage_dir: str | None = None,
         fresh_start: bool = False,
+        catalog_enabled: bool | None = None,
     ) -> None:
         if storage_dir is None:
             storage_dir = str(Path(settings.app_storage_dir) / "uploads")
@@ -116,12 +119,186 @@ class DocumentService:
         self._pending_hashes: dict[str, str] = {}
         self._hash_catalog = self._load_hash_catalog()
         self._lock = threading.RLock()
+        enabled = settings.document_catalog_enabled if catalog_enabled is None else catalog_enabled
+        self.catalog = DocumentCatalog(library_root / "document_catalog.sqlite3") if enabled else None
+        self._catalog_owner = uuid.uuid4().hex
+        self._catalog_scheduled: set[str] = set()
+        self._catalog_claims: dict[str, str] = {}
+        self._restored_counts: dict[str, int] = {}
+        if self.catalog is not None:
+            self.vector_store.document_catalog = self.catalog
+            self.bm25_index.document_catalog = self.catalog
         # Single-worker queue for the heavy parse→chunk→embed→index pipeline, so
         # large uploads run off the request thread (no proxy/browser timeout) and
         # ingestions are serialized (BM25/vector writes never race each other).
         self._ingestion_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ingest")
         if not fresh_start:
             self._restore_document_registry()
+        if self.catalog is not None:
+            self._restore_catalog()
+            self.recover_pending_ingestions()
+
+    @staticmethod
+    def _source_digest(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while block := handle.read(1024 * 1024):
+                digest.update(block)
+        return digest.hexdigest()
+
+    def _restore_catalog(self) -> None:
+        """Import once, then use committed lifecycle state rather than vector presence."""
+        assert self.catalog is not None
+        inventory = self.storage_dir.parent / "catalog_migration_inventory.json"
+        if not inventory.exists():
+            with inventory.open("x", encoding="utf-8") as handle:
+                json.dump({"documents": list(self._documents.values()),
+                           "sources": {key: str(value.resolve()) for key, value in self._stored_files.items()},
+                           "note": "Read-only inventory; original files and indexes retained."}, handle, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+        for document_id, record in self._documents.items():
+            if self.catalog.get(document_id) is None:
+                self.catalog.import_legacy(record, self._stored_files.get(document_id),
+                                           self._hash_catalog.get(document_id, {}))
+        for row in self.catalog.documents():
+            document_id, state = row["document_id"], row["state"]
+            if state == "DELETED":
+                self._documents.pop(document_id, None)
+                self._stored_files.pop(document_id, None)
+                continue
+            record = dict(row["record"])
+            source = Path(row["source_path"]) if row["source_path"] else None
+            if source is not None and source.resolve().parent == self.storage_dir.resolve() and source.is_file():
+                self._stored_files[document_id] = source
+            if state == "READY":
+                issue = None
+                if source is None or not source.is_file() or self._source_digest(source) != row["file_hash"]:
+                    issue = "Original source is missing or its hash changed; recovery requires operator review."
+                elif self._restored_counts.get(document_id, 0) != row["expected_chunks"]:
+                    issue = "Persistent vector count does not match the committed catalog; retry indexing."
+                if issue:
+                    self.catalog.invalidate(document_id, issue)
+                    state = "FAILED"
+            job = self.catalog.job(document_id)
+            if job is not None and state not in {"DELETING", "DELETED"}:
+                status = IngestionStatusResponse.model_validate(job["status"])
+                self._ingestion_jobs[document_id] = status
+                record.update(status=status.status, progress=status.progress, current_stage=status.current_stage,
+                              text_ready=status.text_ready, error=status.error)
+            if state == "DELETING":
+                record.update(status="DELETING", text_ready=False, current_stage="DELETING")
+            self._documents[document_id] = record
+        # Keep persisted indexes untouched during import; filter their runtime views.
+        for chunk_id, chunk in list(self.docstore.items()):
+            if not self.catalog.searchable(chunk.metadata.document_id):
+                self.docstore.pop(chunk_id, None)
+
+    def recover_pending_ingestions(self) -> None:
+        """Queue recoverable work; claims and OS lock prevent competing replay."""
+        if self.catalog is None or not settings.ingestion_recovery_enabled:
+            return
+        with self._lock:
+            for row in self.catalog.documents():
+                document_id = row["document_id"]
+                if row["state"] not in {"QUEUED", "RUNNING"} or document_id in self._catalog_scheduled:
+                    continue
+                job = self.catalog.job(document_id)
+                if job and job["state"] == "RUNNING" and job["lease_until"] > self.catalog.clock():
+                    continue
+                self._schedule_catalog_ingestion(document_id)
+
+    def _schedule_catalog_ingestion(self, document_id: str) -> None:
+        with self._lock:
+            if document_id in self._catalog_scheduled:
+                return
+            self._catalog_scheduled.add(document_id)
+            try:
+                self._ingestion_executor.submit(self._run_catalog_ingestion, document_id)
+            except RuntimeError:
+                self._catalog_scheduled.discard(document_id)
+                # The committed QUEUED job and source remain recoverable.
+                logger.exception("Ingestion queue unavailable; retained durable job %s", document_id)
+
+    def _run_catalog_ingestion(self, document_id: str) -> None:
+        assert self.catalog is not None
+        stopped = threading.Event()
+        heartbeat = None
+        claimed = None
+        try:
+            with self.catalog.worker_lock() as acquired:
+                if not acquired:
+                    return
+                claimed = self.catalog.claim(document_id, self._catalog_owner, settings.ingestion_lease_seconds)
+                job = self.catalog.job(document_id)
+                if not claimed:
+                    if job:
+                        self._ingestion_jobs[document_id] = IngestionStatusResponse.model_validate(job["status"])
+                    return
+                self._catalog_claims[document_id] = claimed["job_id"]
+                self._ingestion_jobs[document_id] = IngestionStatusResponse.model_validate(job["status"])
+
+                def renew() -> None:
+                    while not stopped.wait(settings.ingestion_lease_seconds / 3):
+                        try:
+                            self.catalog.renew(claimed["job_id"], self._catalog_owner, settings.ingestion_lease_seconds)
+                        except Exception:
+                            logger.exception("Ingestion heartbeat failed for %s", document_id)
+                            return
+
+                heartbeat = threading.Thread(target=renew, name="ingest-lease", daemon=True)
+                heartbeat.start()
+                row = self.catalog.get(document_id)
+                source = Path(row["source_path"])
+                if source.resolve().parent != self.storage_dir.resolve() or self._source_digest(source) != row["file_hash"]:
+                    raise ValueError("Original source hash/path changed; automatic recovery refused.")
+                options = row["options"]
+                if isinstance(self.embedding_service, EmbeddingService) and options.get("embedding_model") not in {
+                    None, self.embedding_service.model_name,
+                }:
+                    raise ValueError("Embedding model changed since upload; automatic recovery refused.")
+                if isinstance(self.embedding_service, EmbeddingService) and options.get("query_instruction") not in {
+                    None, self.embedding_service.query_instruction,
+                }:
+                    raise ValueError("Embedding configuration changed since upload; automatic recovery refused.")
+                # Only this API job's derived rows may be compensated/replayed.
+                # Legacy documents have no job and are never automatically reindexed.
+                if isinstance(self.vector_store, ChromaVectorStore):
+                    self.vector_store.delete_by_document_id(document_id, revoke=False)
+                else:
+                    self.vector_store.delete_by_document_id(document_id)
+                self.bm25_index.remove_by_document_id(document_id)
+                self.bm25_index.save()
+                for chunk_id, chunk in list(self.docstore.items()):
+                    if chunk.metadata.document_id == document_id:
+                        self.docstore.pop(chunk_id, None)
+                self._execute_ingestion_stages(document_id, row["record"]["filename"], source,
+                                               category=options.get("category", "general"),
+                                               chunk_strategy=options.get("chunk_strategy"))
+        except Exception as exc:
+            logger.exception("Durable ingestion failed for %s", document_id)
+            if claimed:
+                status = self._ingestion_jobs[document_id]
+                status.status, status.text_ready, status.can_retry = "FAILED", False, True
+                status.error, status.failed_stage = str(exc), status.current_stage
+                self.catalog.finish(document_id, self._catalog_owner, status.model_dump())
+                self._documents[document_id] = {
+                    **self.catalog.get(document_id)["record"], "status": "FAILED", "text_ready": False,
+                    "current_stage": status.current_stage, "error": status.error,
+                }
+        finally:
+            stopped.set()
+            if heartbeat is not None:
+                heartbeat.join(timeout=2)
+            with self._lock:
+                self._catalog_claims.pop(document_id, None)
+                self._catalog_scheduled.discard(document_id)
+                for digest, pending_id in list(self._pending_hashes.items()):
+                    if pending_id == document_id:
+                        self._pending_hashes.pop(digest, None)
+
+    def close(self) -> None:
+        self._ingestion_executor.shutdown(wait=True)
 
     def _load_hash_catalog(self) -> dict[str, dict[str, Any]]:
         if not self._hash_catalog_path.is_file():
@@ -203,7 +380,10 @@ class DocumentService:
                     document_id, legacy_source_file = self._restored_document_identity(meta)
                     if not document_id:
                         continue
+                    self._restored_counts[document_id] = self._restored_counts.get(document_id, 0) + 1
                     if self._is_deleted(document_id, str(meta.get("source_file") or "")):
+                        continue
+                    if self.catalog is not None and not self.catalog.searchable(document_id):
                         continue
                     restored_chunk = Chunk(
                         id=str(chunk_id),
@@ -258,7 +438,7 @@ class DocumentService:
                 logger.warning("Could not restore document registry from vector index: %s", exc)
 
         for file_path in self.storage_dir.glob("doc_*_*"):
-            if not file_path.is_file() or len(file_path.name) < 18:
+            if not file_path.is_file() or file_path.name.endswith(".upload") or len(file_path.name) < 18:
                 continue
             document_id = file_path.name[:16]
             if not document_id.startswith("doc_") or file_path.name[16] != "_":
@@ -395,11 +575,12 @@ class DocumentService:
 
     def get_ingestion_status(self, document_id: str) -> IngestionStatusResponse | None:
         """Return real-time structured ingestion status for a document."""
+        self.recover_pending_ingestions()
         with self._lock:
             if document_id in self._ingestion_jobs:
                 job = self._ingestion_jobs[document_id]
                 # Check for stuck job detection
-                if job.status == IngestionStatus.TEXT_INDEXING.value or job.status == "PROCESSING":
+                if self.catalog is None and (job.status == IngestionStatus.TEXT_INDEXING.value or job.status == "PROCESSING"):
                     try:
                         updated_dt = datetime.fromisoformat(job.updated_at)
                         # A single stage on a large file (parsing a 100MB PDF, a big
@@ -478,6 +659,8 @@ class DocumentService:
                         completed_at=datetime.now(UTC).isoformat() if status == "COMPLETED" else None,
                     )
                 )
+            if self.catalog is not None and document_id in self._catalog_claims:
+                self.catalog.checkpoint(document_id, self._catalog_owner, job.model_dump())
 
     def _execute_ingestion_stages(
         self,
@@ -689,6 +872,9 @@ class DocumentService:
 
             texts = [c.text for c in chunks]
             total_chunks = len(texts)
+            if self.catalog is not None and document_id in self._catalog_claims:
+                self.catalog.checkpoint(document_id, self._catalog_owner,
+                                        self._ingestion_jobs[document_id].model_dump(), expected_chunks=total_chunks)
             all_embeddings: list[list[float]] = []
 
             # Batch processing to prevent CPU/GPU blocking
@@ -880,9 +1066,6 @@ class DocumentService:
                 ],
             }
 
-            with self._lock:
-                self._documents[document_id] = doc_record
-
             t_final = round((time.perf_counter() - t_stage) * 1000, 2)
             t_total = round((time.perf_counter() - t_global_start) * 1000, 2)
 
@@ -909,6 +1092,16 @@ class DocumentService:
                     j.duration_ms = t_total
                     j.can_retry = False
                     stages_dump = [s.model_dump() for s in j.stages]
+
+                    if self.catalog is not None and document_id in self._catalog_claims:
+                        if isinstance(self.vector_store, ChromaVectorStore):
+                            stored = self.vector_store._collection.get(where={"document_id": document_id}, include=[])
+                            if len(stored["ids"]) != len(chunks):
+                                raise RuntimeError("Persistent vector count differs from the expected chunk count.")
+                        if sum(c.metadata.document_id == document_id for c in self.bm25_index.entries) != len(chunks):
+                            raise RuntimeError("Persistent lexical count differs from the expected chunk count.")
+                        self.catalog.finish(document_id, self._catalog_owner, j.model_dump(), doc_record)
+                self._documents[document_id] = doc_record
 
             try:
                 from backend.api.dependencies import get_telemetry_service
@@ -990,6 +1183,7 @@ class DocumentService:
                     j.error = str(exc)
                     j.failed_stage = j.current_stage
                     j.can_retry = True
+                    j.text_ready = False
                     stages_dump = [s.model_dump() for s in j.stages]
                 else:
                     stages_dump = []
@@ -1082,7 +1276,12 @@ class DocumentService:
             self._pending_hashes[content_hash] = document_id
 
         try:
-            target_path.write_bytes(content_bytes)
+            staged_source = target_path.with_suffix(target_path.suffix + ".upload")
+            with staged_source.open("xb") as handle:
+                handle.write(content_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+            staged_source.replace(target_path)
             with self._lock:
                 self._hash_stored_file(document_id, target_path)
                 self._hash_catalog[document_id].update(category=category, chunk_strategy=chunk_strategy)
@@ -1101,13 +1300,33 @@ class DocumentService:
                     created_at=datetime.now(UTC).isoformat(),
                     updated_at=datetime.now(UTC).isoformat(),
                 )
+                if self.catalog is not None:
+                    record = {
+                        "document_id": document_id, "filename": filename,
+                        "file_type": target_path.suffix.lstrip(".").lower(),
+                        "file_size_bytes": file_size, "file_hash": content_hash,
+                        "category": category, "chunk_count": 0, "pages_count": 0,
+                        "created_at": self._ingestion_jobs[document_id].created_at,
+                        "status": "TEXT_INDEXING", "progress": 5, "current_stage": "QUEUED",
+                        "text_ready": False, "storage_state": "FILE_ONLY",
+                    }
+                    options = {"category": category, "chunk_strategy": chunk_strategy}
+                    if isinstance(self.embedding_service, EmbeddingService):
+                        options.update(embedding_model=self.embedding_service.model_name,
+                                       query_instruction=self.embedding_service.query_instruction)
+                    self.catalog.enqueue(record, target_path, options,
+                                         self._ingestion_jobs[document_id].model_dump(),
+                                         max_attempts=settings.ingestion_max_attempts)
+                    self._documents[document_id] = record
         except Exception:
             with self._lock:
                 self._pending_hashes.pop(content_hash, None)
                 self._hash_catalog.pop(document_id, None)
                 self._stored_files.pop(document_id, None)
                 self._ingestion_jobs.pop(document_id, None)
-            target_path.unlink(missing_ok=True)
+            staged_source.unlink(missing_ok=True)
+            if self.catalog is None:
+                target_path.unlink(missing_ok=True)
             raise
 
         # Run the heavy pipeline (parse → chunk → embed → index) off the request
@@ -1134,7 +1353,10 @@ class DocumentService:
                     self._pending_hashes.pop(content_hash, None)
 
         try:
-            self._ingestion_executor.submit(_run_ingestion)
+            if self.catalog is not None:
+                self._schedule_catalog_ingestion(document_id)
+            else:
+                self._ingestion_executor.submit(_run_ingestion)
         except RuntimeError:
             with self._lock:
                 self._pending_hashes.pop(content_hash, None)
@@ -1171,6 +1393,14 @@ class DocumentService:
         if self._is_deleted(document_id):
             raise ValueError("Document is pending deletion; retry deletion instead of indexing.")
         with self._lock:
+            if self.catalog is not None:
+                saved = self.catalog.get(document_id)
+                if saved is None:
+                    raise ValueError("Document is not in the durable catalog.")
+                if saved["state"] == "LEGACY":
+                    raise ValueError("Legacy index needs verified adoption before reindexing; existing evidence is retained.")
+                if saved["state"] in {"DELETING", "DELETED"}:
+                    raise ValueError("Document is pending deletion; retry deletion instead of indexing.")
             existing_job = self._ingestion_jobs.get(document_id)
             if existing_job and existing_job.status != "FAILED":
                 return existing_job.model_copy(deep=True)
@@ -1188,6 +1418,11 @@ class DocumentService:
                 raise ValueError(f"No stored document file found for ID '{document_id}' to retry.")
 
             filename = file_path.name.removeprefix(f"{document_id}_")
+            if self.catalog is not None and (
+                file_path.resolve().parent != self.storage_dir.resolve()
+                or self._source_digest(file_path) != saved["file_hash"]
+            ):
+                raise ValueError("Original source hash/path changed; retry requires operator review.")
             job = IngestionStatusResponse(
                 document_id=document_id,
                 job_id=f"job_{uuid.uuid4().hex[:10]}",
@@ -1200,6 +1435,9 @@ class DocumentService:
                 updated_at=datetime.now(UTC).isoformat(),
             )
             self._ingestion_jobs[document_id] = job
+            if self.catalog is not None:
+                self.catalog.enqueue(saved["record"], file_path, saved["options"], job.model_dump(),
+                                     max_attempts=settings.ingestion_max_attempts)
 
         # Re-run ingestion on the background queue (same reasoning as upload):
         # a large document must not block the retry request. The client polls
@@ -1221,7 +1459,10 @@ class DocumentService:
                 logger.exception("[INGESTION] background retry crashed for document_id=%s", document_id)
 
         try:
-            self._ingestion_executor.submit(_run_retry)
+            if self.catalog is not None:
+                self._schedule_catalog_ingestion(document_id)
+            else:
+                self._ingestion_executor.submit(_run_retry)
         except RuntimeError:
             with self._lock:
                 job.status = "FAILED"
@@ -1271,7 +1512,7 @@ class DocumentService:
         as it is being re-indexed. Caller holds ``self._lock``.
         """
         job = self._ingestion_jobs.get(record["document_id"])
-        if job is None or job.status not in _IN_FLIGHT_STATUSES:
+        if job is None or (self.catalog is None and job.status not in _IN_FLIGHT_STATUSES):
             return record
         return {
             **record,
@@ -1399,6 +1640,8 @@ class DocumentService:
             marker = getattr(self.vector_store, "mark_document_deleted", None)
             if callable(marker):
                 marker(document_id=document_id, source_file=doc_record.get("_legacy_source_file"))
+            if self.catalog is not None:
+                self.catalog.deletion(document_id)
             # Revoke all in-process evidence even when persistent cleanup fails.
             for cid, chunk in list(self.docstore.items()):
                 if chunk.metadata.document_id == document_id:
@@ -1448,6 +1691,8 @@ class DocumentService:
             if file_path.is_file() and file_path.resolve().parent == storage_root:
                 file_path.unlink()
                 deleted_source_files += 1
+        if self.catalog is not None:
+            self.catalog.deletion(document_id, complete=True)
 
         logger.info(
             "Deleted document id=%s, filename=%s (%d chunks purged)", document_id, filename, len(chunk_ids_to_del)

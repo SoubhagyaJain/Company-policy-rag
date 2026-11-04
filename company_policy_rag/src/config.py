@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     storage_dir: Path = Field(default=PROJECT_ROOT / "storage")
     # Document library served by the API: uploads, Chroma and BM25 indexes.
     app_storage_dir: Path = Field(default=PROJECT_ROOT / "app" / "storage", alias="APP_STORAGE_DIR")
+    document_catalog_enabled: bool = Field(default=True, alias="DOCUMENT_CATALOG_ENABLED")
+    ingestion_recovery_enabled: bool = Field(default=True, alias="INGESTION_RECOVERY_ENABLED")
+    ingestion_lease_seconds: float = Field(default=120.0, ge=1.0, alias="INGESTION_LEASE_SECONDS")
+    ingestion_max_attempts: int = Field(default=3, ge=1, le=10, alias="INGESTION_MAX_ATTEMPTS")
     # "persistent": one library under APP_STORAGE_DIR that survives restarts.
     # "session": every API process starts an empty library in
     # APP_STORAGE_DIR/sessions/<id> (earlier sessions stay on disk).

@@ -271,6 +271,10 @@ class BM25SearchIndex:
             ):
                 continue
             chunk = self.entries[idx]
+            from backend.services.document_catalog import DocumentCatalog
+            catalog = getattr(self, "document_catalog", None)
+            if isinstance(catalog, DocumentCatalog) and not catalog.searchable(chunk.metadata.document_id):
+                continue
             if not self._matches_filters(self._meta_dicts[idx], chunk.metadata, filters):
                 continue
             results.append(
