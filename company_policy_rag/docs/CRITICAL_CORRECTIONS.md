@@ -106,3 +106,55 @@ or document requests. Tests now use an explicit loopback socket peer.
 Validation: 44 security, deployment, administrative, storage, and model API tests
 passed; all 221 frontend tests and TypeScript passed. A model-selection test
 that assumed an installed Ollama model now injects its model inventory.
+
+## Model artifact correction
+
+`src/finetuning/merger.py:merge_lora_weights` now requires the real HF/PEFT
+operation. It stages output, checks exported metadata and weight/tokenizer files,
+and publishes only after successful validation. Exporter metadata is retained;
+the previous synthetic fallback and hard-coded replacement config are removed.
+Existing model output directories are refused rather than overwritten.
+
+`src/finetuning/gguf_exporter.py:convert_to_gguf` requires llama.cpp tools, stages
+conversion/quantization, and checks the result before publishing. Missing tools,
+converter errors, missing output and invalid headers raise failures. The
+`allow_simulation=True` behavior is intentionally removed: that option now raises.
+Synthetic artifact builders live only in `tests/fixtures/model_artifacts.py` and
+are used through explicitly requested test fixtures. GGUF header checks are not
+proof that a model can load or produce valid inference.
+
+Both export CLI scripts return nonzero when requested registration or verification
+fails. REST registration requires explicit final success; an HTTP 200, empty body,
+progress message or error body is insufficient. Verification requires the exact
+requested tag, with only the implicit `:latest` alias accepted. An unrelated tag
+of the same model no longer counts as success. Training-only imports are lazy so
+export-only operations do not require the optional dataset package.
+
+Regression coverage includes failed merge with no published output, preserved
+metadata and existing artifacts, unavailable converter, successful exit without
+output, malformed registration responses, wrong tags, and nonzero CLI failures.
+The final combined core, including artifact and exact-tag regressions, passed
+603 tests with one optional-dataset skip. Frontend tests passed 221/221 and
+TypeScript passed. Full commands and limitations are in ENGINEERING_HANDOFF.md.
+
+## Compatibility and practical limits
+
+Document IDs, original bytes, external citation routes, SSE event names and the
+local FastAPI/Next.js/Chroma/BM25/Ollama architecture remain. Existing user data
+was not migrated or reindexed. No runtime dependencies were added.
+
+Intentional behavior changes: deletion can return 409/503 until cleanup completes;
+interrupted SSE fails and remains marked interrupted; invalid embeddings and
+required-storage initialization failures now raise; unknown legacy embedding
+provenance disables dense use until verified; remote administration needs the
+configured trust boundary; model output overwrite and simulation are refused.
+
+The deletion journal is single-process containment. Multi-process consistency,
+snapshot-bound caches and already-generating answers need the proposed catalog
+and generation work. A filename deletion marker can block legacy data reusing
+that filename; the catalog migration must reconcile identity explicitly.
+Legacy root Dockerfile/release routes were not redesigned. Docker recreation and
+real model/GPU/llama.cpp inference validation remain separate operator checks.
+
+See ARCHITECTURAL_IMPROVEMENT_PROPOSAL.md for the larger changes that are proposed
+only, including migration, rollback, compatibility and regression requirements.
