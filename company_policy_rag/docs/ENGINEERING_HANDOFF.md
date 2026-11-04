@@ -1,5 +1,12 @@
 # Engineering handoff and final validation
 
+Live-model follow-up: the app was started and tested without Docker using
+`qwen3.5:9b` and `qwen3-embedding:0.6b`. Document upload, hybrid retrieval,
+streaming, source viewing and restart persistence worked. Five completed queries
+also exposed citation/semantic verification gaps, completeness false negatives
+and interrupted-draft recovery limitations. See LIVE_RAG_VALIDATION.md for the
+measured results and preserved evidence; answer quality is not all-green.
+
 Subsequent phase: SQLite document catalog and ingestion recovery are implemented
 in checkpoints `9acb161` and `f2316e0`, with final verification documented in
 CATALOG_AND_RECOVERY.md. Final core: **665 passed, 1 optional dependency skip**;
