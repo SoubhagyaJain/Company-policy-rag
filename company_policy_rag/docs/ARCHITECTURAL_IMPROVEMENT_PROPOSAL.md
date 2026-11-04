@@ -1,9 +1,14 @@
-# Next architecture: separate proposal, not implemented
+# Architecture roadmap and implementation status
+
+The SQLite catalog and initial ingestion recovery in section 1 are now
+implemented. See CATALOG_AND_RECOVERY.md for code behavior, validation and the
+preservation/rollback runbook. The remaining sections are proposals, not implemented.
 
 The critical batch retains FastAPI, Next.js, Chroma, BM25, Ollama, and a local
 deployment. The small deletion journal and embedding identity file are containment
-measures, not a versioned document catalog. The following work needs a separate
-implementation batch. No performance gains are claimed without measurement.
+measures. The new SQLite catalog records lifecycle and recovery state; versioned
+index generations remain future work. No performance gains are claimed without
+measurement.
 
 ## 1. Durable SQLite document catalog and reliable ingestion recovery — P1
 

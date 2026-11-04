@@ -1,5 +1,12 @@
 # Engineering handoff and final validation
 
+Subsequent phase: SQLite document catalog and ingestion recovery are implemented
+in checkpoints `9acb161` and `f2316e0`, with final verification documented in
+CATALOG_AND_RECOVERY.md. Final core: **665 passed, 1 optional dependency skip**;
+frontend: **221 passed**, TypeScript and selected lint passed. Docker remains
+excluded. The critical-batch results below are retained as historical evidence;
+catalog/recovery is no longer proposal-only.
+
 Branch: `codex/production-critical-corrections`, based on `1182a79`.
 All six critical correction areas are implemented and offline validation passes.
 Docker container recreation remains unvalidated and was excluded from further
@@ -86,14 +93,14 @@ root Dockerfile/release route has not been redesigned.
 ## Proposed next milestones; not implemented
 
 `ARCHITECTURAL_IMPROVEMENT_PROPOSAL.md` supplies migrations, compatibility risks,
-rollback and tests for all eight requested architectural improvements:
+rollback and tests for the requested architectural improvements. Its catalog and
+initial recovery milestone has since been implemented; the remaining work is:
 
-1. Durable SQLite catalog and reliable per-stage ingestion recovery.
-2. Versioned index generations and verified legacy provenance adoption.
-3. Generation-bound semantic caches and conversation evidence.
-4. Explicit, calibrated verification and delivery outcomes.
-5. Truthful health/telemetry and bounded admission/GPU resource coordination.
-6. Incremental pipeline modularization after the contracts stabilize.
+1. Versioned index generations and verified legacy provenance adoption.
+2. Generation-bound semantic caches and conversation evidence.
+3. Explicit, calibrated verification and delivery outcomes.
+4. Truthful health/telemetry and bounded admission/GPU resource coordination.
+5. Incremental pipeline modularization after the contracts stabilize.
 
 Docker recreation is the remaining deployment validation step when the operator
 chooses to resume it. The larger architecture remains a separate future batch.

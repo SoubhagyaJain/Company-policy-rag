@@ -278,3 +278,22 @@ def test_lease_heartbeat_runs_while_parser_has_no_stage_progress(services, monke
         release.set()
     finish(service)
     assert service.get_ingestion_status(uploaded.document_id).status == "READY"
+
+
+def test_restart_recovers_expiring_lease_without_browser_polling(services, monkeypatch):
+    first = services()
+    first.close()
+    uploaded = first.upload_document("policy.txt", CONTENT)
+    first.catalog.claim(uploaded.document_id, "crashed-worker", 0.5)
+    restarted = services()
+    completed = threading.Event()
+    finish_catalog = restarted.catalog.finish
+
+    def published(*args, **kwargs):
+        finish_catalog(*args, **kwargs)
+        completed.set()
+
+    monkeypatch.setattr(restarted.catalog, "finish", published)
+    assert completed.wait(10)
+    assert restarted.catalog.get(uploaded.document_id)["state"] == "READY"
+    assert restarted.catalog.job(uploaded.document_id)["attempt_count"] == 2

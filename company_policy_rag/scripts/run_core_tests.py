@@ -16,6 +16,9 @@ CORE_TEST_PATHS = (
     "tests/unit/test_document_catalog.py",
     "tests/unit/test_ingestion_recovery.py",
     "tests/integration/test_ingestion_process_recovery.py",
+    "tests/unit/test_api_documents.py",
+    "tests/test_ingestion_decoupled_architecture.py",
+    "tests/test_storage_service.py",
     # Deterministic regressions for production-critical corrections.
     "tests/unit/test_deployment_persistence.py",
     "tests/unit/test_deletion_integrity.py",

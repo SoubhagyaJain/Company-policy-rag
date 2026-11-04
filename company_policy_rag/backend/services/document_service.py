@@ -129,6 +129,8 @@ class DocumentService:
         self._catalog_owner = uuid.uuid4().hex
         self._catalog_scheduled: set[str] = set()
         self._catalog_claims: dict[str, str] = {}
+        self._recovery_timer: threading.Timer | None = None
+        self._recovery_stopped = threading.Event()
         self._restored_counts: dict[str, int] = {}
         self._source_candidates: dict[str, list[Path]] = {}
         if self.catalog is not None:
@@ -212,17 +214,43 @@ class DocumentService:
 
     def recover_pending_ingestions(self) -> None:
         """Queue recoverable work; claims and OS lock prevent competing replay."""
-        if self.catalog is None or not settings.ingestion_recovery_enabled:
+        if (self.catalog is None or not settings.ingestion_recovery_enabled
+            or self._recovery_stopped.is_set() or self._ingestion_executor._shutdown):
             return
         with self._lock:
+            waiting: list[float] = []
             for row in self.catalog.documents():
                 document_id = row["document_id"]
                 if row["state"] not in {"QUEUED", "RUNNING"} or document_id in self._catalog_scheduled:
                     continue
                 job = self.catalog.job(document_id)
                 if job and job["state"] == "RUNNING" and job["lease_until"] > self.catalog.clock():
+                    waiting.append(job["lease_until"] - self.catalog.clock())
                     continue
                 self._schedule_catalog_ingestion(document_id)
+            if waiting:
+                self._arm_recovery_check(min(waiting))
+
+    def _arm_recovery_check(self, delay: float) -> None:
+        """One bounded wakeup also recovers expired leases without browser polling."""
+        with self._lock:
+            if self._recovery_stopped.is_set() or self._ingestion_executor._shutdown:
+                return
+            if self._recovery_timer is not None and self._recovery_timer.is_alive():
+                return
+
+            def check() -> None:
+                with self._lock:
+                    self._recovery_timer = None
+                try:
+                    self.recover_pending_ingestions()
+                except Exception:
+                    logger.exception("Catalog recovery scan failed; work remains durable")
+                    self._arm_recovery_check(5)
+
+            self._recovery_timer = threading.Timer(max(0.1, delay), check)
+            self._recovery_timer.daemon = True
+            self._recovery_timer.start()
 
     def _schedule_catalog_ingestion(self, document_id: str) -> None:
         with self._lock:
@@ -313,8 +341,14 @@ class DocumentService:
                 for digest, pending_id in list(self._pending_hashes.items()):
                     if pending_id == document_id:
                         self._pending_hashes.pop(digest, None)
+                remaining = self.catalog.get(document_id)
+                if remaining and remaining["state"] in {"QUEUED", "RUNNING"} and settings.ingestion_recovery_enabled:
+                    self._arm_recovery_check(min(5, settings.ingestion_lease_seconds / 3))
 
     def close(self) -> None:
+        self._recovery_stopped.set()
+        if self._recovery_timer is not None:
+            self._recovery_timer.cancel()
         self._ingestion_executor.shutdown(wait=True)
 
     def _load_hash_catalog(self) -> dict[str, dict[str, Any]]:
