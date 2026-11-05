@@ -2,8 +2,8 @@
 
 Repository-specific mathematical audit and study guide · 22 October 2026
 
-**Audited commit:** `1182a798f6116d9fe882affbffab427d0370007b`  
-**Repository:** `C:/Users/jains/Downloads/Company-policy-rag`  
+**Audited commit:** `1182a798f6116d9fe882affbffab427d0370007b`
+**Repository:** `SoubhagyaJain/Company-policy-rag`
 **Application directory:** `company_policy_rag/`
 
 ## How to read this guide
