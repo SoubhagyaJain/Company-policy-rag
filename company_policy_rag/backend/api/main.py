@@ -150,7 +150,7 @@ def warmup_rag_system() -> None:
 
     total_time = time.perf_counter() - t_start
     logger.info("==========================================================")
-    logger.info("  ALL RAG MODELS READY IN %.2fs — ZERO COLD START READY!  ", total_time)
+    logger.info("  RAG STARTUP CHECKS COMPLETED IN %.2fs", total_time)
     logger.info("==========================================================")
 
 

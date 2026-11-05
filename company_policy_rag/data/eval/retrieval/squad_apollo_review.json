@@ -1,0 +1,74 @@
+[
+  {
+    "config": "top3",
+    "case_id": "5725b888ec44d21400f3d453",
+    "name": "Mercury",
+    "central_answer_correct": true,
+    "all_claims_grounded": true,
+    "all_cited_claims_supported": true,
+    "notes": "One astronaut and three-person Apollo contrast supported by passage 4."
+  },
+  {
+    "config": "top3",
+    "case_id": "5725bd4b38643c19005acc31",
+    "name": "Kennedy memo",
+    "central_answer_correct": true,
+    "all_claims_grounded": true,
+    "all_cited_claims_supported": true,
+    "notes": "Date supported by passage 8; additional election and policy claims supported by passage 6."
+  },
+  {
+    "config": "top3",
+    "case_id": "5725c6dcec44d21400f3d531",
+    "name": "Science adviser",
+    "central_answer_correct": true,
+    "all_claims_grounded": true,
+    "all_cited_claims_supported": true,
+    "notes": "Wiesner claim and additional contextual claims supported by cited passages 16, 7 and 6."
+  },
+  {
+    "config": "top3",
+    "case_id": "5725d51589a1e219009abf6e",
+    "name": "Astronaut groups",
+    "central_answer_correct": true,
+    "all_claims_grounded": false,
+    "all_cited_claims_supported": false,
+    "notes": "Correctly names Mercury and Gemini and two later groups, but calls them three groups; passage 28 states four groups."
+  },
+  {
+    "config": "top3",
+    "case_id": "5725dc1638643c19005ace01",
+    "name": "Plugs-out test",
+    "central_answer_correct": true,
+    "all_claims_grounded": true,
+    "all_cited_claims_supported": true,
+    "notes": "Odor and additional test details supported by passages 36 and 35."
+  },
+  {
+    "config": "top3",
+    "case_id": "5725e44238643c19005ace35",
+    "name": "Apollo 12",
+    "central_answer_correct": true,
+    "all_claims_grounded": false,
+    "all_cited_claims_supported": false,
+    "notes": "Main answer correct, but assigns Conrad and Bean reversed roles and says Saturn V was the spacecraft; source 45 does not substantiate those statements."
+  },
+  {
+    "config": "top3",
+    "case_id": "5725ef6838643c19005acece",
+    "name": "Skylab",
+    "central_answer_correct": true,
+    "all_claims_grounded": true,
+    "all_cited_claims_supported": true,
+    "notes": "1973 and cited supporting context appear in passages 52 and 47; the opening date is not followed immediately by a source tag."
+  },
+  {
+    "config": "top3",
+    "case_id": "5725f39638643c19005acef7",
+    "name": "Broadcast data",
+    "central_answer_correct": true,
+    "all_claims_grounded": true,
+    "all_cited_claims_supported": true,
+    "notes": "Nafzger and additional source, restoration and tape-history claims are supported by passages 56 and 55."
+  }
+]

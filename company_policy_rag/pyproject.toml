@@ -73,7 +73,6 @@ policy-rag-eval = "src.cli:eval_main"
 packages = ["src", "backend"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"app" = "app"
 "scripts" = "scripts"
 "data/eval" = "data/eval"
 "data/demo" = "data/demo"
@@ -82,7 +81,6 @@ packages = ["src", "backend"]
 include = [
   "/src",
   "/backend",
-  "/app",
   "/scripts",
   "/data/eval",
   "/data/demo",

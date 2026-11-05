@@ -18,6 +18,7 @@ from backend.embeddings.vector_store import ChromaVectorStore, unpack_chroma_met
 from backend.ingestion.chunkers.adaptive_chunker import AdaptiveChunker
 from backend.ingestion.loaders.loader_factory import get_loader_for_file, load_document
 from backend.ingestion.metadata_extractor import DocumentMetadataExtractor
+from backend.ingestion.companion_metadata import enrich_chunks
 from backend.models.api_dto import (
     DocumentDetailResponse,
     DocumentListResponse,
@@ -898,6 +899,12 @@ class DocumentService:
                 if not c.metadata.topic_tags:
                     c.metadata.topic_tags = list(extracted_meta.topic_tags)
                 used_strategy = c.metadata.chunk_strategy or used_strategy
+
+            if ext == ".pdf":
+                try:
+                    enrich_chunks(chunks, raw_docs, self._source_digest(file_path))
+                except Exception as exc:
+                    logger.warning("Companion metadata ignored for %s: %s", filename, exc)
 
             t_chunk = round((time.perf_counter() - t_stage) * 1000, 2)
             self._update_job_stage(

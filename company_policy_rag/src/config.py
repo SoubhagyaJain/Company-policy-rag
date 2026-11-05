@@ -360,7 +360,7 @@ class Settings(BaseSettings):
     bm25_stemming: bool = Field(default=False, alias="BM25_STEMMING")
     # Metadata fields appended to chunk text in the BM25 index.
     bm25_metadata_fields: str = Field(
-        default="section_path,section_title,section_number,source_file,category",
+        default="section_path,section_title,section_number,source_file,category,companion_navigation",
         alias="BM25_METADATA_FIELDS",
     )
     # Record ranked chunk ids per retrieval stage on RAGTrace.retrieval_stages.

@@ -400,6 +400,7 @@ class TelemetryService:
             vision_extraction_ms=st.get("vision_extraction"),
             context_build_ms=st.get("context_build"),
             ttft_ms=ttft_ms,
+            qwen_prefill_ms=(t.llm_usage or {}).get("prompt_ms"),
             generation_ms=st.get("llm_synthesis"),
             total_latency_ms=t.execution_time_ms if t else rag_response.latency_ms,
         )
@@ -407,8 +408,7 @@ class TelemetryService:
         prompt_tok = rag_response.token_usage.get("prompt_tokens", 0)
         comp_tok = rag_response.token_usage.get("completion_tokens", 0)
         tot_tok = prompt_tok + comp_tok
-        duration_sec = max(0.001, (t.execution_time_ms if t else rag_response.latency_ms) / 1000.0)
-        tps = round(comp_tok / duration_sec, 1) if comp_tok > 0 else None
+        tps = (t.llm_usage or {}).get("decode_tokens_per_second") if t else None
 
         req_id = request_id or getattr(rag_response, "id", f"req_{rag_response.id.replace('resp_', '')}")
 

@@ -52,6 +52,7 @@ class QueryContext:
     # ── Derived setup ──────────────────────────────────────────────────────
     total_start: float = 0.0
     stage_timings: dict[str, float] = field(default_factory=dict)
+    stage_status: dict[str, str] = field(default_factory=dict)
     response_mode_config: Any = None
     req_llm: Any = None
     selected_model: str = ""
