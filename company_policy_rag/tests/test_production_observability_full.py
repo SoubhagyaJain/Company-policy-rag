@@ -270,7 +270,7 @@ def test_multi_model_monitoring_separation(temp_telemetry_db):
 def test_rest_api_endpoints():
     """Verify all FastAPI REST endpoints for production observability."""
     app = create_app()
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     # 1. Health endpoint
     res_health = client.get("/api/health")

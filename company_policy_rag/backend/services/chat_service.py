@@ -200,9 +200,8 @@ class ChatService:
         chat_mode = self._request_chat_mode(request)
 
         with self._session_lock:
-            history = self._history_for_mode(
-                list(self._sessions.get(session_id, [])), chat_mode
-            )
+            # Each request is independent; retain the transcript for display only.
+            history: list[dict[str, Any]] = []
             session_meta = self._session_metadata.setdefault(session_id, {})
             if request.active_document_id:
                 session_meta["active_document_id"] = request.active_document_id
@@ -218,8 +217,8 @@ class ChatService:
             selected_doc_ids = request.selected_document_ids or session_meta.get("selected_document_ids")
             doc_scope = request.document_scope or session_meta.get("document_scope")
 
-        # Get current isolated conversation state
-        conv_state = self.state_manager.get_state(session_id)
+        # Start each request with fresh conversation state
+        conv_state = ConversationRAGState(conversation_id=session_id)
         preserved_document_state = conv_state.model_copy(deep=True) if chat_mode == "general" else None
 
         # Run pipeline with document-aware scope resolution and conversation state
@@ -466,9 +465,8 @@ class ChatService:
             model_name = raw_req_model
 
         with self._session_lock:
-            history = self._history_for_mode(
-                list(self._sessions.get(session_id, [])), chat_mode
-            )
+            # Each request is independent; retain the transcript for display only.
+            history: list[dict[str, Any]] = []
             session_meta = self._session_metadata.setdefault(session_id, {})
             if request.active_document_id:
                 session_meta["active_document_id"] = request.active_document_id
@@ -484,8 +482,8 @@ class ChatService:
             selected_doc_ids = request.selected_document_ids or session_meta.get("selected_document_ids")
             doc_scope = request.document_scope or session_meta.get("document_scope")
 
-        # Get conversation state from manager
-        conv_state = self.state_manager.get_state(session_id)
+        # Start each request with fresh conversation state
+        conv_state = ConversationRAGState(conversation_id=session_id)
         preserved_document_state = conv_state.model_copy(deep=True) if chat_mode == "general" else None
 
         try:
@@ -514,8 +512,9 @@ class ChatService:
             yield f"event: start\ndata: {json.dumps(start_payload)}\n\n"
 
             ttft_recorded = False
-            ttft_ms = 0.0
+            ttft_ms: float | None = None
             full_answer = ""
+            final_received = False
             token_index = 0
             final_rag_trace: Any = None
             final_citations: list[Any] = []
@@ -590,11 +589,17 @@ class ChatService:
                         "request_id": request_id,
                         "content": token_text,
                         "index": token_index,
+                        "provisional": True,
                     }
                     yield f"event: chunk\ndata: {json.dumps(chunk_payload)}\n\n"
                     token_index += 1
 
                 elif event["type"] == "done":
+                    # Tokens are a draft. Verification/source repair can replace
+                    # them, including with an empty answer, before completion.
+                    final_received = True
+                    full_answer = event.get("answer", full_answer)
+                    model_name = event.get("model") or model_name
                     total_latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
 
                     citations = event.get("citations", [])
@@ -670,6 +675,7 @@ class ChatService:
                         "request_id": request_id,
                         "turn_id": message_id,
                         "answer": full_answer,
+                        "provisional": False,
                         "status": "completed",
                         "total_latency_ms": total_latency_ms,
                         "ttft_ms": ttft_ms,
@@ -682,6 +688,8 @@ class ChatService:
                             "ttft_ms": ttft_ms,
                             "total_latency_ms": total_latency_ms,
                             "stage_timings": trace.stage_timings_ms if trace else {},
+                            "stage_status": trace.stage_status if trace else {},
+                            "llm_usage": trace.llm_usage if trace else {},
                         },
                         "low_confidence": low_confidence,
                         "model": model_name,
@@ -701,6 +709,9 @@ class ChatService:
 
                 elif event["type"] == "error":
                     yield f"event: error\ndata: {json.dumps({'detail': event.get('detail', 'Unknown error'), 'status': 500, 'request_id': request_id})}\n\n"
+
+            if not final_received:
+                return  # cancelled/incomplete drafts must not become conversation evidence
 
             # 4. Save turn to history and update conversation state
             with self._session_lock:

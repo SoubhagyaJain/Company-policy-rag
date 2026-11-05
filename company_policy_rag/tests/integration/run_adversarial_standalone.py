@@ -34,7 +34,7 @@ def run_all_tests():
 
     reset_dependencies()
     from backend.api.main import app
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     # 1. Empty & Whitespace Payloads
     t0 = time.perf_counter()

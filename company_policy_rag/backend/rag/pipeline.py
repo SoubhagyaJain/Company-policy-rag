@@ -1833,6 +1833,18 @@ class RAGPipeline:
             default=str,
         )
 
+    def _document_revoked(self, document_id: str | None, source_file: str | None = None) -> bool:
+        store = getattr(getattr(self.hybrid_retriever, "dense_retriever", None), "vector_store", None)
+        searchable = getattr(store, "is_document_searchable", None)
+        if callable(searchable) and searchable(document_id, source_file) is False:
+            return True
+        check = getattr(store, "is_document_deleted", None)
+        return callable(check) and check(document_id, source_file) is True
+
+    def _visible_chunks(self, chunks: list[ScoredChunk]) -> list[ScoredChunk]:
+        return [sc for sc in chunks if not self._document_revoked(
+            sc.chunk.metadata.document_id, sc.chunk.metadata.source_file)]
+
     def _stage_retrieve(self, ctx: QueryContext, prefix: str) -> None:
         """Build sub-queries and run one attempt's hybrid retrieval onto ``ctx``.
 
@@ -1871,7 +1883,7 @@ class RAGPipeline:
                 ctx.reuse_turn_id,
             )
             if trusted_turn is not None:
-                trusted_chunks = list(trusted_turn.retrieved_chunks)
+                trusted_chunks = self._visible_chunks(list(trusted_turn.retrieved_chunks))
                 ctx.reused_evidence_status = str(
                     getattr(
                         trusted_turn.evidence_status,
@@ -2055,9 +2067,11 @@ class RAGPipeline:
                     version=cache_version,
                 )
 
+        candidate_chunks = self._visible_chunks(candidate_chunks)
         ctx.raw_new_chunk_count = len(candidate_chunks)
         ctx.candidate_chunks = candidate_chunks
-        ctx.stage_timings[f"hybrid_retrieval{prefix}"] = 0.1 if cache_hit_retrieval else round((time.perf_counter() - t0) * 1000, 2)
+        ctx.stage_timings[f"hybrid_retrieval{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
+        ctx.stage_status[f"hybrid_retrieval{prefix}"] = "cache_hit" if cache_hit_retrieval else "executed"
         if stages is not None:
             stages["sub_queries"] = list(sub_queries)
             stages["retrieval_cache_hit"] = cache_hit_retrieval
@@ -2140,21 +2154,24 @@ class RAGPipeline:
                 ctx.retrieval_stages = {}
             stages = ctx.retrieval_stages
             stages["pre_rerank"] = _stage_ids(candidate_chunks)
-        rerank_traces: list[dict[str, Any]] | None = [] if stages is not None else None
+        rerank_traces: list[dict[str, Any]] = []
         reranker_enabled = bool(getattr(settings, "enable_reranker", False))
 
         # 4. Cross-Encoder Reranking
         t0 = time.perf_counter()
         thinking_sm.start_stage(ThinkingStage.RERANKING)
         if ctx.retrieval_decision == RetrievalDecision.REUSE_PREVIOUS.value:
+            ctx.stage_status[f"reranking{prefix}"] = "skipped_reused_evidence"
             # These chunks were already retrieved and verified for the selected
             # turn. Preserve their order and avoid a second model-based rank.
             reranked_chunks = candidate_chunks[:current_strategy.rerank_top_n]
         elif not reranker_enabled:
+            ctx.stage_status[f"reranking{prefix}"] = "skipped_disabled"
             # ENABLE_RERANKER=false: keep the fused retrieval order.
             reranked_chunks = candidate_chunks[:current_strategy.rerank_top_n]
         else:
             try:
+                ctx.stage_status[f"reranking{prefix}"] = "executed" if candidate_chunks else "skipped_no_candidates"
                 reranked_chunks = self._rerank_for_parts(
                     ctx.question_parts or [ctx.rewrite_res.rewritten_query],
                     candidate_chunks,
@@ -2162,7 +2179,10 @@ class RAGPipeline:
                     min_ratio=current_strategy.min_score_ratio,
                     trace_sink=rerank_traces,
                 )
+                if any(item.get("fallback") for item in rerank_traces):
+                    ctx.stage_status[f"reranking{prefix}"] = "fallback"
             except Exception as rerank_exc:
+                ctx.stage_status[f"reranking{prefix}"] = "fallback_error"
                 logger.warning("Reranker error (%s); falling back to retrieval ranking.", rerank_exc)
                 thinking_sm.degrade_stage(
                     ThinkingStage.RERANKING,
@@ -2250,6 +2270,7 @@ class RAGPipeline:
                 )
 
         # 5b. Evidence Sufficiency Gate & Cross-Page Vision Fallback (Phases 3, 4, 8)
+        evidence_start = time.perf_counter()
         if ctx.retrieval_decision == RetrievalDecision.REUSE_PREVIOUS.value:
             prior_status = (
                 ctx.reused_evidence_status
@@ -2270,6 +2291,8 @@ class RAGPipeline:
                 previous_chunks=None,
                 is_followup=conv_res.is_followup if conv_res else False,
             )
+        ctx.stage_timings[f"evidence_gate_and_vision{prefix}"] = round((time.perf_counter() - evidence_start) * 1000, 2)
+        ctx.stage_status[f"evidence_gate_and_vision{prefix}"] = ("skipped_reused_evidence" if ctx.retrieval_decision == RetrievalDecision.REUSE_PREVIOUS.value else "executed")
         logger.info(
             "[EVIDENCE_STATUS] prev=%s current=%s monotonic=%s rationale='%s'",
             str(ctx.conversation_state.previous_evidence_status) if (ctx.conversation_state and conv_res and conv_res.is_followup) else "NONE",
@@ -2408,6 +2431,8 @@ class RAGPipeline:
         context_tokens += policy_block_tokens
         ctx.stage_timings[f"context_expansion{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
 
+        # This milestone reports the result of earlier evidence analysis; it is not a verifier.
+        ctx.stage_status[f"evidence_verification{prefix}"] = "milestone_only"
         # Evidence Verification Stage
         thinking_sm.start_stage(ThinkingStage.EVIDENCE_VERIFICATION)
         thinking_sm.complete_stage(
@@ -2512,6 +2537,7 @@ class RAGPipeline:
             query=user_query,
         )
 
+        ctx.stage_timings[f"prompt_construction{prefix}"] = round((time.perf_counter() - t0) * 1000, 2)
         max_tokens = response_mode_config.max_output_tokens
         ctx.llm_usage = {}
         if _is_cancelled(ctx):
@@ -2666,6 +2692,7 @@ class RAGPipeline:
         # 8. Post-Generation Verification
         t0 = time.perf_counter()
         if ctx.enable_verification and self.verifier is not None:
+            ctx.stage_status[f"verification{prefix}"] = "executed"
             # High-risk (policy / numeric) answers are already buffered before
             # the user sees them (see _stage_plan), so an LLM claim-support audit
             # here costs no perceived latency and catches hallucinations the
@@ -2676,6 +2703,8 @@ class RAGPipeline:
                 and req_llm is not None
                 and getattr(settings, "enable_llm_faithfulness_verification", True)
             )
+            if use_llm_judge:
+                ctx.stage_status[f"verification{prefix}"] = "executed_llm_judge_requested"
             report = self.verifier.verify(
                 query=user_query,
                 answer=answer_text,
@@ -2689,6 +2718,7 @@ class RAGPipeline:
             )
             report.retry_count = attempt
         else:
+            ctx.stage_status[f"verification{prefix}"] = "skipped_disabled_or_unavailable"
             report = VerificationReport(
                 faithfulness=1.0,
                 completeness=1.0,
@@ -3097,7 +3127,8 @@ class RAGPipeline:
         )
         ctx.stage_timings["cache_lookup"] = round((time.perf_counter() - t0) * 1000, 2)
         if cached_res is not None and (
-            _is_degraded_or_abstention_answer(cached_res.answer)
+            any(self._document_revoked(c.document_id, c.source_file) for c in cached_res.citations)
+            or _is_degraded_or_abstention_answer(cached_res.answer)
             or not _answer_matches_requested_enumeration(ctx.user_query, cached_res.answer)
         ):
             logger.info("Ignoring incomplete semantic-cache answer and continuing with fresh retrieval.")
@@ -3593,6 +3624,7 @@ class RAGPipeline:
             generation_max_tokens=response_mode_config.max_output_tokens,
             execution_time_ms=total_elapsed,
             stage_timings_ms=stage_timings,
+            stage_status=ctx.stage_status,
             fallback_reason=fallback_reason,
             faithfulness_checked=enable_verification,
             faithfulness_passed=best_report.passed if best_report else True,

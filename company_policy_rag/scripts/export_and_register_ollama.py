@@ -30,11 +30,10 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional
 
 # Ensure project root and company_policy_rag root are in sys.path
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -54,7 +53,6 @@ try:
     from company_policy_rag.src.finetuning.merger import merge_lora_weights
     from company_policy_rag.src.finetuning.modelfile_generator import generate_modelfile
     from company_policy_rag.src.finetuning.ollama_registrar import (
-        probe_ollama_tags,
         register_model_in_ollama,
         verify_model_registered,
     )
@@ -67,7 +65,6 @@ except ImportError:
     from src.finetuning.merger import merge_lora_weights
     from src.finetuning.modelfile_generator import generate_modelfile
     from src.finetuning.ollama_registrar import (
-        probe_ollama_tags,
         register_model_in_ollama,
         verify_model_registered,
     )
@@ -200,6 +197,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             logger.info("==> [Stage 2/4] Skipping GGUF conversion (using existing %s)", gguf_path)
 
         # Stage 3: Modelfile Generation
+        if not validate_gguf_file(gguf_path)["is_valid"]:
+            raise RuntimeError("A valid GGUF artifact is required before registration.")
+        if modelfile_path.exists():
+            raise FileExistsError(f"Refusing to replace existing Modelfile: {modelfile_path}")
         logger.info("==> [Stage 3/4] Generating Ollama Modelfile...")
         t0 = time.time()
         generate_modelfile(
@@ -224,8 +225,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             if registered:
                 logger.info("Stage 4 completed in %.2fs -> Successfully registered '%s' in Ollama.", time.time() - t0, args.model_name)
             else:
-                logger.warning("Stage 4 warning: Registration could not connect to Ollama service at %s. Modelfile ready for manual import: `ollama create %s -f %s`",
-                               args.ollama_url, args.model_name, modelfile_path)
+                raise RuntimeError("Ollama registration failed. Artifacts remain available for manual recovery.")
+            if not verify_model_registered(args.model_name, ollama_url=args.ollama_url):
+                raise RuntimeError("Ollama did not verify the registered model.")
         else:
             logger.info("==> [Stage 4/4] Skipping Ollama registration as requested.")
 

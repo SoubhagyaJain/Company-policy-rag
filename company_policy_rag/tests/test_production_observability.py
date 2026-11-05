@@ -86,7 +86,7 @@ def test_telemetry_db_crud(test_db_path: Path):
 
 def test_observability_summary_endpoint():
     app = create_app()
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     response = client.get("/api/admin/observability?time_range=24h")
     assert response.status_code == 200
@@ -120,7 +120,7 @@ def test_observability_summary_endpoint():
 
 def test_subsystem_health_endpoint():
     app = create_app()
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     response = client.get("/api/admin/observability/health")
     assert response.status_code == 200
@@ -133,7 +133,7 @@ def test_subsystem_health_endpoint():
 
 def test_conversational_bypass_semantics():
     app = create_app()
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     response = client.post("/api/chat", json={"message": "hi"})
     assert response.status_code == 200
@@ -149,7 +149,7 @@ def test_conversational_bypass_semantics():
 
 def test_telemetry_delete_trace_and_clear_endpoints():
     app = create_app()
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     # 1. Record a trace via chat or direct service injection
     from backend.api.dependencies import get_telemetry_service
@@ -202,7 +202,7 @@ def test_telemetry_delete_trace_and_clear_endpoints():
 def test_telemetry_all_time_ranges():
     """Verify all required telemetry time ranges (5m, 15m, 1h, 6h, 24h, 7d, Live, 3s) work smoothly."""
     app = create_app()
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     time_ranges = ["5m", "15m", "1h", "6h", "24h", "7d", "Live", "3s"]
     for tr in time_ranges:

@@ -1,0 +1,159 @@
+{
+  "corpus": "squad_apollo",
+  "corpus_source": "SQuAD v1.1 dev, Apollo_program; original paragraphs",
+  "query_source": "First question in eight spaced paragraphs; relevance labels are not exhaustive",
+  "queries": [
+    {
+      "id": "5725b888ec44d21400f3d453",
+      "question": "How many people could the Mercury capsule hold?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_004": 2
+      },
+      "keywords": [
+        "one"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "one",
+        "three",
+        "one",
+        "one",
+        "one astronaut"
+      ]
+    },
+    {
+      "id": "5725bd4b38643c19005acc31",
+      "question": "What month and day did Kennedy message his vice president about the status of the program?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_008": 2
+      },
+      "keywords": [
+        "April 20"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "April 20",
+        "April 20",
+        "April",
+        "April",
+        "April 20"
+      ]
+    },
+    {
+      "id": "5725c6dcec44d21400f3d531",
+      "question": "Who was Kennedy's science adviser that opposed manned spacecraft flights?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_016": 2
+      },
+      "keywords": [
+        "Jerome Wiesner"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "Jerome Wiesner",
+        "Wiesner",
+        "Jerome Wiesner",
+        "Jerome Wiesner",
+        "Jerome Wiesner"
+      ]
+    },
+    {
+      "id": "5725d51589a1e219009abf6e",
+      "question": "From what project groups were the Apollo astronauts selected?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_028": 2
+      },
+      "keywords": [
+        "Mercury and Gemini"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "Mercury and Gemini",
+        "Mercury",
+        "Mercury and Gemini",
+        "Project Mercury and Gemini",
+        "Mercury and Gemini"
+      ]
+    },
+    {
+      "id": "5725dc1638643c19005ace01",
+      "question": "What was the first problem astronauts encountered during the plugs-out test?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_036": 2
+      },
+      "keywords": [
+        "strange odor in their spacesuits"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "strange odor in their spacesuits",
+        "odor",
+        "strange odor in their spacesuits",
+        "strange odor",
+        "strange odor in their spacesuits"
+      ]
+    },
+    {
+      "id": "5725e44238643c19005ace35",
+      "question": "Charles Conrad and Alan Bean were on what spacecraft to the moon?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_044": 2
+      },
+      "keywords": [
+        "Apollo 12"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "Apollo 12",
+        "Apollo 12",
+        "Apollo 12",
+        "Apollo 12",
+        "Apollo 12"
+      ]
+    },
+    {
+      "id": "5725ef6838643c19005acece",
+      "question": "When was the Skylab launched?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_052": 2
+      },
+      "keywords": [
+        "1973"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "1973",
+        "1973",
+        "1973",
+        "1973",
+        "1973"
+      ]
+    },
+    {
+      "id": "5725f39638643c19005acef7",
+      "question": "Who compiled the original surviving Apollo 11 landing data?",
+      "category": "squad_extractive",
+      "relevant": {
+        "apollo_056": 2
+      },
+      "keywords": [
+        "Nafzger"
+      ],
+      "should_abstain": false,
+      "answers": [
+        "Nafzger",
+        "Nafzger",
+        "Nafzger",
+        "Nafzger",
+        "Nafzger"
+      ]
+    }
+  ]
+}

@@ -18,7 +18,7 @@ def cleanup_deps():
 
 
 def test_get_health():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
@@ -30,7 +30,7 @@ def test_get_health():
 
 
 def test_get_models():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     response = client.get("/api/models")
     assert response.status_code == 200
     data = response.json()
@@ -39,8 +39,13 @@ def test_get_models():
     assert len(data["models"]) >= 1
 
 
-def test_select_active_model_success():
-    client = TestClient(app)
+def test_select_active_model_success(monkeypatch):
+    from types import SimpleNamespace
+    from backend.api.dependencies import get_chat_service
+    monkeypatch.setattr("backend.api.routes.models.probe_ollama_tags", lambda **kwargs: (True, ["qwen2.5:7b"], None))
+    monkeypatch.setitem(app.dependency_overrides, get_chat_service,
+                        lambda: SimpleNamespace(set_active_model=lambda model: model))
+    client = TestClient(app, client=("127.0.0.1", 50000))
     response = client.post("/api/models/select", json={"model": "qwen2.5:7b"})
     assert response.status_code == 200
     data = response.json()
@@ -49,7 +54,7 @@ def test_select_active_model_success():
 
 
 def test_select_active_model_invalid():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     response = client.post("/api/models/select", json={"model": "non_existent_model_xyz"})
     assert response.status_code == 400
     assert "detail" in response.json()

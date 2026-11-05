@@ -19,6 +19,7 @@ import { runAllChallenger2Tests } from './adversarial_challenger2.test';
 import { runMilestone4Tests } from './milestone4_thinking_ui.test';
 import { runAdversarialM4ChallengerTests } from './adversarial_challenger_m4_1.test';
 import { runModelSwitchingTests } from './model_switching.test';
+import { runCanonicalDeliveryTests } from './canonical_delivery.test';
 
 async function main() {
   console.log('\n' + '='.repeat(80));
@@ -29,6 +30,7 @@ async function main() {
 
   const ch2Results = await runAllChallenger2Tests();
   const modelSwitchingResults = await runModelSwitchingTests();
+  const canonicalResults = await runCanonicalDeliveryTests();
 
   const allResults: TestResult[] = [
     ...runTier1Tests(),
@@ -40,6 +42,7 @@ async function main() {
     ...runMilestone4Tests(),
     ...runAdversarialM4ChallengerTests(),
     ...modelSwitchingResults,
+    ...canonicalResults,
   ];
 
   const totalDuration = performance.now() - startTime;

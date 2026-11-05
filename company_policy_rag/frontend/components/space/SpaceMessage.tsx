@@ -138,6 +138,8 @@ export const SpaceMessage = memo(function SpaceMessage({ message, onOpenCitation
 
   return (
     <article className="sp-rise flex w-full flex-col gap-3" aria-label="Grounded answer">
+      {message.content_status === 'provisional' && <p className="sp-muted text-xs">Draft · awaiting final answer</p>}
+      {message.content_status === 'interrupted' && <p className="sp-muted text-xs">Interrupted draft</p>}
       {/* Reasoning trace */}
       {message.thinking_events && message.thinking_events.length > 0 && (
         <SpaceThinkingPanel

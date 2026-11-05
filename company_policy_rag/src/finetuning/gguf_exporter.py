@@ -2,7 +2,7 @@
 
 Provides multi-tier Hugging Face model export to GGUF format supporting:
 - Quantization modes: Q4_K_M, Q8_0, FP16, Q4_0, Q5_K_M (and variants)
-- 3-tier execution strategy: llama.cpp toolchain -> gguf-py library -> structured binary simulation fallback
+- Real llama.cpp conversion and quantization with staged publication
 - GGUF v3 binary header validation (magic bytes, version, tensor/KV metadata)
 
 Authoritative Reference:
@@ -21,9 +21,9 @@ import struct
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +210,12 @@ def validate_gguf_file(gguf_path: Union[str, Path]) -> Dict[str, Any]:
             ).to_dict()
 
         version, tensor_count, kv_count = struct.unpack("<IQQ", header_bytes[4:24])
+        if version not in (2, 3) or tensor_count == 0 or kv_count == 0 or file_size <= 24:
+            return GGUFValidationResult(
+                is_valid=False, file_path=str(path), file_size_bytes=file_size, magic="GGUF",
+                version=version, tensor_count=tensor_count, kv_count=kv_count,
+                error_message="Unsupported version, empty model, or missing payload.",
+            ).to_dict()
 
         return GGUFValidationResult(
             is_valid=True,
@@ -230,142 +236,52 @@ def validate_gguf_file(gguf_path: Union[str, Path]) -> Dict[str, Any]:
         ).to_dict()
 
 
-def _write_simulated_gguf(
-    output_path: Path,
-    quantization: str,
-    architecture: str = "qwen2",
-) -> None:
-    """Generate a structurally valid GGUF binary containing header metadata and quantization tag."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # GGUF Header: Magic (4B) + Version 3 (4B) + Tensor Count (8B) + KV Count (8B)
-    magic = GGUF_MAGIC
-    version = struct.pack("<I", GGUF_VERSION)
-    tensor_count = struct.pack("<Q", 1)  # 1 tensor
-    kv_count = struct.pack("<Q", 2)      # 2 metadata KV pairs
-
-    header = magic + version + tensor_count + kv_count
-
-    # KV pair 1: "general.architecture" -> "qwen2"
-    key1 = "general.architecture".encode("utf-8")
-    val1 = architecture.encode("utf-8")
-    kv1 = (
-        struct.pack("<Q", len(key1)) + key1 +
-        struct.pack("<I", 8) +  # GGUF_TYPE_STRING = 8
-        struct.pack("<Q", len(val1)) + val1
-    )
-
-    # KV pair 2: "general.quantization_type" -> quantization format string (e.g. "Q4_K_M")
-    key2 = "general.quantization_type".encode("utf-8")
-    val2 = quantization.encode("utf-8")
-    kv2 = (
-        struct.pack("<Q", len(key2)) + key2 +
-        struct.pack("<I", 8) +  # GGUF_TYPE_STRING = 8
-        struct.pack("<Q", len(val2)) + val2
-    )
-
-    # Tensor Info 1: "token_embd.weight"
-    t_name = "token_embd.weight".encode("utf-8")
-    t_info = (
-        struct.pack("<Q", len(t_name)) + t_name +
-        struct.pack("<I", 1) +           # n_dims = 1
-        struct.pack("<Q", 128) +         # dim[0] = 128
-        struct.pack("<I", 1) +           # type = GGML_TYPE_F16 (1)
-        struct.pack("<Q", 0)             # offset = 0
-    )
-
-    # 32-byte alignment padding + dummy tensor payload with explicit quantization marker
-    payload = quantization.encode("utf-8") + b"\x00" * 256
-
-    full_binary = header + kv1 + kv2 + t_info + payload
-    output_path.write_bytes(full_binary)
 
 
 def convert_to_gguf(
     model_dir: Union[str, Path],
     output_file: Union[str, Path],
     quantization: str = "Q4_K_M",
-    allow_simulation: bool = True,
+    allow_simulation: bool = False,
     llama_cpp_dir: Optional[Union[str, Path]] = None,
 ) -> str:
-    """Convert a merged HuggingFace model directory to GGUF format with quantization.
+    """Convert with the real toolchain and publish only a validated staged file.
 
-    Args:
-        model_dir: Directory containing merged HuggingFace model weights & tokenizer.
-        output_file: Target file path ending in .gguf.
-        quantization: Quantization format (Q4_K_M, Q8_0, FP16, Q4_0, Q5_K_M).
-        allow_simulation: If True, generate valid GGUF binary when tools are absent.
-        llama_cpp_dir: Optional custom directory containing llama.cpp binaries.
-
-    Returns:
-        String path to the created .gguf file.
+    Simulation is no longer supported. Existing output artifacts are never replaced.
+    Header validation checks container structure; model usability needs a runtime load.
     """
     canonical_quant = normalize_quantization(quantization)
-    out_file = Path(output_file)
-
+    out_file, model_path = Path(output_file), Path(model_dir)
     if not out_file.name.endswith(".gguf"):
         raise ValueError(f"Output file must have .gguf extension, got '{out_file.name}'")
-
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    model_path = Path(model_dir)
-
-    # ── Tier 1: Try llama.cpp Toolchain ──────────────────────────────────
-    tools = find_llama_cpp_tools(llama_cpp_dir)
-    if tools["convert_script"] and (canonical_quant == "FP16" or tools["quantize_bin"]):
-        try:
-            logger.info("Attempting GGUF conversion via llama.cpp toolchain...")
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                tmp_f16_gguf = Path(tmp_dir) / "model_f16.gguf"
-
-                # Step 1: Run convert_hf_to_gguf.py
-                conv_cmd = [
-                    sys.executable,
-                    str(tools["convert_script"]),
-                    str(model_path),
-                    "--outfile",
-                    str(tmp_f16_gguf),
-                    "--outtype",
-                    "f16",
-                ]
-                res_conv = subprocess.run(conv_cmd, capture_output=True, text=True, check=True)
-
-                if canonical_quant == "FP16":
-                    shutil.copy2(tmp_f16_gguf, out_file)
-                    return str(out_file)
-
-                # Step 2: Run llama-quantize
-                quant_cmd = [
-                    str(tools["quantize_bin"]),
-                    str(tmp_f16_gguf),
-                    str(out_file),
-                    canonical_quant,
-                ]
-                subprocess.run(quant_cmd, capture_output=True, text=True, check=True)
-                return str(out_file)
-
-        except Exception as exc:
-            logger.warning("llama.cpp toolchain conversion attempt skipped/failed: %s", exc)
-
-    # ── Tier 2: Try gguf-py Python Library ──────────────────────────────
-    try:
-        import gguf
-        logger.info("Attempting GGUF conversion via Python gguf package...")
-        # If gguf-py writer can be invoked on real safetensors:
-        # Fall back to simulation if model directory is synthetic/mock
-    except ImportError:
-        pass
-    except Exception as exc:
-        logger.warning("gguf-py conversion failed: %s", exc)
-
-    # ── Tier 3: Simulation Fallback ──────────────────────────────────────
     if allow_simulation:
-        logger.info("Generating verified GGUF binary structure via fallback simulator for '%s'...", canonical_quant)
-        _write_simulated_gguf(out_file, quantization=canonical_quant)
-        return str(out_file)
-
-    raise GGUFExportError(
-        f"GGUF conversion failed: llama.cpp tools and gguf-py library not available and simulation is disabled."
-    )
+        raise GGUFExportError("Simulation is restricted to test fixtures.")
+    if out_file.exists():
+        raise FileExistsError(f"Refusing to replace existing GGUF output: {out_file}")
+    if not model_path.is_dir():
+        raise GGUFExportError(f"Model directory not found: {model_path}")
+    tools = find_llama_cpp_tools(llama_cpp_dir)
+    if not tools["convert_script"] or (canonical_quant != "FP16" and not tools["quantize_bin"]):
+        raise GGUFExportError("The llama.cpp converter and requested quantizer are required.")
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix=".gguf-", dir=out_file.parent) as temporary:
+            full_precision = Path(temporary) / "model-f16.gguf"
+            subprocess.run([sys.executable, str(tools["convert_script"]), str(model_path),
+                            "--outfile", str(full_precision), "--outtype", "f16"],
+                           capture_output=True, text=True, check=True, timeout=1800)
+            staged = full_precision
+            if canonical_quant != "FP16":
+                staged = Path(temporary) / "model-quantized.gguf"
+                subprocess.run([str(tools["quantize_bin"]), str(full_precision), str(staged), canonical_quant],
+                               capture_output=True, text=True, check=True, timeout=1800)
+            validation = validate_gguf_file(staged)
+            if not validation["is_valid"]:
+                raise GGUFExportError(f"Converter output is invalid: {validation['error_message']}")
+            staged.rename(out_file)
+    except Exception as exc:
+        raise GGUFExportError(f"GGUF conversion failed; no output was published: {exc}") from exc
+    return str(out_file)
 
 
 class GGUFExporter:
@@ -374,7 +290,7 @@ class GGUFExporter:
     def __init__(
         self,
         quantization: str = "Q4_K_M",
-        allow_simulation: bool = True,
+        allow_simulation: bool = False,
         llama_cpp_dir: Optional[Union[str, Path]] = None,
     ):
         self.quantization = normalize_quantization(quantization)

@@ -11,6 +11,8 @@ embedding/reranker model to be present:
 
 from __future__ import annotations
 
+import pytest
+
 from backend.embeddings.embeddings import EmbeddingService, _default_query_instruction
 from backend.models.chunk import Chunk, ChunkMetadata
 from backend.models.rag import ScoredChunk
@@ -19,7 +21,7 @@ from backend.retrieval.reranker import CrossEncoderReranker
 
 def _force_fallback_embedder(model_name: str) -> EmbeddingService:
     """Return a service that skips model loading and uses the hash fallback."""
-    svc = EmbeddingService(model_name=model_name)
+    svc = EmbeddingService(model_name=model_name, allow_test_fallback=True)
     svc._model = None
     svc._model_loaded = True  # mark load attempted -> deterministic fallback path
     return svc
@@ -53,7 +55,8 @@ def test_embed_query_is_identity_without_instruction() -> None:
 
 def test_embed_query_handles_empty_text() -> None:
     svc = _force_fallback_embedder("BAAI/bge-small-en-v1.5")
-    assert svc.embed_query("") == [0.0] * svc.dimension
+    with pytest.raises(ValueError, match="empty"):
+        svc.embed_query("")
 
 
 # ── 2. Degraded-retrieval health signal ─────────────────────────────────────

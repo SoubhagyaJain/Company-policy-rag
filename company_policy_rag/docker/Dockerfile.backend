@@ -53,7 +53,7 @@ COPY src/ ./src/
 COPY data/demo/ ./data/demo/
 
 # Create required directories
-RUN mkdir -p data/policies data/legal data/raw storage logs .cache/huggingface
+RUN mkdir -p app/storage data/policies data/legal data/raw storage logs .cache/huggingface
 
 # Non-root user for security
 RUN groupadd --gid 1001 appuser \

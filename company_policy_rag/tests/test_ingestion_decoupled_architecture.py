@@ -1,8 +1,23 @@
+import time
+
 from backend.vision.vision_service import VisionCircuitBreaker
 from backend.vision.vision_cache import VisionCacheManager
 
+
+def _ready_status(client, document_id):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        response = client.get(f"/api/documents/{document_id}/status")
+        assert response.status_code == 200
+        status = response.json()
+        if status["status"] in {"READY", "FAILED"}:
+            assert status["status"] == "READY", status.get("error")
+            return status
+        time.sleep(0.02)
+    raise AssertionError("Ingestion did not reach a terminal status")
+
 def test_fast_document_upload_and_ready_status(isolated_document_client):
-    """Verify document uploads fast, marks READY immediately, and text RAG is active."""
+    """Upload acknowledges queued work; polling reports committed search readiness."""
     doc_content = b"""# Engineering Remote Work Policy
 
 1. Overview
@@ -19,16 +34,13 @@ Company laptops must run endpoint protection and VPN at all times.
     assert response.status_code == 201
     data = response.json()
     assert data["document_id"].startswith("doc_")
-    assert data["status"] == "READY"
-    assert data["progress"] == 100
-    assert data["text_ready"] is True
-    assert data["chunks_indexed"] > 0
+    assert data["status"] == "TEXT_INDEXING"
+    assert data["text_ready"] is False
+    assert data["chunks_indexed"] == 0
 
     # Verify status endpoint
     doc_id = data["document_id"]
-    status_res = isolated_document_client.get(f"/api/documents/{doc_id}/status")
-    assert status_res.status_code == 200
-    status_data = status_res.json()
+    status_data = _ready_status(isolated_document_client, doc_id)
     assert status_data["document_id"] == doc_id
     assert status_data["status"] == "READY"
     assert status_data["progress"] == 100
@@ -36,7 +48,7 @@ Company laptops must run endpoint protection and VPN at all times.
     assert len(status_data["stages"]) > 0
 
 def test_document_retry_endpoint(isolated_document_client):
-    """Verify POST /api/documents/{doc_id}/retry successfully re-indexes the document."""
+    """Retrying an already committed document is idempotent."""
     doc_content = b"""# Code Review Standard 2026
 
 All pull requests require 2 passing approvals and CI green.
@@ -48,6 +60,7 @@ All pull requests require 2 passing approvals and CI green.
     )
     assert response.status_code == 201
     doc_id = response.json()["document_id"]
+    ready = _ready_status(isolated_document_client, doc_id)
 
     # Call retry endpoint
     retry_res = isolated_document_client.post(f"/api/documents/{doc_id}/retry")
@@ -56,6 +69,7 @@ All pull requests require 2 passing approvals and CI green.
     assert retry_data["document_id"] == doc_id
     assert retry_data["status"] == "READY"
     assert retry_data["progress"] == 100
+    assert retry_data["job_id"] == ready["job_id"]
 
 def test_vision_circuit_breaker_and_failure_isolation():
     """Verify circuit breaker trips on consecutive failures and prevents system freeze."""

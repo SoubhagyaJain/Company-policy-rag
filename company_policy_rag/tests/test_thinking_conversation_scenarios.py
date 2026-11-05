@@ -895,7 +895,7 @@ def test_tier4_scenario_20_api_regression_endpoints() -> None:
     Verifies that standard REST endpoints (/api/chat, /api/chat/stream, session management)
     maintain backward compatibility, proper status codes, and payload schemas.
     """
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     # 1. Empty message rejection
     resp_empty = client.post("/api/chat", json={"message": "   "})

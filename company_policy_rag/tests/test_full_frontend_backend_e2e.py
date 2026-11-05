@@ -23,7 +23,7 @@ from backend.api.main import create_app
 @pytest.fixture(scope="module")
 def client():
     app = create_app()
-    with TestClient(app) as test_client:
+    with TestClient(app, client=("127.0.0.1", 50000)) as test_client:
         yield test_client
 
 

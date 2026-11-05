@@ -25,6 +25,10 @@ harness). Nothing is written to the live document library.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
+import platform
+import subprocess
+import urllib.request
 import json
 import math
 import sys
@@ -109,6 +113,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     from backend.rag.verifier import SelfReflectionVerifier
     from backend.retrieval.reranker import CrossEncoderReranker
 
+    from backend.rag.response_modes import RESPONSE_MODES
+
+    if args.context_chunks:
+        mode = RESPONSE_MODES[args.response_mode]
+        RESPONSE_MODES[args.response_mode] = replace(mode, retrieval_top_k=max(15, mode.retrieval_top_k), rerank_top_k=args.context_chunks)
     overrides = dict(_FORCED)
     for item in args.set or []:
         key, _, raw = item.partition("=")
@@ -122,6 +131,17 @@ def cmd_run(args: argparse.Namespace) -> int:
     results_path = out_dir / "results.jsonl"
     done = {(r["config"], r["corpus"], r["case_id"]) for r in _read_jsonl(results_path)}
 
+    metadata = {"python": platform.python_version(), "platform": platform.platform(), "model": args.model or settings.llm_model, "context_chunks_limit": args.context_chunks, "response_mode": args.response_mode, "forced_settings": overrides, "note": "run each configuration in a fresh process; warmup is excluded"}
+    try:
+        with urllib.request.urlopen(settings.ollama_base_url.rstrip("/") + "/api/ps", timeout=3) as response:
+            metadata["ollama_ps_before"] = json.load(response)
+    except Exception as exc:
+        metadata["ollama_ps_error"] = str(exc)
+    try:
+        metadata["nvidia_smi"] = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        metadata["nvidia_smi"] = None
+    (out_dir / (args.config + "_environment.json")).write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     llm = _build_llm(args.model or settings.llm_model)
     judge = _build_llm(args.judge_model) if args.judge_model else None
     verifier = SelfReflectionVerifier()
@@ -151,14 +171,34 @@ def cmd_run(args: argparse.Namespace) -> int:
             semantic_cache=None,
         )
         started = time.perf_counter()
+        if args.warmup and cases:
+            pipeline.query(cases[0].question, response_mode=args.response_mode)
         for case in cases:
             if (args.config, corpus, case.case_id) in done and not args.force:
                 continue
             t0 = time.perf_counter()
-            response = pipeline.query(case.question, response_mode=args.response_mode)
+            first_text = []
+            def on_text(delta: str) -> None:
+                if delta and not first_text:
+                    first_text.append((time.perf_counter() - t0) * 1000)
+            response = pipeline.query(case.question, response_mode=args.response_mode,
+                                      stream_callback=on_text if args.stream else None)
             row = score_response(case, response, latency_ms=(time.perf_counter() - t0) * 1000)
             row["config"] = args.config
             row["settings"] = {k: overrides[k] for k in sorted(overrides) if k not in _FORCED}
+            row["first_callback_ms"] = round(first_text[0], 2) if first_text else None
+            row["stream_requested"] = args.stream
+            row["context_limit"] = args.context_chunks
+            row["final_context_count"] = len(response.context_chunks)
+            row["context_tokens_estimated"] = response.trace.context_tokens
+            row["stage_timings_ms"] = response.trace.stage_timings_ms
+            row["stage_status"] = response.trace.stage_status
+            row["llm_usage"] = response.trace.llm_usage
+            try:
+                with urllib.request.urlopen(settings.ollama_base_url.rstrip("/") + "/api/ps", timeout=3) as ps_response:
+                    row["ollama_ps_after"] = json.load(ps_response)
+            except Exception:
+                row["ollama_ps_after"] = None
             if judge is not None and not row["abstained"] and response.context_chunks:
                 verdict = verifier._evaluate_faithfulness_llm(response.answer, response.context_chunks, judge)
                 row["faithfulness"] = verdict[0] if verdict else None
@@ -235,6 +275,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--response-mode", default="standard")
     run.add_argument("--limit", type=int, default=0)
     run.add_argument("--force", action="store_true")
+    run.add_argument("--context-chunks", type=int, choices=[3, 5, 10], help="maximum final evidence chunks; other standard-mode budgets stay fixed")
+    run.add_argument("--warmup", action="store_true", help="run one unrecorded query before measurement")
+    run.add_argument("--stream", action="store_true", help="measure time to first pipeline callback (not network delivery)")
     run.add_argument("--workdir", default=str(PROJECT_ROOT / "storage" / "retrieval_eval"))
     run.add_argument("--score-cache", default=str(PROJECT_ROOT / "storage" / "retrieval_eval" / "rerank_scores.json"))
     run.set_defaults(func=cmd_run)

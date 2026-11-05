@@ -33,7 +33,7 @@ def test_chat_api_rejects_unknown_response_mode() -> None:
 
     from backend.api.main import app
 
-    response = TestClient(app).post(
+    response = TestClient(app, client=("127.0.0.1", 50000)).post(
         "/api/chat",
         json={"message": "Explain hybrid retrieval", "response_mode": "verbose"},
     )

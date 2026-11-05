@@ -20,6 +20,7 @@ DEFAULT_METADATA_FIELDS: tuple[str, ...] = (
     "section_number",
     "source_file",
     "category",
+    "companion_navigation",
 )
 
 
@@ -42,7 +43,7 @@ def _stem(token: str) -> str:
 def _searchable_text(chunk: Chunk, fields: tuple[str, ...] = DEFAULT_METADATA_FIELDS) -> str:
     meta = chunk.metadata
     parts = [chunk.text or ""]
-    parts.extend(str(getattr(meta, field, None) or "") for field in fields)
+    parts.extend(str(getattr(meta, field, None) or (meta.extra or {}).get(field) or "") for field in fields)
     return " ".join(p for p in parts if p).strip()
 
 
@@ -271,6 +272,12 @@ class BM25SearchIndex:
             ):
                 continue
             chunk = self.entries[idx]
+            from backend.services.document_catalog import DocumentCatalog
+            catalog = getattr(self, "document_catalog", None)
+            if isinstance(catalog, DocumentCatalog) and not catalog.searchable(
+                chunk.metadata.document_id, chunk.metadata.source_file
+            ):
+                continue
             if not self._matches_filters(self._meta_dicts[idx], chunk.metadata, filters):
                 continue
             results.append(

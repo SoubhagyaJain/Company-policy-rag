@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     storage_dir: Path = Field(default=PROJECT_ROOT / "storage")
     # Document library served by the API: uploads, Chroma and BM25 indexes.
     app_storage_dir: Path = Field(default=PROJECT_ROOT / "app" / "storage", alias="APP_STORAGE_DIR")
+    document_catalog_enabled: bool = Field(default=True, alias="DOCUMENT_CATALOG_ENABLED")
+    ingestion_recovery_enabled: bool = Field(default=True, alias="INGESTION_RECOVERY_ENABLED")
+    ingestion_lease_seconds: float = Field(default=120.0, ge=1.0, alias="INGESTION_LEASE_SECONDS")
+    ingestion_max_attempts: int = Field(default=3, ge=1, le=10, alias="INGESTION_MAX_ATTEMPTS")
     # "persistent": one library under APP_STORAGE_DIR that survives restarts.
     # "session": every API process starts an empty library in
     # APP_STORAGE_DIR/sessions/<id> (earlier sessions stay on disk).
@@ -66,6 +70,16 @@ class Settings(BaseSettings):
     )
     pdf_images_dir: Path = Field(default=PROJECT_ROOT / "storage" / "images")
     logs_dir: Path = Field(default=PROJECT_ROOT / "logs")
+
+    # Local-first ingress. JSON arrays allow explicit LAN/proxy configuration.
+    api_allowed_origins: list[str] = Field(default=[
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:8000", "http://127.0.0.1:8000",
+    ], alias="API_ALLOWED_ORIGINS")
+    api_allowed_hosts: list[str] = Field(default=["localhost", "127.0.0.1", "[::1]", "backend", "testserver"], alias="API_ALLOWED_HOSTS")
+    admin_trusted_networks: list[str] = Field(default=["127.0.0.0/8", "::1/128"], alias="ADMIN_TRUSTED_NETWORKS")
+    admin_token: str = Field(default="", alias="ADMIN_TOKEN", repr=False)
 
     # ── ChromaDB vector store ──────────────────────────────────────────────
     # Chroma replaces SimpleVectorStore: persistent storage, metadata filtering,
@@ -346,7 +360,7 @@ class Settings(BaseSettings):
     bm25_stemming: bool = Field(default=False, alias="BM25_STEMMING")
     # Metadata fields appended to chunk text in the BM25 index.
     bm25_metadata_fields: str = Field(
-        default="section_path,section_title,section_number,source_file,category",
+        default="section_path,section_title,section_number,source_file,category,companion_navigation",
         alias="BM25_METADATA_FIELDS",
     )
     # Record ranked chunk ids per retrieval stage on RAGTrace.retrieval_stages.

@@ -12,6 +12,7 @@ the previous ``complete(prompt, temperature=..., max_new_tokens=...)`` call.
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -40,6 +41,9 @@ class LLMUsage:
     num_ctx: int | None = None
     num_predict: int | None = None
     estimated_prompt_tokens: int | None = None
+    load_ms: float | None = None
+    total_ms: float | None = None
+    first_text_ms: float | None = None
     prompt_ms: float | None = None
     generation_ms: float | None = None
     done_reason: str | None = None
@@ -59,6 +63,7 @@ class LLMUsage:
         data = asdict(self)
         data.pop("_prompt_overflow")
         data["prompt_overflow"] = self.prompt_overflow
+        data["decode_tokens_per_second"] = (round(self.completion_tokens * 1000 / self.generation_ms, 2) if self.completion_tokens is not None and self.generation_ms and self.generation_ms > 0 else None)
         return data
 
 
@@ -102,6 +107,8 @@ def _usage_from(response: Any, options: dict[str, Any], estimated: int) -> LLMUs
         num_ctx=options.get("num_ctx"),
         num_predict=options.get("num_predict"),
         estimated_prompt_tokens=estimated,
+        load_ms=_ms(getattr(response, "load_duration", None)),
+        total_ms=_ms(getattr(response, "total_duration", None)),
         prompt_ms=_ms(getattr(response, "prompt_eval_duration", None)),
         generation_ms=_ms(getattr(response, "eval_duration", None)),
         done_reason=getattr(response, "done_reason", None),
@@ -125,6 +132,8 @@ def _combined_usage(first: LLMUsage, second: LLMUsage, max_tokens: int) -> LLMUs
         num_ctx=second.num_ctx,
         num_predict=max_tokens,
         estimated_prompt_tokens=_sum_optional(first.estimated_prompt_tokens, second.estimated_prompt_tokens),
+        load_ms=_sum_optional(first.load_ms, second.load_ms),
+        total_ms=_sum_optional(first.total_ms, second.total_ms),
         prompt_ms=_sum_optional(first.prompt_ms, second.prompt_ms),
         generation_ms=_sum_optional(first.generation_ms, second.generation_ms),
         done_reason=second.done_reason,
@@ -266,10 +275,16 @@ class StreamingCompletion:
         self.usage = LLMUsage(num_predict=max_tokens, estimated_prompt_tokens=estimate_tokens(prompt))
 
     def __iter__(self) -> Iterator[str]:
-        if _is_ollama_llm(self._llm):
-            yield from self._iter_ollama()
-        else:
-            yield from self._iter_generic()
+        start = time.perf_counter()
+        first_text_ms = None
+        source = self._iter_ollama() if _is_ollama_llm(self._llm) else self._iter_generic()
+        try:
+            for delta in source:
+                if delta and first_text_ms is None:
+                    first_text_ms = (time.perf_counter() - start) * 1000
+                yield delta
+        finally:
+            self.usage.first_text_ms = round(first_text_ms, 2) if first_text_ms is not None else None
 
     def _cancelled(self) -> bool:
         if self._cancel_event is not None and self._cancel_event.is_set():

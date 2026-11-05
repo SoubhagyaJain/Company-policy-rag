@@ -15,7 +15,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import pytest
+
+pytestmark = pytest.mark.usefixtures("offline_model_toolchain")
 import torch
+from tests.fixtures.model_artifacts import synthesize_fallback_merged_artifacts, _write_simulated_gguf
 
 from company_policy_rag.src.finetuning.merger import (
     ModelMerger,
@@ -25,7 +28,6 @@ from company_policy_rag.src.finetuning.merger import (
     resolve_device,
     resolve_torch_dtype,
     cleanup_memory,
-    synthesize_fallback_merged_artifacts,
     DEFAULT_CHATML_TEMPLATE,
 )
 from company_policy_rag.src.finetuning.gguf_exporter import (
@@ -39,7 +41,6 @@ from company_policy_rag.src.finetuning.gguf_exporter import (
     convert_to_gguf,
     normalize_quantization,
     validate_gguf_file,
-    _write_simulated_gguf,
 )
 
 
@@ -349,7 +350,7 @@ class TestGGUFExporterAdversarial:
             model_dir=model_dir,
             output_file=out_file,
             quantization=quant,
-            allow_simulation=True,
+            allow_simulation=False,
         )
 
         assert Path(res_path).exists()
@@ -366,7 +367,7 @@ class TestGGUFExporterAdversarial:
 
     def test_gguf_exporter_class_oop_contract(self, tmp_path: Path) -> None:
         """GGUFExporter class wrapper correctly exports and validates GGUF files."""
-        exporter = GGUFExporter(quantization="Q8_0", allow_simulation=True)
+        exporter = GGUFExporter(quantization="Q8_0", allow_simulation=False)
         model_dir = tmp_path / "hf_model"
         model_dir.mkdir()
         out_gguf = tmp_path / "exported_q8.gguf"

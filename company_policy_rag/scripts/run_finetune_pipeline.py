@@ -33,7 +33,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 import time
 from pathlib import Path
@@ -55,13 +54,6 @@ except ImportError:
     YAML_AVAILABLE = False
 
 try:
-    from company_policy_rag.src.finetuning.dataset_loader import (
-        DatasetEmptyError,
-        DatasetFormatValidationError,
-        DatasetValidationError,
-        compute_dataset_statistics,
-        load_dataset_from_file,
-    )
     from company_policy_rag.src.finetuning.gguf_exporter import (
         SUPPORTED_QUANTIZATIONS,
         convert_to_gguf,
@@ -70,22 +62,10 @@ try:
     from company_policy_rag.src.finetuning.merger import merge_lora_weights
     from company_policy_rag.src.finetuning.modelfile_generator import generate_modelfile
     from company_policy_rag.src.finetuning.ollama_registrar import (
-        probe_ollama_tags,
         register_model_in_ollama,
         verify_model_registered,
     )
-    from company_policy_rag.src.finetuning.trainer import (
-        FineTuneConfig,
-        train_lora,
-    )
 except ImportError:
-    from src.finetuning.dataset_loader import (
-        DatasetEmptyError,
-        DatasetFormatValidationError,
-        DatasetValidationError,
-        compute_dataset_statistics,
-        load_dataset_from_file,
-    )
     from src.finetuning.gguf_exporter import (
         SUPPORTED_QUANTIZATIONS,
         convert_to_gguf,
@@ -94,13 +74,8 @@ except ImportError:
     from src.finetuning.merger import merge_lora_weights
     from src.finetuning.modelfile_generator import generate_modelfile
     from src.finetuning.ollama_registrar import (
-        probe_ollama_tags,
         register_model_in_ollama,
         verify_model_registered,
-    )
-    from src.finetuning.trainer import (
-        FineTuneConfig,
-        train_lora,
     )
 
 logger = logging.getLogger("finetune_pipeline")
@@ -266,6 +241,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         # Pre-flight Validation / Dry-Run
         if args.dataset_path and Path(args.dataset_path).is_file():
+            from src.finetuning.dataset_loader import load_dataset_from_file, compute_dataset_statistics
             logger.info("Validating dataset at: %s", args.dataset_path)
             train_ds, val_ds = load_dataset_from_file(
                 file_path=args.dataset_path,
@@ -283,6 +259,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # Stage 1: Fine-Tuning
         if not args.skip_train:
+            from src.finetuning.trainer import FineTuneConfig, train_lora
             logger.info("==> [1/6] Running LoRA Fine-Tuning Stage...")
             t0 = time.time()
             ft_config = FineTuneConfig(
@@ -345,6 +322,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             logger.info("==> [3/6] Skipping GGUF conversion stage.")
 
         # Stage 4: Modelfile Generation
+        if not validate_gguf_file(gguf_path)["is_valid"]:
+            raise RuntimeError("A valid GGUF artifact is required before registration.")
+        if modelfile_path.exists():
+            raise FileExistsError(f"Refusing to replace existing Modelfile: {modelfile_path}")
         logger.info("==> [4/6] Generating Ollama Modelfile Stage...")
         t0 = time.time()
         generate_modelfile(
@@ -369,6 +350,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
             stage_timings["5. Ollama Registration"] = time.time() - t0
             artifacts["Registration Status"] = "SUCCESS" if reg_ok else "OFFLINE / UNREACHABLE"
+            if not reg_ok:
+                raise RuntimeError("Ollama registration failed; artifacts were retained.")
         else:
             logger.info("==> [5/6] Skipping Ollama registration stage.")
 
@@ -379,6 +362,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             verified = verify_model_registered(args.ollama_model_name, ollama_url=args.ollama_url)
             stage_timings["6. Verification Probe"] = time.time() - t0
             artifacts["Manifest Tag Verified"] = verified
+            if not verified:
+                raise RuntimeError("Ollama model verification failed.")
         else:
             logger.info("==> [6/6] Skipping verification probe.")
 

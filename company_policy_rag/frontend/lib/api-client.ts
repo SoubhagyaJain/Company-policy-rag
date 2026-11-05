@@ -65,6 +65,8 @@ export interface DonePayload {
   thinking_detail_level?: ThinkingDetailLevel;
   response_mode?: ResponseMode;
   model?: string;
+  low_confidence?: boolean;
+  provisional?: boolean;
 }
 
 export interface StreamCallbacks {
@@ -314,6 +316,23 @@ export function mapTrace(t: any): QueryTrace {
 
 export class ApiClient {
   private baseUrl: string;
+  private adminToken = '';
+
+  setAdminToken(token: string) { this.adminToken = token; }
+
+  private request(input: string, init?: RequestInit): Promise<Response> {
+    const administrative = input.includes('/api/admin/') || input.includes('/api/models/select') ||
+      input.includes('/api/models/active') || input.includes('/api/documents/deduplicate') ||
+      (input.endsWith('/api/chat/sessions') && init?.method === 'DELETE');
+    const headers = new Headers(init?.headers);
+    if (administrative) {
+      let token = this.adminToken;
+      try { token ||= typeof window !== 'undefined' ? window.sessionStorage.getItem('rag_admin_token') || '' : ''; }
+      catch { /* Session storage is optional; never send a guessed credential. */ }
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+    }
+    return globalThis.fetch(input, { ...init, headers });
+  }
 
   constructor(baseUrl = API_BASE) {
     this.baseUrl = baseUrl;
@@ -349,7 +368,7 @@ export class ApiClient {
     };
 
     try {
-      const response = await fetch(url, {
+      const response = await this.request(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -382,6 +401,20 @@ export class ApiClient {
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
       let currentEvent = 'chunk';
+      let receivedFinal = false;
+      const dispatch = (dataStr: string) => {
+        let data: unknown;
+        try { data = JSON.parse(dataStr); }
+        catch {
+          if (currentEvent === 'chunk') callbacks?.onChunk?.(dataStr);
+          return;
+        }
+        if (currentEvent === 'error') {
+          throw new Error((data as any)?.detail || 'Error from RAG backend');
+        }
+        this.handleStreamEvent(currentEvent, data, callbacks);
+        if (currentEvent === 'done') receivedFinal = true;
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -399,15 +432,7 @@ export class ApiClient {
             currentEvent = trimmed.substring(6).trim();
           } else if (trimmed.startsWith('data:')) {
             const dataStr = trimmed.substring(5).trim();
-            try {
-              const data = JSON.parse(dataStr);
-              this.handleStreamEvent(currentEvent, data, callbacks);
-            } catch {
-              // If data is raw text string instead of JSON
-              if (currentEvent === 'chunk' && callbacks?.onChunk) {
-                callbacks.onChunk(dataStr);
-              }
-            }
+            dispatch(dataStr);
           }
         }
       }
@@ -416,16 +441,10 @@ export class ApiClient {
       if (buffer.trim()) {
         if (buffer.startsWith('data:')) {
           const dataStr = buffer.substring(5).trim();
-          try {
-            const data = JSON.parse(dataStr);
-            this.handleStreamEvent(currentEvent, data, callbacks);
-          } catch {
-            if (currentEvent === 'chunk' && callbacks?.onChunk) {
-              callbacks.onChunk(dataStr);
-            }
-          }
+          dispatch(dataStr);
         }
       }
+      if (!receivedFinal) throw new Error('The response ended before a final answer was received.');
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         return;
@@ -483,6 +502,7 @@ export class ApiClient {
         if (data && typeof data === 'object') {
           const doneData = data as any;
           if (Array.isArray(doneData.citations)) {
+            doneData.citations = doneData.citations.map(mapCitation);
             doneData.citations.forEach((c: any, i: number) => {
               callbacks.onCitation?.(mapCitation(c, i));
             });
@@ -592,7 +612,7 @@ export class ApiClient {
     if (model && model !== 'default') {
       payload.model = model;
     }
-    const res = await fetch(`${this.baseUrl}/api/chat`, {
+    const res = await this.request(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -625,7 +645,7 @@ export class ApiClient {
     if (filters?.hasError !== undefined) params.set('has_error', String(filters.hasError));
 
     const url = `${this.baseUrl}/api/admin/observability?${params.toString()}`;
-    const res = await fetch(url, { signal });
+    const res = await this.request(url, { signal });
     if (!res.ok) {
       throw new Error(`Failed to fetch observability summary (${res.status})`);
     }
@@ -640,7 +660,7 @@ export class ApiClient {
    * Detailed Trace: GET /api/admin/observability/queries/{identifier}
    */
   async getQueryTraceDetail(identifier: string): Promise<QueryTrace> {
-    const res = await fetch(`${this.baseUrl}/api/admin/observability/queries/${encodeURIComponent(identifier)}`);
+    const res = await this.request(`${this.baseUrl}/api/admin/observability/queries/${encodeURIComponent(identifier)}`);
     if (!res.ok) {
       throw new Error(`Failed to fetch trace detail (${res.status})`);
     }
@@ -656,7 +676,7 @@ export class ApiClient {
     if (component) params.set('component', component);
     if (severity) params.set('severity', severity);
 
-    const res = await fetch(`${this.baseUrl}/api/admin/observability/errors?${params.toString()}`);
+    const res = await this.request(`${this.baseUrl}/api/admin/observability/errors?${params.toString()}`);
     if (!res.ok) {
       return [];
     }
@@ -668,8 +688,8 @@ export class ApiClient {
    */
   async getObservability(): Promise<ObservabilityData> {
     const [obsRes, healthRes] = await Promise.all([
-      fetch(`${this.baseUrl}/api/admin/observability`),
-      fetch(`${this.baseUrl}/api/health`).catch(() => null),
+      this.request(`${this.baseUrl}/api/admin/observability`),
+      this.request(`${this.baseUrl}/api/health`).catch(() => null),
     ]);
 
     if (!obsRes.ok) {
@@ -738,16 +758,16 @@ export class ApiClient {
    */
   async clearTelemetry(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/admin/observability/clear`, { method: 'POST' });
+      const res = await this.request(`${this.baseUrl}/api/admin/observability/clear`, { method: 'POST' });
       if (!res.ok) {
         // Fallback to DELETE method or legacy endpoint
-        const delRes = await fetch(`${this.baseUrl}/api/admin/traces`, { method: 'DELETE' });
+        const delRes = await this.request(`${this.baseUrl}/api/admin/traces`, { method: 'DELETE' });
         return delRes.ok;
       }
       return res.ok;
     } catch {
       try {
-        const delRes = await fetch(`${this.baseUrl}/api/admin/traces`, { method: 'DELETE' });
+        const delRes = await this.request(`${this.baseUrl}/api/admin/traces`, { method: 'DELETE' });
         return delRes.ok;
       } catch {
         return false;
@@ -760,11 +780,11 @@ export class ApiClient {
    */
   async deleteTrace(identifier: string): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/admin/observability/queries/${encodeURIComponent(identifier)}`, {
+      const res = await this.request(`${this.baseUrl}/api/admin/observability/queries/${encodeURIComponent(identifier)}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
-        const fallbackRes = await fetch(`${this.baseUrl}/api/admin/traces/${encodeURIComponent(identifier)}`, {
+        const fallbackRes = await this.request(`${this.baseUrl}/api/admin/traces/${encodeURIComponent(identifier)}`, {
           method: 'DELETE',
         });
         return fallbackRes.ok;
@@ -779,7 +799,7 @@ export class ApiClient {
    * Fetch Document list: GET /api/documents
    */
   async getDocuments(): Promise<DocumentItem[]> {
-    const res = await fetch(`${this.baseUrl}/api/documents`);
+    const res = await this.request(`${this.baseUrl}/api/documents`);
     if (!res.ok) {
       throw new Error(`Failed to fetch documents (${res.status})`);
     }
@@ -814,7 +834,7 @@ export class ApiClient {
    * Fetch Document Ingestion Status: GET /api/documents/{doc_id}/status
    */
   async getDocumentStatus(docId: string): Promise<IngestionStatusResponse> {
-    const res = await fetch(`${this.baseUrl}/api/documents/${docId}/status`);
+    const res = await this.request(`${this.baseUrl}/api/documents/${docId}/status`);
     if (!res.ok) {
       throw new Error(`Failed to fetch document status (${res.status})`);
     }
@@ -825,7 +845,7 @@ export class ApiClient {
    * Retry Document Indexing: POST /api/documents/{doc_id}/retry
    */
   async retryDocument(docId: string): Promise<IngestionStatusResponse> {
-    const res = await fetch(`${this.baseUrl}/api/documents/${docId}/retry`, {
+    const res = await this.request(`${this.baseUrl}/api/documents/${docId}/retry`, {
       method: 'POST',
     });
     if (!res.ok) {
@@ -845,7 +865,7 @@ export class ApiClient {
 
     // Post straight to the backend (bypassing the slow dev proxy) so large PDFs
     // upload in-place instead of stalling for ~30s and failing.
-    const res = await fetch(`${directBackendBase()}/api/documents/upload`, {
+    const res = await this.request(`${directBackendBase()}/api/documents/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -889,7 +909,7 @@ export class ApiClient {
 
   /** Preview or safely remove byte-identical documents. */
   async deduplicateDocuments(dryRun = true): Promise<DuplicateDocumentSummary> {
-    const res = await fetch(`${this.baseUrl}/api/documents/deduplicate?dry_run=${dryRun}`, {
+    const res = await this.request(`${this.baseUrl}/api/documents/deduplicate?dry_run=${dryRun}`, {
       method: 'POST',
     });
     if (!res.ok) {
@@ -902,7 +922,7 @@ export class ApiClient {
    * Delete Document: DELETE /api/documents/{doc_id}
    */
   async deleteDocument(docId: string): Promise<{ status: string; document_id: string }> {
-    const res = await fetch(`${this.baseUrl}/api/documents/${encodeURIComponent(docId)}`, {
+    const res = await this.request(`${this.baseUrl}/api/documents/${encodeURIComponent(docId)}`, {
       method: 'DELETE',
     });
 
@@ -927,7 +947,7 @@ export class ApiClient {
    * Backend Health check: GET /api/health
    */
   async getHealth(): Promise<HealthStatus> {
-    const res = await fetch(`${this.baseUrl}/api/health`);
+    const res = await this.request(`${this.baseUrl}/api/health`);
     if (!res.ok) {
       return { status: 'error', redis: false, vector_db: false, models_loaded: false };
     }
@@ -958,7 +978,7 @@ export class ApiClient {
     }>;
   }> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/models`);
+      const res = await this.request(`${this.baseUrl}/api/models`);
       if (!res.ok) {
         return { active_model: 'qwen3.5:9b', models: [] };
       }
@@ -973,7 +993,7 @@ export class ApiClient {
    */
   async selectModel(model: string): Promise<{ status: string; active_model: string }> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/models/select`, {
+      const res = await this.request(`${this.baseUrl}/api/models/select`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model }),
@@ -996,7 +1016,7 @@ export class ApiClient {
    */
   async deleteSession(sessionId: string): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/chat/session/${encodeURIComponent(sessionId)}`, {
+      const res = await this.request(`${this.baseUrl}/api/chat/session/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE',
       });
       return res.ok;
@@ -1010,7 +1030,7 @@ export class ApiClient {
    */
   async clearSession(sessionId: string): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/chat/session/${encodeURIComponent(sessionId)}/clear`, {
+      const res = await this.request(`${this.baseUrl}/api/chat/session/${encodeURIComponent(sessionId)}/clear`, {
         method: 'POST',
       });
       return res.ok;
@@ -1024,7 +1044,7 @@ export class ApiClient {
    */
   async clearAllSessions(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/chat/sessions`, {
+      const res = await this.request(`${this.baseUrl}/api/chat/sessions`, {
         method: 'DELETE',
       });
       return res.ok;
@@ -1037,7 +1057,7 @@ export class ApiClient {
    * Storage API: GET /api/admin/storage
    */
   async getStorage(refresh = false): Promise<StorageSummary> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage${refresh ? '?refresh=true' : ''}`);
+    const res = await this.request(`${this.baseUrl}/api/admin/storage${refresh ? '?refresh=true' : ''}`);
     if (!res.ok) {
       throw new Error(`Failed to load storage summary (${res.status})`);
     }
@@ -1048,7 +1068,7 @@ export class ApiClient {
    * Storage API: GET /api/admin/storage/live — RAM, VRAM, loaded models, running operations.
    */
   async getStorageLive(): Promise<StorageLive> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/live`);
+    const res = await this.request(`${this.baseUrl}/api/admin/storage/live`);
     if (!res.ok) {
       throw new Error(`Failed to load runtime state (${res.status})`);
     }
@@ -1059,7 +1079,7 @@ export class ApiClient {
    * Storage API: GET /api/admin/storage/documents
    */
   async getStorageDocuments(deep = false): Promise<StorageDocuments> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/documents${deep ? '?deep=true' : ''}`);
+    const res = await this.request(`${this.baseUrl}/api/admin/storage/documents${deep ? '?deep=true' : ''}`);
     if (!res.ok) {
       throw new Error(`Failed to load document storage (${res.status})`);
     }
@@ -1070,7 +1090,7 @@ export class ApiClient {
    * Storage API: GET /api/admin/storage/history
    */
   async getStorageHistory(range?: StorageRange): Promise<StorageHistory> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/history${range ? `?range=${range}` : ''}`);
+    const res = await this.request(`${this.baseUrl}/api/admin/storage/history${range ? `?range=${range}` : ''}`);
     if (!res.ok) {
       throw new Error(`Failed to load storage history (${res.status})`);
     }
@@ -1081,7 +1101,7 @@ export class ApiClient {
    * Storage API: GET /api/admin/storage/{store_id}/inspect
    */
   async inspectStorage(storeId: string): Promise<StorageInspect> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/${encodeURIComponent(storeId)}/inspect`);
+    const res = await this.request(`${this.baseUrl}/api/admin/storage/${encodeURIComponent(storeId)}/inspect`);
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.detail || `Inspection failed (${res.status})`);
@@ -1093,7 +1113,7 @@ export class ApiClient {
    * Storage API: POST /api/admin/storage/{store_id}/{action_id}/preview — nothing is deleted.
    */
   async previewStorageAction(storeId: string, actionId: string, olderThanDays?: number): Promise<StoragePreview> {
-    const res = await fetch(
+    const res = await this.request(
       `${this.baseUrl}/api/admin/storage/${encodeURIComponent(storeId)}/${encodeURIComponent(actionId)}/preview`,
       {
         method: 'POST',
@@ -1112,7 +1132,7 @@ export class ApiClient {
    * Storage API: GET /api/admin/storage/cleanup/plan
    */
   async getCleanupPlan(): Promise<StorageCleanupPlan> {
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/cleanup/plan`);
+    const res = await this.request(`${this.baseUrl}/api/admin/storage/cleanup/plan`);
     if (!res.ok) {
       throw new Error(`Failed to load the cleanup plan (${res.status})`);
     }
@@ -1127,7 +1147,7 @@ export class ApiClient {
     actionId: string,
     options: { olderThanDays?: number; target?: string } = {},
   ): Promise<StorageActionResult> {
-    const res = await fetch(
+    const res = await this.request(
       `${this.baseUrl}/api/admin/storage/${encodeURIComponent(storeId)}/${encodeURIComponent(actionId)}`,
       {
         method: 'POST',
@@ -1147,7 +1167,7 @@ export class ApiClient {
    */
   async cleanStorage(items?: StorageCleanupSelection[]): Promise<StorageCleanupResult> {
     // Stores and actions travel as logical ids; the backend owns every path.
-    const res = await fetch(`${this.baseUrl}/api/admin/storage/cleanup`, {
+    const res = await this.request(`${this.baseUrl}/api/admin/storage/cleanup`, {
       method: 'POST',
       ...(items ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) } : {}),
     });

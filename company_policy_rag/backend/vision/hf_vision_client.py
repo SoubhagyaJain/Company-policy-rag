@@ -3,6 +3,7 @@ from __future__ import annotations
 import gc
 import io
 import importlib.util
+import json
 import subprocess
 import threading
 import time
@@ -11,15 +12,15 @@ from typing import Any
 
 from PIL import Image
 
+from backend.utils.logging import logger
+from src.config import settings
+
 torch: Any = None
 AutoProcessor: Any = None
 _VisionModelClass: Any = None
 _runtime_imported = False
 _runtime_error: str | None = None
 _runtime_lock = threading.Lock()
-
-from backend.utils.logging import logger
-from src.config import settings
 
 
 def _ensure_runtime() -> tuple[bool, str | None]:
@@ -128,6 +129,25 @@ class HFVisionClient:
             return False, f"Qwen3-VL model directory was not found: {self.model_path}"
         if not (self.model_path / "config.json").is_file():
             return False, f"Qwen3-VL config.json is missing from: {self.model_path}"
+        weights = [
+            path for name in ("model.safetensors", "pytorch_model.bin")
+            if (path := self.model_path / name).is_file()
+        ]
+        if not weights:
+            for name in ("model.safetensors.index.json", "pytorch_model.bin.index.json"):
+                index_path = self.model_path / name
+                if index_path.is_file():
+                    try:
+                        index = json.loads(index_path.read_text(encoding="utf-8"))
+                        weights = [self.model_path / name for name in set(index["weight_map"].values())]
+                    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                        return False, f"Qwen3-VL checkpoint index is invalid: {index_path}"
+                    break
+        if not weights or any(not path.is_file() or path.stat().st_size == 0 for path in weights):
+            return False, (
+                f"Qwen3-VL model weights are missing or incomplete in: {self.model_path}. "
+                "Finish downloading the checkpoint before using vision."
+            )
         if self._load_error:
             return False, f"Qwen3-VL failed to load: {self._load_error}"
         state = "loaded" if self.is_loaded else "available (lazy load)"

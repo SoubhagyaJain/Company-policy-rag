@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { ChatMessageData, Citation, QueryTrace, FilterOptions, ThinkingEvent, ThinkingDetailLevel, ReasoningSummary, ResponseMode } from '../lib/types';
 import { apiClient } from '../lib/api-client';
+import { completeMessage } from '../lib/chat-completion';
 import { generateId } from '../lib/utils';
 
 type ProgressEventInput = Pick<ThinkingEvent, 'stage' | 'status' | 'title' | 'summary'>;
@@ -92,7 +93,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
     }
     setIsStreaming(false);
     setMessages((prev) =>
-      prev.map((msg) => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
+      prev.map((msg) => (msg.isStreaming ? { ...msg, isStreaming: false, content_status: 'interrupted' } : msg))
     );
   }, [clearProgressTimers]);
 
@@ -135,6 +136,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
         response_mode: responseMode,
         model,
         isStreaming: true,
+        content_status: 'provisional',
       };
 
       setMessages((prev) => [...prev, userMsg, initialAssistantMsg]);
@@ -215,6 +217,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
       let pendingChunkText = '';
       let chunkFlushTimer: ReturnType<typeof setTimeout> | null = null;
       let answerGenerationStarted = false;
+      let receivedChunk = false;
 
       const flushPendingChunks = () => {
         if (chunkFlushTimer) {
@@ -306,6 +309,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
               },
               onChunk: (chunkText) => {
                 if (controller.signal.aborted) return;
+                receivedChunk = true;
                 queueChunk(chunkText);
               },
               onCitation: (citation) => {
@@ -336,14 +340,12 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
                 setMessages((prev) =>
                   prev.map((msg) => {
                     if (msg.id !== assistantMsgId) return msg;
-                    const finalContent = msg.content || doneData?.answer || '';
                     const finalThinkingEvents =
                       doneData?.thinking_events && doneData.thinking_events.length > 0
                         ? normalizeThinkingEvents(doneData.thinking_events)
                         : (msg.thinking_events || []).map(e => (e.status === 'running' ? { ...e, status: 'completed' as const } : e));
                     return {
-                      ...msg,
-                      content: finalContent || 'I am unable to answer based on the provided documents.',
+                      ...completeMessage(msg, doneData),
                       thinking_events: finalThinkingEvents,
                       reasoning_summary: doneData?.reasoning_summary || msg.reasoning_summary,
                       model: doneData?.model || msg.trace?.model || msg.model || model,
@@ -403,7 +405,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
             return;
           }
 
-          if (attempt < MAX_RETRIES && !controller.signal.aborted) {
+          if (attempt < MAX_RETRIES && !controller.signal.aborted && !receivedChunk) {
             // Wait before retrying
             await new Promise((res) => setTimeout(res, RETRY_DELAY_MS * attempt));
             continue;
@@ -418,6 +420,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
                 ? {
                     ...msg,
                     isStreaming: false,
+                    content_status: 'interrupted',
                     error: errMsg,
                     content:
                       msg.content ||
@@ -428,6 +431,7 @@ export function useChatStream(initialMessages: ChatMessageData[] = []) {
           );
           setIsStreaming(false);
           abortControllerRef.current = null;
+          return;
         }
       }
     },

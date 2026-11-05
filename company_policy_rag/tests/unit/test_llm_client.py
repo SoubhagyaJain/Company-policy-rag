@@ -272,3 +272,26 @@ def test_token_estimate_is_conservative_for_code_heavy_text() -> None:
     code = "def get_rate(currency: str) -> float:\n    return requests.get(f'https://api.example.com/{currency}').json()['rate']\n" * 20
     words = len(code.split())
     assert estimate_tokens(code) >= int(words * 1.4)
+
+
+def test_ollama_timing_and_decode_throughput():
+    from backend.rag.llm_client import _usage_from
+
+    response = SimpleNamespace(prompt_eval_count=80, eval_count=20,
+                               load_duration=3_000_000_000, total_duration=9_000_000_000,
+                               prompt_eval_duration=2_000_000_000, eval_duration=4_000_000_000,
+                               done_reason="stop")
+    usage = _usage_from(response, {}, 90).to_dict()
+    assert usage["load_ms"] == 3000
+    assert usage["prompt_ms"] == 2000
+    assert usage["generation_ms"] == 4000
+    assert usage["decode_tokens_per_second"] == 5
+
+
+def test_stream_measures_first_visible_text(monkeypatch, ollama_llm):
+    monkeypatch.setattr(ollama.Client, "chat", lambda self, **kw: iter([
+        _response("", done=False), _response("answer", done=False), _response("", done=True)]))
+    stream = StreamingCompletion(ollama_llm, "prompt")
+    assert "".join(stream) == "answer"
+    assert stream.usage.first_text_ms is not None
+    assert stream.usage.first_text_ms >= 0

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import get_chat_service
+from backend.api.security import require_admin
 from backend.models.api_dto import ChatRequest, ChatResponse
 from backend.services.chat_service import ChatService
 from backend.utils.logging import logger
@@ -103,7 +104,7 @@ def clear_chat_session_messages(
     return {"status": "success", "detail": f"Messages for session {session_id} cleared."}
 
 
-@router.delete("/api/chat/sessions")
+@router.delete("/api/chat/sessions", dependencies=[Depends(require_admin)])
 def clear_all_chat_sessions(
     chat_service: ChatService = Depends(get_chat_service),
 ):

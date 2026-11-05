@@ -116,7 +116,7 @@ class TestOllamaRegistrationCLI:
 class TestOllamaRegistrationAPI:
     """Tests for Ollama REST API registration payload, headers, and HTTP responses."""
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_api_registration_success(self, mock_urlopen: MagicMock, tmp_path: Path) -> None:
         """REST API registration POST /api/create succeeds with status 200 and success status."""
         modelfile = tmp_path / "Modelfile"
@@ -139,7 +139,7 @@ class TestOllamaRegistrationAPI:
         assert body["name"] == "qwen2.5-coder-7b-policy"
         assert "FROM ./test.gguf" in body["modelfile"]
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_api_registration_server_offline(self, mock_urlopen: MagicMock, tmp_path: Path) -> None:
         """When Ollama server is offline (URLError / ConnectionRefused), returns False gracefully."""
         modelfile = tmp_path / "Modelfile"
@@ -149,7 +149,7 @@ class TestOllamaRegistrationAPI:
         ok = register_model_api("qwen2.5-coder-7b-policy", modelfile, ollama_url="http://localhost:11434")
         assert ok is False
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_api_registration_server_500_error(self, mock_urlopen: MagicMock, tmp_path: Path) -> None:
         """When Ollama server returns HTTP 500 error, returns False gracefully."""
         modelfile = tmp_path / "Modelfile"
@@ -169,7 +169,7 @@ class TestOllamaRegistrationAPI:
 class TestUnifiedOllamaRegistrar:
     """Tests for unified registration fallback, registrar class wrapper, and utilities."""
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_unified_registrar_via_api(self, mock_urlopen: MagicMock, tmp_path: Path) -> None:
         """Unified registrar succeeds via REST API when Ollama is online."""
         modelfile = tmp_path / "Modelfile"
@@ -185,7 +185,7 @@ class TestUnifiedOllamaRegistrar:
         assert registrar.register("qwen2.5-coder-7b-policy", modelfile) is True
 
     @patch("subprocess.run")
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_unified_registrar_fallback_to_cli(self, mock_urlopen: MagicMock, mock_run: MagicMock, tmp_path: Path) -> None:
         """Unified registrar falls back to CLI when API endpoint returns connection error."""
         modelfile = tmp_path / "Modelfile"
@@ -207,7 +207,7 @@ class TestUnifiedOllamaRegistrar:
 class TestOllamaInspectionAndProbing:
     """Tests for probe_ollama_tags, verify_model_registered, get_model_details, and find_ollama_binary."""
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_probe_ollama_tags_online(self, mock_urlopen: MagicMock) -> None:
         """probe_ollama_tags successfully extracts model list when online."""
         mock_resp = MagicMock()
@@ -228,7 +228,7 @@ class TestOllamaInspectionAndProbing:
         assert "llama3:latest" in models
         assert err is None
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_probe_ollama_tags_offline(self, mock_urlopen: MagicMock) -> None:
         """probe_ollama_tags returns False, empty list, and error string when offline."""
         mock_urlopen.side_effect = URLError("Connection refused")
@@ -241,15 +241,17 @@ class TestOllamaInspectionAndProbing:
 
     @patch("company_policy_rag.src.finetuning.ollama_registrar.probe_ollama_tags")
     def test_verify_model_registered_variants(self, mock_probe: MagicMock) -> None:
-        """verify_model_registered handles exact tag match, :latest suffix, base name match, and missing tag."""
+        """Only the requested tag or its implicit :latest alias counts as registered."""
         mock_probe.return_value = (True, ["qwen2.5-coder-7b-policy:latest", "mistral:7b"], None)
 
         # 1. Exact match
         assert verify_model_registered("qwen2.5-coder-7b-policy:latest") is True
         # 2. Match without :latest suffix
         assert verify_model_registered("qwen2.5-coder-7b-policy") is True
-        # 3. Base name match
-        assert verify_model_registered("mistral") is True
+        # 3. A different explicit tag cannot satisfy the implicit :latest tag.
+        assert verify_model_registered("mistral") is False
+        assert verify_model_registered("mistral:7b") is True
+        assert verify_model_registered("mistral:other") is False
         # 4. Not found
         assert verify_model_registered("non-existent-model") is False
 
@@ -259,7 +261,7 @@ class TestOllamaInspectionAndProbing:
         mock_probe.return_value = (False, [], "Offline")
         assert verify_model_registered("qwen2.5-coder-7b-policy") is False
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_get_model_details_success(self, mock_urlopen: MagicMock) -> None:
         """get_model_details parses /api/show response successfully."""
         mock_resp = MagicMock()
@@ -277,7 +279,7 @@ class TestOllamaInspectionAndProbing:
         assert info.get("parameters") == "num_ctx 8192\ntemperature 0.1"
         assert info.get("details", {}).get("family") == "qwen2"
 
-    @patch("urllib.request.urlopen")
+    @patch("company_policy_rag.src.finetuning.ollama_registrar.urlopen")
     def test_get_model_details_error_resilience(self, mock_urlopen: MagicMock) -> None:
         """get_model_details returns empty dict on HTTP error or exception."""
         mock_urlopen.side_effect = URLError("Server timeout")
@@ -370,6 +372,7 @@ class TestRunFinetunePipelineCLI:
 
     def test_pipeline_main_dry_run_with_dataset(self) -> None:
         """pipeline_main with --dry-run and valid dataset loads and validates successfully."""
+        pytest.importorskip("datasets", reason="optional training dataset dependency is not installed")
         sample_dataset = FIXTURES_DIR / "alpaca_sample.json"
         rc = pipeline_main([
             "--dry-run",

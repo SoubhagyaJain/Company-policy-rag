@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import hashlib
+import json
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from backend.models.chunk import Chunk, ChunkMetadata, ChunkRole, ContentType
 from backend.models.rag import ScoredChunk
+from backend.embeddings.embeddings import validate_embedding
 from backend.utils.logging import logger
 
 
@@ -191,8 +193,10 @@ class ChromaVectorStore(VectorStoreInterface):
         self,
         collection_name: str = "company_policy",
         persist_dir: str | Path | None = None,
+        require_persistence: bool = False,
     ) -> None:
         self.collection_name = collection_name
+        self.require_persistence = require_persistence
         if persist_dir is None:
             from src.config import settings
 
@@ -203,15 +207,78 @@ class ChromaVectorStore(VectorStoreInterface):
         self._memory_chunks: dict[str, Chunk] = {}
         self._lock = threading.RLock()
         self._corpus_version_cache: str | None = None
+        self._embedding_manifest = self.persist_dir / f"embedding_{hashlib.sha256(collection_name.encode()).hexdigest()[:16]}.json"
+        self._embedding_identity = (
+            json.loads(self._embedding_manifest.read_text(encoding="utf-8"))
+            if self._embedding_manifest.exists() else None
+        )
+        self._deletions_path = self.persist_dir / "document_deletions.json"
+        self._deleted_ids: set[str] = set()
+        self._deleted_sources: set[str] = set()
+        if self._deletions_path.exists():
+            # An unreadable journal must not make deleted content visible again.
+            journal = json.loads(self._deletions_path.read_text(encoding="utf-8"))
+            self._deleted_ids = set(journal["document_ids"])
+            self._deleted_sources = set(journal["source_files"])
         self._init_chroma()
+
+    def bind_embedding_model(self, model_name: str, query_instruction: str = "") -> None:
+        """Bind a new collection; refuse changes or guesses about a legacy index."""
+        if self._collection is None:
+            if self.require_persistence:
+                raise RuntimeError("Persistent vector storage is unavailable.")
+            return
+        with self._lock:
+            identity = json.dumps([model_name, query_instruction, "unit_norm"], separators=(",", ":"))
+            existing = self._embedding_identity
+            if existing is not None and existing != identity:
+                raise RuntimeError("Index embedding model is incompatible; use a separately built index.")
+            if existing is None:
+                if self._collection.count():
+                    raise RuntimeError("Existing index embedding model is unknown; verify provenance before binding it.")
+                temporary = self._embedding_manifest.with_suffix(".tmp")
+                temporary.write_text(json.dumps(identity), encoding="utf-8")
+                temporary.replace(self._embedding_manifest)
+                self._embedding_identity = identity
+
+    def is_document_deleted(self, document_id: str | None, source_file: str | None = None) -> bool:
+        with self._lock:
+            return document_id in self._deleted_ids or source_file in self._deleted_sources
+
+    def is_document_searchable(self, document_id: str | None, source_file: str | None = None) -> bool:
+        from backend.services.document_catalog import DocumentCatalog
+        catalog = getattr(self, "document_catalog", None)
+        return not self.is_document_deleted(document_id, source_file) and (
+            not isinstance(catalog, DocumentCatalog) or catalog.searchable(document_id, source_file))
+
+    def _catalog_revision(self) -> str:
+        from backend.services.document_catalog import DocumentCatalog
+        catalog = getattr(self, "document_catalog", None)
+        return f"_catalog_{catalog.revision()}" if isinstance(catalog, DocumentCatalog) else ""
+
+    def mark_document_deleted(self, document_id: str | None = None, source_file: str | None = None) -> None:
+        """Durably revoke retrieval before attempting physical cleanup. Never auto-clear."""
+        with self._lock:
+            ids = self._deleted_ids | ({document_id} if document_id else set())
+            sources = self._deleted_sources | ({source_file} if source_file else set())
+            temporary = self._deletions_path.with_suffix(".tmp")
+            with temporary.open("w", encoding="utf-8") as handle:
+                json.dump({"document_ids": sorted(ids), "source_files": sorted(sources)}, handle)
+                handle.flush()
+                import os
+                os.fsync(handle.fileno())
+            temporary.replace(self._deletions_path)
+            self._deleted_ids, self._deleted_sources = ids, sources
+            self._corpus_version_cache = None
 
     def corpus_version(self) -> str:
         """Return a stable fingerprint of the indexed corpus for cache isolation."""
         with self._lock:
             if self._corpus_version_cache is not None:
-                return self._corpus_version_cache
+                return self._corpus_version_cache + self._catalog_revision()
 
             digest = hashlib.sha256()
+            digest.update(json.dumps([sorted(self._deleted_ids), sorted(self._deleted_sources)]).encode())
             rows_found = False
             if self._collection is not None:
                 try:
@@ -242,7 +309,7 @@ class ChromaVectorStore(VectorStoreInterface):
                     digest.update(b"\0")
 
             self._corpus_version_cache = f"kb_{digest.hexdigest()[:20]}"
-            return self._corpus_version_cache
+            return self._corpus_version_cache + self._catalog_revision()
 
     def _init_chroma(self) -> None:
         try:
@@ -253,6 +320,8 @@ class ChromaVectorStore(VectorStoreInterface):
             )
             logger.info("ChromaVectorStore initialized collection '%s' at %s", self.collection_name, self.persist_dir)
         except Exception as exc:
+            if self.require_persistence:
+                raise RuntimeError("Persistent Chroma storage is unavailable; startup cannot continue.") from exc
             logger.warning("ChromaDB initialization failed (%s). Operating in-memory vector store mode.", exc)
             self._collection = None
 
@@ -279,6 +348,15 @@ class ChromaVectorStore(VectorStoreInterface):
     def add_chunks(self, chunks: list[Chunk]) -> None:
         if not chunks:
             return
+
+        if any(self.is_document_deleted(c.metadata.document_id, c.metadata.source_file) for c in chunks):
+            raise RuntimeError("Cannot index a document pending deletion.")
+        dimension = None
+        for chunk in chunks:
+            if chunk.embedding is None and not self.require_persistence:
+                continue
+            validate_embedding(chunk.embedding, dimension)
+            dimension = len(chunk.embedding)
 
         with self._lock:
             for chunk in chunks:
@@ -353,6 +431,7 @@ class ChromaVectorStore(VectorStoreInterface):
     ) -> list[ScoredChunk]:
         if not query_embedding:
             return []
+        validate_embedding(query_embedding)
 
         if self._collection is not None and cast(int, self._collection.count()) > 0:
             try:
@@ -396,6 +475,9 @@ class ChromaVectorStore(VectorStoreInterface):
                             meta_obj = unpack_chroma_metadata(meta_dict)
                             chunk = Chunk(id=str(cid), text=str(doc or ""), metadata=meta_obj)
 
+                        if not self.is_document_searchable(chunk.metadata.document_id, chunk.metadata.source_file):
+                            continue
+
                         scored_chunks.append(
                             ScoredChunk(
                                 chunk=chunk,
@@ -405,6 +487,9 @@ class ChromaVectorStore(VectorStoreInterface):
                         )
                 return scored_chunks
             except Exception as exc:
+                from chromadb.errors import InvalidDimensionException
+                if isinstance(exc, InvalidDimensionException):
+                    raise ValueError("Query embedding dimension is incompatible with the index.") from exc
                 logger.warning("Chroma query failed (%s). Falling back to memory search.", exc)
 
         # Fallback in-memory search
@@ -412,6 +497,8 @@ class ChromaVectorStore(VectorStoreInterface):
         with self._lock:
             memory_chunks = list(self._memory_chunks.values())
         for chunk in memory_chunks:
+            if not self.is_document_searchable(chunk.metadata.document_id, chunk.metadata.source_file):
+                continue
             if not self._matches_filters(chunk, filters):
                 continue
             if chunk.embedding is not None:
@@ -424,6 +511,7 @@ class ChromaVectorStore(VectorStoreInterface):
         return scored_memory[:top_k]
 
     def delete_by_source(self, source_file: str) -> None:
+        self.mark_document_deleted(source_file=source_file)
         with self._lock:
             to_delete = [
                 cid for cid, chunk in self._memory_chunks.items()
@@ -437,9 +525,11 @@ class ChromaVectorStore(VectorStoreInterface):
             try:
                 self._collection.delete(where={"source_file": source_file})
             except Exception as exc:
-                logger.warning("Failed to delete from Chroma by source_file: %s", exc)
+                raise RuntimeError("Persistent vector delete failed; cleanup must be retried.") from exc
 
-    def delete_by_document_id(self, document_id: str) -> None:
+    def delete_by_document_id(self, document_id: str, *, revoke: bool = True) -> None:
+        if revoke:
+            self.mark_document_deleted(document_id=document_id)
         with self._lock:
             to_delete = [
                 cid for cid, chunk in self._memory_chunks.items()
@@ -453,7 +543,7 @@ class ChromaVectorStore(VectorStoreInterface):
             try:
                 self._collection.delete(where={"document_id": document_id})
             except Exception as exc:
-                logger.warning("Failed to delete from Chroma by document_id: %s", exc)
+                raise RuntimeError("Persistent vector delete failed; cleanup must be retried.") from exc
 
     def count(self) -> int:
         if self._collection is not None:

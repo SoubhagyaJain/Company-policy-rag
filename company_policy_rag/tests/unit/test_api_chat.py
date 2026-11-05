@@ -15,7 +15,7 @@ def cleanup_deps():
 
 
 def test_post_chat_success():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "What is the employee annual leave policy?",
         "session_id": "test_session_123",
@@ -36,7 +36,7 @@ def test_post_chat_success():
 
 
 def test_post_chat_empty_message():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {"message": "   "}
     response = client.post("/api/chat", json=payload)
     assert response.status_code == 400
@@ -45,7 +45,7 @@ def test_post_chat_empty_message():
 
 
 def test_post_chat_auto_generates_session_id():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {"message": "Tell me about remote work policies."}
     response = client.post("/api/chat", json=payload)
     assert response.status_code == 200
@@ -54,7 +54,7 @@ def test_post_chat_auto_generates_session_id():
 
 
 def test_post_chat_with_category_filter():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "What are the security guidelines?",
         "filters": {"category": "policy"},
@@ -66,7 +66,7 @@ def test_post_chat_with_category_filter():
 
 
 def test_post_chat_multi_turn_conversational_memory():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     session_id = "mem_test_session_1"
 
     # Turn 1
@@ -100,7 +100,7 @@ def test_post_chat_multi_turn_conversational_memory():
 
 
 def test_post_chat_model_parameter():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "What is the resignation notice period?",
         "model": "llama3.1:8b",
@@ -112,7 +112,7 @@ def test_post_chat_model_parameter():
 
 
 def test_post_chat_semantic_cache_hit_and_miss():
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
     payload = {
         "message": "What is the policy for parental leave?",
         "session_id": "cache_test_sess_1",

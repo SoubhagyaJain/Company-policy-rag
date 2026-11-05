@@ -352,7 +352,7 @@ def test_storage_api(env):
     _seed_images_and_cache(env)
     app = create_app()
     app.dependency_overrides[get_storage_service] = lambda: env.service
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     summary = client.get("/api/admin/storage")
     assert summary.status_code == 200
@@ -716,7 +716,7 @@ def test_console_api(env):
     _seed_images_and_cache(env)
     app = create_app()
     app.dependency_overrides[get_storage_service] = lambda: env.service
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 50000))
 
     assert client.get("/api/admin/storage/live").json()["operations"]["cleanup"] is None
     assert client.get("/api/admin/storage/documents").json()["orphans"]["total_bytes"] == 5400

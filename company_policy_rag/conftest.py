@@ -59,6 +59,38 @@ class _DeterministicTestEmbeddings:
 
 
 @pytest.fixture
+def offline_model_toolchain(monkeypatch):
+    """Explicit test doubles for optional model loaders and external converters."""
+    import importlib
+    from types import SimpleNamespace
+    from tests.fixtures.model_artifacts import synthesize_fallback_merged_artifacts, _write_simulated_gguf
+
+    class Model:
+        def save_pretrained(self, path, **kwargs):
+            synthesize_fallback_merged_artifacts(Path(path))
+
+    tokenizer = SimpleNamespace(pad_token="pad", eos_token="eos", save_pretrained=lambda path: None)
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(
+        AutoModelForCausalLM=SimpleNamespace(from_pretrained=lambda *a, **kw: Model()),
+        AutoTokenizer=SimpleNamespace(from_pretrained=lambda *a, **kw: tokenizer)))
+    monkeypatch.setitem(sys.modules, "peft", SimpleNamespace(PeftModel=SimpleNamespace(
+        from_pretrained=lambda *a, **kw: SimpleNamespace(merge_and_unload=lambda **kw: Model()))))
+
+    def run_converter(command, **kwargs):
+        if "--outfile" in command:
+            output, quantization = command[command.index("--outfile") + 1], "FP16"
+        else:
+            output, quantization = command[2], command[3]
+        _write_simulated_gguf(Path(output), quantization)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    for name in ("src.finetuning.gguf_exporter", "company_policy_rag.src.finetuning.gguf_exporter"):
+        module = importlib.import_module(name)
+        monkeypatch.setattr(module, "find_llama_cpp_tools", lambda *a: {"convert_script": Path("test-convert.py"), "quantize_bin": Path("test-quantize")})
+        monkeypatch.setattr(module, "subprocess", SimpleNamespace(run=run_converter))
+
+
+@pytest.fixture
 def isolated_document_client(tmp_path: Path):
     """FastAPI client with every document persistence layer rooted in pytest temp storage."""
     from fastapi.testclient import TestClient
@@ -82,7 +114,7 @@ def isolated_document_client(tmp_path: Path):
     )
     app.dependency_overrides[get_document_service] = lambda: service
     try:
-        yield TestClient(app)
+        yield TestClient(app, client=("127.0.0.1", 50000))
     finally:
         app.dependency_overrides.pop(get_document_service, None)
         reset_dependencies()

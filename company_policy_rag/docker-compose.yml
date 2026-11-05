@@ -6,9 +6,13 @@ services:
       dockerfile: docker/Dockerfile.backend
     container_name: rag-backend
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
       PYTHONPATH: /app
+      APP_STORAGE_DIR: /app/app/storage
+      # Only this host exposes ports. Private peers are the app's Docker network.
+      ADMIN_TRUSTED_NETWORKS: '["127.0.0.0/8","::1/128","172.16.0.0/12","192.168.0.0/16","10.0.0.0/8"]'
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_ENABLED: "true"
@@ -21,6 +25,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
+      - ./app/storage:/app/app/storage
       - ./logs:/app/logs
       - uploads:/app/uploads
       - hf_cache:/app/.cache/huggingface
@@ -42,6 +47,7 @@ services:
     command: celery -A backend.tasks.celery_app worker --loglevel=info
     environment:
       PYTHONPATH: /app
+      APP_STORAGE_DIR: /app/app/storage
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_ENABLED: "true"
@@ -54,6 +60,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./storage:/app/storage
+      - ./app/storage:/app/app/storage
       - ./logs:/app/logs
       - uploads:/app/uploads
       - hf_cache:/app/.cache/huggingface
@@ -75,7 +82,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: rag-frontend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       BACKEND_API_URL: http://backend:8000
@@ -91,8 +98,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: rag-redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     command: >
       redis-server
       --appendonly yes

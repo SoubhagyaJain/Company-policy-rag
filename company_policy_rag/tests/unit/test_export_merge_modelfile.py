@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import pytest
 
+pytestmark = pytest.mark.usefixtures("offline_model_toolchain")
+
 # Ensure project root and company_policy_rag root are in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 WORKSPACE_ROOT = PROJECT_ROOT.parent
